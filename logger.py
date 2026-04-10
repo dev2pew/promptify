@@ -1,5 +1,21 @@
 import sys
+import os
 import datetime
+
+# Enable ANSI escape sequence processing for Windows cmd.exe
+if os.name == "nt":
+    try:
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        kernel32.GetConsoleMode(handle, ctypes.byref(mode))
+        # 0x0004 is ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        kernel32.SetConsoleMode(handle, mode.value | 0x0004)
+    except Exception:
+        # Fallback hack that often forces ANSI rendering on Windows
+        os.system("")
 
 
 class Logger:
