@@ -4,7 +4,7 @@ complete the task while adhering to the guidelines after analyzing the project s
 
 ## TASK
 
-[[YOUR_TASK_HERE]]
+TODO: [[YOUR_TASK_HERE]]
 
 ## GUIDE
 
@@ -26,7 +26,7 @@ below is the project structure...
 
 ## NOTE
 
-[[YOUR_NOTES_HERE]]
+TODO: [[YOUR_NOTES_HERE]]
 
 ## CONTEXT
 
