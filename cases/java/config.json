@@ -1,0 +1,19 @@
+{
+    "name": "java",
+    "types": [
+        ".java",
+        ".xml",
+        ".properties",
+        ".yml",
+        ".yaml",
+        ".gradle",
+        ".kts",
+        ".json",
+        ".md",
+        ".sql"
+    ],
+    "ignores": ".caseignore",
+    "system": "system.md",
+    "prompt": "prompt.md",
+    "legacy": "legacy.md"
+}

@@ -1,0 +1,10 @@
+{
+    "name": "markdown",
+    "types": [
+        ".md"
+    ],
+    "ignores": ".caseignore",
+    "system": "system.md",
+    "prompt": "prompt.md",
+    "legacy": "legacy.md"
+}

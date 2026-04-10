@@ -1,0 +1,21 @@
+{
+    "name": "android",
+    "types": [
+        ".kt",
+        ".java",
+        ".xml",
+        ".gradle",
+        ".kts",
+        ".toml",
+        ".properties",
+        ".pro",
+        ".json",
+        ".cpp",
+        ".c",
+        ".h"
+    ],
+    "ignores": ".caseignore",
+    "system": "system.md",
+    "prompt": "prompt.md",
+    "legacy": "legacy.md"
+}

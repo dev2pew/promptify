@@ -1,0 +1,78 @@
+# COMPILED OUTPUT
+/dist
+/tmp
+/out-tsc
+/bazel-out
+/.angular/
+
+# NODE & LOCKS (AI Token Savers)
+/node_modules
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+npm-debug.log
+yarn-error.log
+.turbo/
+
+# TESTING ARTIFACTS
+/coverage
+/test-results
+/playwright-report
+/cypress/videos/
+/cypress/screenshots/
+testem.log
+__screenshots__/
+
+# IDES AND EDITORS
+.idea/
+.vscode/
+.history/
+.project
+.classpath
+.settings/
+.c9/
+*.launch
+*.sublime-workspace
+*.swp
+*~
+
+# SECRETS & ENVIRONMENTS
+*.env
+.env.*
+secret-*.json
+credentials
+*.p12
+key.pem
+
+# AI & SESSIONS
+.tmp/
+prev/
+prompt/
+prompts/
+*.prompt
+*.conversation
+*.session
+
+# MISCELLANEOUS & OS
+.DS_Store
+Thumbs.db
+.sass-cache/
+/typings
+
+# MEDIA, FONTS & AUDIO
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.ico
+*.bmp
+*.svg
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.mp3
+*.wav
+*.ogg

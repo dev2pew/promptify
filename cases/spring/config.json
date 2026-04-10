@@ -1,0 +1,20 @@
+{
+    "name": "spring",
+    "types": [
+        ".java",
+        ".kt",
+        ".properties",
+        ".yml",
+        ".yaml",
+        ".xml",
+        ".gradle",
+        ".kts",
+        ".sql",
+        ".html",
+        ".json"
+    ],
+    "ignores": ".caseignore",
+    "system": "system.md",
+    "prompt": "prompt.md",
+    "legacy": "legacy.md"
+}
