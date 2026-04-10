@@ -2,6 +2,7 @@ import sys
 import os
 import shutil
 import datetime
+import json
 from pathlib import Path
 
 from logger import log
@@ -77,6 +78,21 @@ class App:
         case_data_dir.mkdir(parents=True, exist_ok=True)
         with open(case_data_dir / "last.dat", "w", encoding="utf-8") as f:
             f.write(path)
+
+    def get_state(self) -> dict:
+        state_file = self.data_dir / "state.json"
+        if state_file.exists():
+            try:
+                with open(state_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {}
+
+    def save_state(self, state: dict):
+        state_file = self.data_dir / "state.json"
+        with open(state_file, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=4)
 
     def save_output(self, case_name: str, content: str):
         now = datetime.datetime.now()
@@ -190,8 +206,15 @@ class App:
             with open(prompt_path, "r", encoding="utf-8") as f:
                 initial_text = f.read()
 
-        editor = InteractiveEditor(initial_text, context)
+        state = self.get_state()
+        firsttime = state.get("firsttime", True)
+
+        editor = InteractiveEditor(initial_text, context, show_help=firsttime)
         edited_text = editor.run()
+
+        if firsttime:
+            state["firsttime"] = False
+            self.save_state(state)
 
         if edited_text is None:
             log.warning("operation cancelled by user")
