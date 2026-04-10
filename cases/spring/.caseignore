@@ -1,0 +1,83 @@
+# COMPILED OUTPUT & BUILD TOOLS
+.gradle/
+build/
+target/
+bin/
+out/
+*.class
+*.jar
+*.war
+*.ear
+gradle-wrapper.jar
+
+# LOGS
+*.log
+
+# IDES AND EDITORS
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.history/
+.settings/
+.project
+.classpath
+.factorypath
+.apt_generated
+.sts4-cache
+/nbproject/private/
+/nbbuild/
+/nbdist/
+*.swp
+*~
+
+# SECRETS & ENVIRONMENTS
+*.env
+.env.*
+*.jks
+*.p12
+*.pem
+*.keystore
+*.truststore
+secret-*.json
+application-secret.yml
+application-secret.properties
+
+# FRONTEND & NODE (If serving React/Angular from Spring Boot)
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+
+# AI & SESSIONS
+.tmp/
+prev/
+prompt/
+prompts/
+*.prompt
+*.conversation
+*.session
+
+# MISCELLANEOUS & OS
+.DS_Store
+Thumbs.db
+HELP.md
+
+# MEDIA, FONTS & AUDIO
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.ico
+*.bmp
+*.svg
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.mp3
+*.wav
+*.ogg

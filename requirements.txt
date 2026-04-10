@@ -1,0 +1,5 @@
+pathspec==1.0.4
+prompt_toolkit==3.0.52
+Pygments==2.20.0
+RapidFuzz==3.14.5
+wcwidth==0.6.0

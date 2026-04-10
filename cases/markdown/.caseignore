@@ -1,0 +1,44 @@
+# AI & SESSIONS
+.tmp/
+prev/
+prompt/
+prompts/
+*.prompt
+*.conversation
+*.session
+
+# IDES & OS
+.idea/
+.vscode/
+.history/
+.DS_Store
+Thumbs.db
+
+# NODE & BUILD (For Static Site Generators)
+node_modules/
+.next/
+dist/
+build/
+out/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# MEDIA, FONTS & AUDIO
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.ico
+*.bmp
+*.svg
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.mp3
+*.wav
+*.ogg
+*.mp4
+*.mov
