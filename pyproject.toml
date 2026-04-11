@@ -3,7 +3,7 @@ name = "promptify"
 version = "0.1.0"
 description = "collect context from your projects and create prompts in a neat way."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "aiofiles>=25.1.0",
     "pathspec>=1.0.4",
@@ -13,3 +13,14 @@ dependencies = [
     "watchdog>=6.0.0",
     "wcwidth>=0.6.0",
 ]
+
+[tool.uv]
+managed = true
+
+[build.system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
