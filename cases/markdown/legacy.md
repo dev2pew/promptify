@@ -17,7 +17,6 @@ below is the documentation structure...
 
 ```log
 [@project]
-
 ```
 
 ## CONTEXT

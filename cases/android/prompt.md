@@ -18,7 +18,6 @@ below is the project structure...
 
 ```log
 [@project]
-
 ```
 
 ## NOTE
