@@ -1,0 +1,159 @@
+# ----------------------------------------------------------------
+# PYTHON CORE & VIRTUAL ENVS
+# ----------------------------------------------------------------
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+interface/
+.installed.cfg
+*.egg-info/
+.eggs/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.ipynb_checkpoints/
+
+# ----------------------------------------------------------------
+# BUILD & DISTRIBUTION
+# ----------------------------------------------------------------
+
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg
+MANIFEST
+*.spec
+*.manifest
+
+# ----------------------------------------------------------------
+# PACKAGE MANAGERS (AI TOKEN SAVERS)
+# ----------------------------------------------------------------
+# WE IGNORE LOCKS BECAUSE THEY ARE HUGE AND AI USUALLY DOESN'T NEED
+# EXACT VERSION HASHES TO UNDERSTAND THE DEPENDENCY LOGIC.
+# ----------------------------------------------------------------
+
+poetry.lock
+Pipfile.lock
+pdm.lock
+package-lock.json
+yarn.lock
+
+# ----------------------------------------------------------------
+# IDES, EDITORS & PROJECT TOOLS
+# ----------------------------------------------------------------
+
+.idea/
+.vscode/
+.history/
+*.iml
+*.ipr
+*.iws
+.project
+.pybuilder/
+.spyderproject
+.spyproject
+.ropeproject
+.swp
+*~
+.DS_Store
+Thumbs.db
+
+# ----------------------------------------------------------------
+# LOGS, TESTS & COVERAGE
+# ----------------------------------------------------------------
+
+*.log
+pip-log.txt
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+cover/
+instance/
+.webassets-cache
+.scrapy
+
+# ----------------------------------------------------------------
+# SECRETS & ENVIRONMENTS
+# ----------------------------------------------------------------
+
+.env
+.env.*
+*.bak
+local_settings.py
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+secret-*.json
+credentials
+
+# ----------------------------------------------------------------
+# DATABASE & STORAGE
+# ----------------------------------------------------------------
+
+*.db
+*.sqlite3
+*.sqlite3-journal
+*.mysql
+*.psql
+
+# ----------------------------------------------------------------
+# AI & SESSIONS (CUSTOM CONTEXT CONTROL)
+# ----------------------------------------------------------------
+
+.tmp/
+prev/
+prompt/
+prompts/
+*.prompt
+*.conversation
+*.session
+
+# ----------------------------------------------------------------
+# MEDIA, FONTS & AUDIO (NO LOGIC VALUE)
+# ----------------------------------------------------------------
+
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.ico
+*.bmp
+*.svg
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.mp3
+*.wav
+*.ogg
+*.mp4
+*.mov
+*.pdf

@@ -50,7 +50,6 @@ export class {{ ClassName }} {
   <button (click)="toggleServerStatus()">Toggle Server Status</button>
 </section>
 
-
 ```
 
 When you update a component, be sure to put the logic in the ts file, the styles in the css file and the html template in the html file.
@@ -59,10 +58,10 @@ When you update a component, be sure to put the logic in the ts file, the styles
 
 Here are some links to the essentials for building Angular applications. Use these to get an understanding of how some of the core functionality works...
 
-- <https://angular.dev/essentials/components>
-- <https://angular.dev/essentials/signals>
-- <https://angular.dev/essentials/templates>
-- <https://angular.dev/essentials/dependency-injection>
+- <https://angular.dev/essentials/components>;
+- <https://angular.dev/essentials/signals>;
+- <https://angular.dev/essentials/templates>;
+- <https://angular.dev/essentials/dependency-injection>.
 
 ## BEST PRACTICES & STYLE GUIDE
 
@@ -70,9 +69,9 @@ Here are the best practices and the style guide information...
 
 ### CODING STYLE GUIDE
 
-Here is a link to the most recent Angular style guide
+Here is a link to the most recent Angular style guide...
 
-- <https://angular.dev/style-guide>
+- <https://angular.dev/style-guide>.
 
 ### TYPESCRIPT BEST PRACTICES
 
@@ -98,14 +97,14 @@ Here is a link to the most recent Angular style guide
 ### COMPONENTS
 
 - Keep components small and focused on a single responsibility;
-- Use `input()` signal instead of decorators, learn more here - <https://angular.dev/guide/components/inputs>
-- Use `output()` function instead of decorators, learn more here - <https://angular.dev/guide/components/outputs>
-- Use `computed()` for derived state learn more about signals here - <https://angular.dev/guide/signals>
+- Use `input()` signal instead of decorators, learn more here - <https://angular.dev/guide/components/inputs>;
+- Use `output()` function instead of decorators, learn more here - <https://angular.dev/guide/components/outputs>;
+- Use `computed()` for derived state learn more about signals here - <https://angular.dev/guide/signals>;
 - Set `changeDetection: ChangeDetectionStrategy.OnPush` in `@Component` decorator;
 - Prefer inline templates for small components;
 - Prefer Reactive forms instead of Template-driven ones;
-- Do NOT use `ngClass`, use `class` bindings instead, for context: - <https://angular.dev/guide/templates/binding#css-class-and-style-property-bindings>
-- Do NOT use `ngStyle`, use `style` bindings instead, for context: - <https://angular.dev/guide/templates/binding#css-class-and-style-property-bindings>
+- Do NOT use `ngClass`, use `class` bindings instead, for context: - <https://angular.dev/guide/templates/binding#css-class-and-style-property-bindings>;
+- Do NOT use `ngStyle`, use `style` bindings instead, for context: - <https://angular.dev/guide/templates/binding#css-class-and-style-property-bindings>.
 
 ### STATE MANAGEMENT
 
@@ -120,7 +119,7 @@ Here is a link to the most recent Angular style guide
 - Use native control flow (`@if`, `@for`, `@switch`) instead of `*ngIf`, `*ngFor`, `*ngSwitch`;
 - Do not assume globals like (`new Date()`) are available;
 - Use the async pipe to handle observables;
-- Use built in pipes and import pipes when being used in a template, learn more - <https://angular.dev/guide/templates/pipes#>
+- Use built in pipes and import pipes when being used in a template, learn more - <https://angular.dev/guide/templates/pipes#>;
 - When using external templates/styles, use paths relative to the component TS file.
 
 ### SERVICES

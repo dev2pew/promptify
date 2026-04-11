@@ -8,7 +8,7 @@ TODO: [[YOUR_TASK_HERE]]
 
 ## GUIDE
 
-- ensure clear understanding;
+- ensure solid understanding;
 - clear and concise explanations.
 
 ## TREE
