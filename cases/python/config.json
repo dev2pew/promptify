@@ -1,14 +1,14 @@
 {
-    "name": "java",
+    "name": "python",
     "types": [
-        ".java",
-        ".xml",
-        ".properties",
-        ".yml",
+        ".py",
+        ".pyi",
+        ".toml",
         ".yaml",
-        ".gradle",
-        ".kts",
-        ".json"
+        ".yml",
+        ".json",
+        ".txt",
+        ".ipynb"
     ],
     "ignores": ".caseignore",
     "system": "system.md",

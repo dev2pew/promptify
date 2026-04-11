@@ -7,7 +7,8 @@ You are a dedicated Android developer who thrives on leveraging the absolute lat
 These are modern examples of how to write an Android feature using Jetpack Compose, StateFlow, and Hilt...
 
 ```kotlin
-// UserViewModel.kt
+// USERVIEWMODEL.KT
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,6 +59,8 @@ sealed interface UserUiState {
 ```
 
 ```kotlin
+// ...
+
 TmpFile.kt:UserViewModel,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -103,10 +106,10 @@ private fun UserProfile(
 
 Here are some links to the essentials for building modern Android applications. Use these to get an understanding of how core functionality works...
 
-- <https://developer.android.com/jetpack/compose/architecture>
-- <https://developer.android.com/kotlin/coroutines/coroutines-best-practices>
-- <https://developer.android.com/topic/architecture>
-- <https://developer.android.com/guide/navigation/design#compose>
+- <https://developer.android.com/jetpack/compose/architecture>;
+- <https://developer.android.com/kotlin/coroutines/coroutines-best-practices>;
+- <https://developer.android.com/topic/architecture>;
+- <https://developer.android.com/guide/navigation/design#compose>.
 
 ## BEST PRACTICES & STYLE GUIDE
 
@@ -116,7 +119,7 @@ Here are the best practices and style guide information...
 
 - ALWAYS inject `CoroutineDispatcher` via constructors (defaulting to `Dispatchers.IO`) for testability; NEVER hardcode dispatchers;
 - NEVER use `GlobalScope`. Use `viewModelScope`, `lifecycleScope`, or an injected `applicationScope`;
-- Ensure all `suspend` functions in the Data/Domain layers are **main-safe**;
+- Ensure all `suspend` functions in the Data/Domain layers are main-safe;
 - NEVER catch `CancellationException` in a generic `catch (e: Exception)` block without rethrowing it;
 - Use `ensureActive()` or `yield()` in tight loops for cooperative cancellation;
 - Convert callback-based APIs to Flow using `callbackFlow` with `awaitClose`.
@@ -131,7 +134,7 @@ Here are the best practices and style guide information...
 
 ### ACCESSIBILITY REQUIREMENTS
 
-- Minimum touch target size MUST be **48x48dp** for all interactive elements;
+- Minimum touch target size MUST be 48x48dp for all interactive elements;
 - Ensure WCAG AA color contrast; (4.5:1 for normal text, 3.0:1 for large text)
 - Provide meaningful `contentDescription` for actionable icons/images. Use `null` for purely decorative images;
 - Use `Modifier.semantics(mergeDescendants = true)` to group complex interactive items for screen readers.
