@@ -1,0 +1,13 @@
+[project]
+name = "promptify"
+version = "0.1.0"
+description = "collect context from your projects and create prompts in a neat way."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pathspec>=1.0.4",
+    "prompt-toolkit>=3.0.52",
+    "pygments>=2.20.0",
+    "rapidfuzz>=3.14.5",
+    "wcwidth>=0.6.0",
+]
