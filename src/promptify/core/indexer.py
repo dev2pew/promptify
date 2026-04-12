@@ -91,45 +91,52 @@ class ProjectIndexer(FileSystemEventHandler):
 
     def on_any_event(self, event: FileSystemEvent) -> None:
         """Thread-safe state update triggered by filesystem changes."""
-        path = Path(event.src_path)
-        try:
-            if not path.is_relative_to(self.target_dir):
-                return
+        src_path_str = getattr(event, "src_path", None)
+        if not src_path_str:
+            return
 
-            rel_path_str = str(path.relative_to(self.target_dir)).replace("\\", "/")
-            match_path = rel_path_str + ("/" if event.is_directory else "")
+        path = Path(src_path_str).resolve()
+        target = self.target_dir.resolve()
 
-            if self.spec.match_file(match_path):
-                return
+        if not path.is_relative_to(target):
+            return
 
-            if event.event_type in ("deleted", "moved"):
-                if not event.is_directory:
-                    self.files_by_rel.pop(rel_path_str, None)
-                else:
-                    self.dirs.discard(rel_path_str)
+        rel_path_str = str(path.relative_to(target)).replace("\\", "/")
+        is_dir = getattr(event, "is_directory", False)
+        match_path = rel_path_str + ("/" if is_dir else "")
 
-            if event.event_type in ("created", "modified", "moved"):
-                dest_path = (
-                    Path(event.dest_path) if hasattr(event, "dest_path") else path
-                )
+        if self.spec.match_file(match_path):
+            return
 
-                if dest_path.exists():
-                    dest_rel = str(dest_path.relative_to(self.target_dir)).replace(
-                        "\\", "/"
+        event_type = getattr(event, "event_type", "")
+
+        if event_type in ("deleted", "moved"):
+            if not is_dir:
+                self.files_by_rel.pop(rel_path_str, None)
+            else:
+                self.dirs.discard(rel_path_str)
+
+        if event_type in ("created", "modified", "moved"):
+            dest_path_str = getattr(event, "dest_path", None)
+            dest_path = Path(dest_path_str).resolve() if dest_path_str else path
+
+            if dest_path.exists():
+                dest_rel = str(dest_path.relative_to(target)).replace("\\", "/")
+
+                if not self.case.is_file_allowed(dest_path, target, self.spec):
+                    return
+
+                if dest_path.is_file():
+                    stat = dest_path.stat()
+                    self.files_by_rel[dest_rel] = FileMeta(
+                        path=dest_path,
+                        rel_path=dest_rel,
+                        ext=dest_path.suffix.lstrip(".").lower(),
+                        size=stat.st_size,
+                        mtime=stat.st_mtime,
                     )
-                    if dest_path.is_file():
-                        stat = dest_path.stat()
-                        self.files_by_rel[dest_rel] = FileMeta(
-                            path=dest_path,
-                            rel_path=dest_rel,
-                            ext=dest_path.suffix.lstrip(".").lower(),
-                            size=stat.st_size,
-                            mtime=stat.st_mtime,
-                        )
-                    else:
-                        self.dirs.add(dest_rel)
-        except Exception:
-            pass
+                else:
+                    self.dirs.add(dest_rel)
 
     def find_matches(self, query: str) -> list[FileMeta]:
         """Supports exact, globbing, and fuzzy partial path matching."""
