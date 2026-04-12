@@ -1,6 +1,7 @@
 {
     "name": "python",
     "types": [
+        "README.md",
         ".py",
         ".pyi",
         ".toml",
