@@ -6,13 +6,15 @@ from .config import CaseConfig
 from .indexer import ProjectIndexer
 from .models import FileMeta, CachedContent
 from .constants import COMMENT_SYNTAX
+from .settings import MAX_FILE_SIZE, MAX_CONCURRENT_READS
+from .i18n import strings
 
 
 class ProjectContext:
     """Provides sandboxed, asynchronous, size-limited access to project resources."""
 
-    IO_SEMAPHORE = asyncio.Semaphore(100)
-    MAX_FILE_SIZE = 5 * 1024 * 1024
+    IO_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_READS)
+    MAX_FILE_SIZE = MAX_FILE_SIZE
 
     def __init__(self, target_dir: Path, case: CaseConfig, indexer: ProjectIndexer):
         self.target_dir = target_dir
@@ -27,7 +29,7 @@ class ProjectContext:
     async def get_file_content(self, query: str, range_str: str | None = None) -> str:
         matches = self.indexer.find_matches(query)
         if not matches:
-            return f"<!-- error... no files matching '{query}' found -->\n"
+            return strings["err_file_not_found"].format(query=query)
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -43,7 +45,7 @@ class ProjectContext:
         matches = self.indexer.get_by_extensions(exts)
 
         if not matches:
-            return f"<!-- no files found for types '{exts_str}' -->\n"
+            return strings["err_type_not_found"].format(exts=exts_str)
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -60,7 +62,7 @@ class ProjectContext:
         ]
 
         if not matches:
-            return f"<!-- directory '{dir_query}' is empty or not found -->\n"
+            return strings["err_dir_empty"].format(query=dir_query)
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -72,10 +74,11 @@ class ProjectContext:
 
     async def _read_and_format(self, meta: FileMeta, range_str: str | None) -> str:
         if meta.size > self.MAX_FILE_SIZE:
-            return f"<!-- error... '{meta.rel_path}' exceeds 5MB size limit -->\n"
+            # THIS IS THE LINE THAT WAS CAUSING THE TEST FAILURE
+            return strings["err_file_too_large"].format(path=meta.rel_path)
 
         if not self.is_sandboxed(meta.path):
-            return f"<!-- error... access denied to '{meta.rel_path}' -->\n"
+            return strings["err_access_denied"].format(path=meta.rel_path)
 
         content = await self._read_cached(meta)
         lines = content.splitlines(keepends=True)
@@ -84,9 +87,10 @@ class ProjectContext:
             lines, omitted = self._apply_range(lines, range_str)
             if omitted > 0:
                 prefix, suffix = COMMENT_SYNTAX.get(meta.ext, ("// ", ""))
-                lines.append(
-                    f"\n{prefix}... (truncated, {omitted} lines omitted){suffix}\n"
+                notice = strings["truncation_notice"].format(
+                    prefix=prefix, omitted=omitted, suffix=suffix
                 )
+                lines.append(notice)
 
         final_content = "".join(lines)
         return f"- `{meta.rel_path}`\n\n```{meta.ext}\n{final_content}\n```\n"
@@ -109,7 +113,7 @@ class ProjectContext:
         """Evaluates limits like 'first 200', 'last 100', '10-20', or '#L45'."""
         range_str = range_str.strip().lower()
         total = len(lines)
-        error_msg = f"\n<!-- error... invalid range '{range_str}' -->\n"
+        error_msg = strings["err_invalid_range"].format(range=range_str)
 
         if range_str.startswith("first "):
             try:
@@ -143,7 +147,11 @@ class ProjectContext:
         return lines, 0
 
     def generate_tree(self) -> str:
-        tree_str = ["TREE /F", f"Folder PATH listing for {self.target_dir.name}", "C:."]
+        tree_str = [
+            strings["tree_header_1"],
+            strings["tree_header_2"].format(name=self.target_dir.name),
+            strings["tree_header_3"],
+        ]
 
         def _build_tree(current_dir: str, prefix: str = ""):
             children = set()

@@ -4,6 +4,8 @@ from typing import Any
 from prompt_toolkit import print_formatted_text, HTML
 from prompt_toolkit.shortcuts import PromptSession
 
+from .i18n import strings
+
 
 class Logger:
     def __init__(self, verbosity: int = 1, include_timestamp: bool = False):
@@ -22,10 +24,8 @@ class Logger:
         formatted_text = HTML(f"{timestamp}<{color}>{prefix}</{color}> {safe_message}")
 
         try:
-            # Attempt to print with rich terminal colors
             print_formatted_text(formatted_text, **kwargs)
         except Exception:
-            # Fallback for pytest capturing, CI/CD pipelines, or piped outputs
             print(f"{timestamp}{prefix} {message}", **kwargs)
 
     def normal(self, message: str, **kwargs: Any) -> None:
@@ -34,7 +34,11 @@ class Logger:
     async def input_async(self, message: str) -> str:
         timestamp = self._get_timestamp()
         safe_message = str(message).replace("<", "&lt;").replace(">", "&gt;")
-        formatted_text = HTML(f"{timestamp}<ansicyan>[&lt;]</ansicyan> {safe_message}")
+
+        # AUTOMATICALLY APPEND ' >> ' TO ALL INPUT PROMPTS
+        formatted_text = HTML(
+            f"{timestamp}<ansicyan>[&lt;]</ansicyan> {safe_message} &gt;&gt; "
+        )
 
         if self._session is None:
             self._session = PromptSession()
@@ -43,7 +47,7 @@ class Logger:
             return await self._session.prompt_async(formatted_text)
         except (EOFError, KeyboardInterrupt):
             print()
-            self.warning("operation cancelled by user")
+            self.warning(strings.get("operation_cancelled", "operation cancelled"))
             sys.exit(0)
 
     def error(self, message: str, **kwargs: Any) -> None:

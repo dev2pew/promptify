@@ -2,6 +2,7 @@ import sys
 import datetime
 import asyncio
 import aiofiles
+import pyperclip
 from pathlib import Path
 
 from .logger import log
@@ -11,6 +12,7 @@ from .context import ProjectContext
 from .indexer import ProjectIndexer
 from .resolver import PromptResolver
 from .editor import InteractiveEditor
+from .i18n import strings
 
 
 class App:
@@ -44,44 +46,53 @@ class App:
         out_dir = self.outs_dir / case_name / f"{now.year}_{now.month}_{now.day}"
         out_dir.mkdir(parents=True, exist_ok=True)
         filepath = out_dir / f"{now.strftime('%H_%M_%S')}.md"
+
         async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
             await f.write(content)
-        log.success(f"successfully saved output - '{filepath}'")
+
+        log.success(strings["saved_output"].format(path=filepath))
+
+        try:
+            await asyncio.to_thread(pyperclip.copy, content)
+            log.success(strings["copied_clipboard"])
+        except Exception as e:
+            log.warning(strings["clipboard_failed"].format(error=e))
 
     async def run(self) -> None:
-        print(">>> welcome to promptify ---")
+        print(strings["welcome"])
 
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
         if not cases:
-            log.error("no cases found in 'cases/' directory")
-            log.info(f"self.root_dir shows '{self.root_dir}'")
+            log.error(strings["no_cases"])
+            log.info(strings["root_dir_shows"].format(path=self.root_dir))
             return
 
-        print("\n[available cases]")
+        print(strings["available_cases"])
         print_columnized([c.name for c in cases])
 
         try:
-            case_input = (await log.input_async("select case >> ")).strip()
+            case_input = (await log.input_async(strings["select_case"])).strip()
             if not case_input:
-                log.warning("operation cancelled")
+                log.warning(strings["operation_cancelled"])
                 return
             case_idx = int(case_input) - 1
             if case_idx < 0:
                 raise IndexError
             selected_case_dir = cases[case_idx]
         except (ValueError, IndexError):
-            log.error("invalid selection")
+            log.error(strings["invalid_selection"])
             return
 
         case = CaseConfig(selected_case_dir)
         last_path = await self.get_last_path(case.name)
+
         target_path_str = (
-            await log.input_async(f"enter target project path ('{last_path}') >> ")
+            await log.input_async(strings["enter_target_path"].format(path=last_path))
         ).strip() or last_path
 
         target_dir = Path(target_path_str).resolve()
         if not target_dir.is_dir():
-            log.error(f"directory '{target_dir}' does not exist")
+            log.error(strings["dir_not_exist"].format(path=target_dir))
             return
 
         await self.save_last_path(case.name, str(target_dir))
@@ -93,22 +104,22 @@ class App:
         context = ProjectContext(target_dir, case, indexer)
         resolver = PromptResolver(context)
 
-        print("\n[available modes]")
+        print(strings["available_modes"])
         print_modes(
             [
-                ("simple mode", "static fixed prompt based off a template"),
-                ("interactive mode", "rich CLI text editor with autocomplete"),
+                (strings["mode_simple_name"], strings["mode_simple_desc"]),
+                (strings["mode_interactive_name"], strings["mode_interactive_desc"]),
             ]
         )
 
         try:
-            mode_input = (await log.input_async("select mode >> ")).strip()
+            mode_input = (await log.input_async(strings["select_mode"])).strip()
             if not mode_input:
-                log.warning("operation cancelled.")
+                log.warning(strings["operation_cancelled"])
                 return
             mode = int(mode_input)
         except ValueError:
-            log.error("invalid selection")
+            log.error(strings["invalid_selection"])
             return
 
         try:
@@ -117,17 +128,17 @@ class App:
             elif mode == 2:
                 await self.run_interactive_mode(case, resolver, indexer)
             else:
-                log.error("invalid mode")
+                log.error(strings["invalid_mode"])
         finally:
             indexer.stop_watching()
 
     async def run_legacy_mode(self, case: CaseConfig, resolver: PromptResolver) -> None:
         legacy_path = case.case_dir / case.legacy_file
         if not legacy_path.exists():
-            log.error(f"legacy file '{legacy_path}' not found")
+            log.error(strings["legacy_not_found"].format(path=legacy_path))
             return
 
-        log.normal("processing legacy template")
+        log.normal(strings["processing_legacy"])
         async with aiofiles.open(legacy_path, "r", encoding="utf-8") as f:
             content = await f.read()
 
@@ -147,10 +158,10 @@ class App:
         edited_text = await editor.run_async()
 
         if edited_text is None:
-            log.warning("operation cancelled by user")
+            log.warning(strings["operation_cancelled"])
             return
 
-        log.normal("resolving mentions")
+        log.normal(strings["resolving_mentions"])
         final_output = await resolver.resolve_user(edited_text)
         await self.save_output(case.name, final_output)
 
@@ -160,5 +171,5 @@ def cli():
         asyncio.run(App().run())
     except KeyboardInterrupt:
         print()
-        log.warning("exiting")
+        log.warning(strings.get("exiting", "exiting"))
         sys.exit(0)
