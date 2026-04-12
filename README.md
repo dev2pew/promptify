@@ -10,8 +10,8 @@
 
 ### GENERAL
 
-- Built on `asyncio` with structured concurrency (`TaskGroup`) for high-performance file reading and mention resolution;
-- Uses `watchdog` to maintain an in-memory map of your project. Autocomplete is near-instant, even in large codebases;
+- Built on `asyncio` with structured concurrency (`TaskGroup`) and `aiofiles` for fully non-blocking, high-performance file I/O and mention resolution;
+- Uses `watchdog` to maintain an in-memory map of your project, paired with `rapidfuzz` for ultra-fast, near-instant fuzzy autocomplete even in massive codebases;
 - Strict path validation ensures the tool never reads files outside of your specified project directory;
 - Automatically detects language extensions to wrap code in appropriate Markdown fences. (e.g., `python`)
 
@@ -80,7 +80,7 @@ cases/
 
 `promptify` is built with a "Test-First" mentality.
 
-- 100% Green Suite: All core logic is verified via `pytest` and `pytest-asyncio`;
+- 100% Green Suite: All core logic is verified via `pytest` and `pytest-asyncio`, with graceful CI/CD console fallbacks;
 - Dynamic Sandbox: Tests generate a temporary filesystem to verify indexing, line-slicing, and loop prevention without touching your actual data;
 - Linting: Strictly formatted and linted using Ruff for Python 3.13+ compatibility.
 
@@ -110,10 +110,17 @@ uv sync
 
 ```
 
-3. Run using...
+1. Run using...
 
 ```bash
 uv run promptify
+
+```
+
+Or via the module entry point...
+
+```bash
+uv run python -m promptify
 
 ```
 
