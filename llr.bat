@@ -2,3 +2,5 @@
 TITLE %~n0
 
 uv.exe run promptify %*
+
+PAUSE
