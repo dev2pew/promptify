@@ -9,6 +9,8 @@ dependencies = [
     "pathspec>=1.0.4",
     "prompt-toolkit>=3.0.52",
     "pygments>=2.20.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
     "rapidfuzz>=3.14.5",
     "watchdog>=6.0.0",
     "wcwidth>=0.6.0",
@@ -24,3 +26,8 @@ build-backend = "hatchling.build"
 [tool.ruff]
 line-length = 88
 target-version = "py313"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
