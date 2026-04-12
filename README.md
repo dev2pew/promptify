@@ -80,3 +80,62 @@ cases/
     ├── .caseignore    # Rules like *.log or secret.key
     ├── prompt.md      # Initial text for Interactive Mode
     └── legacy.md      # Template for Simple Mode
+
+```
+
+### TESTING
+
+`promptify` is built with a "Test-First" mentality.
+
+- 100% Green Suite: All core logic is verified via `pytest` and `pytest-asyncio`, with graceful CI/CD console fallbacks;
+- Dynamic Sandbox: Tests generate a temporary filesystem to verify indexing, line-slicing, and loop prevention without touching your actual data;
+- Linting: Strictly formatted and linted using Ruff for Python 3.13+ compatibility.
+
+Run Tests...
+
+```bash
+uv run pytest -v
+
+```
+
+Format Code...
+
+```bash
+uv run ruff format src/ tests/
+
+```
+
+---
+
+### INSTALL
+
+1. Get [uv](https://github.com/astral-sh/uv);
+2. Setup using...
+
+```bash
+uv sync
+
+```
+
+1. Run using...
+
+```bash
+uv run promptify
+
+```
+
+Or via the module entry point...
+
+```bash
+uv run python -m promptify
+
+```
+
+---
+
+### GUARDS
+
+- Prevents reading files larger than 5MB; (configurable)
+- If using `resolve_system`, the engine detects infinite loops (e.g., `A.md` calls `A.md`) and neutralizes them with an HTML warning comment;
+- Limits concurrent file reads to 100 to prevent OS file descriptor exhaustion;
+- Gracefully handles missing `git` installations or missing `.git` repositories.
