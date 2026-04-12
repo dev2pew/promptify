@@ -3,6 +3,7 @@ import datetime
 import asyncio
 import aiofiles
 import pyperclip
+import shutil
 from pathlib import Path
 
 from .logger import log
@@ -97,11 +98,26 @@ class App:
 
         await self.save_last_path(case.name, str(target_dir))
 
+        has_git = shutil.which("git") is not None
+        has_git_folder = (target_dir / ".git").exists()
+        if not has_git:
+            log.warning(
+                strings.get("git_not_found", "git executable not found in system path.")
+            )
+        if not has_git_folder:
+            log.warning(
+                strings.get(
+                    "no_git_folder", "no .git folder found in '{path}'."
+                ).format(path=target_dir)
+            )
+
         indexer = ProjectIndexer(target_dir, case)
         await indexer.build_index()
         indexer.start_watching()
 
-        context = ProjectContext(target_dir, case, indexer)
+        context = ProjectContext(
+            target_dir, case, indexer, has_git=has_git and has_git_folder
+        )
         resolver = PromptResolver(context)
 
         print(strings["available_modes"])
