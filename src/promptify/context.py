@@ -13,6 +13,18 @@ class ProjectContext:
     IO_SEMAPHORE = asyncio.Semaphore(100)
     MAX_FILE_SIZE = 5 * 1024 * 1024 # 5MB limit for single file reads
 
+    # Language aware commenting syntax mapping
+    COMMENT_SYNTAX = {
+        "python": ("# ", ""), "py": ("# ", ""), "bash": ("# ", ""), "sh": ("# ", ""),
+        "yaml": ("# ", ""), "yml": ("# ", ""), "ruby": ("# ", ""), "rb": ("# ", ""),
+        "javascript": ("// ", ""), "js": ("// ", ""), "typescript": ("// ", ""), "ts": ("// ", ""),
+        "java": ("// ", ""), "c": ("// ", ""), "cpp": ("// ", ""), "csharp": ("// ", ""),
+        "cs": ("// ", ""), "go": ("// ", ""), "rust": ("// ", ""), "rs": ("// ", ""),
+        "swift": ("// ", ""), "php": ("// ", ""), "html": ("<!-- ", " -->"),
+        "xml": ("<!-- ", " -->"), "markdown": ("<!-- ", " -->"), "md": ("<!-- ", " -->"),
+        "css": ("/* ", " */"), "scss": ("/* ", " */"), "sql": ("-- ", ""), "lua": ("-- ", "")
+    }
+
     def __init__(self, target_dir: Path, case: CaseConfig, indexer: ProjectIndexer):
         self.target_dir = target_dir
         self.case = case
@@ -78,7 +90,8 @@ class ProjectContext:
         if range_str:
             lines, omitted = self._apply_range(lines, range_str)
             if omitted > 0:
-                lines.append(f"\n... (truncated, {omitted} lines omitted)\n")
+                prefix, suffix = self.COMMENT_SYNTAX.get(meta.ext, ("// ", ""))
+                lines.append(f"\n{prefix}... (truncated, {omitted} lines omitted){suffix}\n")
 
         final_content = "".join(lines)
         return f"- `{meta.rel_path}`\n\n```{meta.ext}\n{final_content}\n```\n"
@@ -131,7 +144,6 @@ class ProjectContext:
         tree_str = ["TREE /F", f"Folder PATH listing for {self.target_dir.name}", "C:."]
 
         def _build_tree(current_dir: str, prefix: str = ""):
-            # Gather immediate children from index
             children = set()
             for p in self.indexer.files_by_rel:
                 if p.startswith(current_dir) and p != current_dir:
