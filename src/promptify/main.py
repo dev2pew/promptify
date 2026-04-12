@@ -55,7 +55,13 @@ class App:
         print_columnized([c.name for c in cases])
 
         try:
-            case_idx = int(log.input("select case >> ")) - 1
+            case_input = log.input("select case >> ").strip()
+            if not case_input:
+                log.warning("operation cancelled")
+                return
+            case_idx = int(case_input) - 1
+            if case_idx < 0:
+                raise IndexError
             selected_case_dir = cases[case_idx]
         except (ValueError, IndexError):
             log.error("invalid selection")
@@ -87,7 +93,16 @@ class App:
         ])
 
         try:
-            mode = int(log.input("select mode >> "))
+            mode_input = log.input("select mode >> ").strip()
+            if not mode_input:
+                log.warning("operation cancelled.")
+                return
+            mode = int(mode_input)
+        except ValueError:
+            log.error("invalid selection")
+            return
+
+        try:
             if mode == 1:
                 await self.run_legacy_mode(case, resolver)
             elif mode == 2:
