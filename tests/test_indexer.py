@@ -18,11 +18,11 @@ async def test_indexer_find_matches(app_components):
     """Tests exact, glob, and fuzzy matching."""
     context, _ = app_components
     indexer = context.indexer
-    # Exact
+    # EXACT
     assert len(indexer.find_matches("app.py")) == 1
-    # Glob
+    # GLOB
     assert len(indexer.find_matches("src/*.py")) == 2
-    # Fuzzy
+    # FUZZY
     assert len(indexer.find_matches("main")) == 1
 
 
@@ -35,7 +35,7 @@ async def test_indexer_extensions(app_components):
     assert "md" in exts
 
     py_files = indexer.get_by_extensions(["py"])
-    assert len(py_files) == 3  # app.py, src/main.py, src/utils.py
+    assert len(py_files) == 3  # APP.PY, SRC/MAIN.PY, SRC/UTILS.PY
 
 
 async def test_indexer_events(app_components, test_sandbox):
@@ -44,14 +44,14 @@ async def test_indexer_events(app_components, test_sandbox):
     indexer = context.indexer
     demo_dir = test_sandbox["demo"]
 
-    # Simulate create
+    # SIMULATE CREATE
     new_file = demo_dir / "new.py"
     new_file.write_text("print('new')", encoding="utf-8")
     event = FileCreatedEvent(str(new_file))
     indexer.on_any_event(event)
     assert "new.py" in indexer.files_by_rel
 
-    # Simulate delete
+    # SIMULATE DELETE
     event = FileDeletedEvent(str(new_file))
     indexer.on_any_event(event)
     assert "new.py" not in indexer.files_by_rel

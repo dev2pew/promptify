@@ -26,7 +26,7 @@ class SymbolExtractor:
         declarations = []
         char_pos = 0
 
-        # 1. Identify all declarations
+        # 1. IDENTIFY ALL DECLARATIONS
         for i, (ttype, tval) in enumerate(tokens):
             if ttype in (Token.Name.Function, Token.Name.Class, Token.Name.Namespace):
                 line_idx = self.code.count("\n", 0, char_pos)
@@ -39,7 +39,7 @@ class SymbolExtractor:
                     }
                 )
             elif ttype in Token.Name:
-                # Lookback for declaration keywords
+                # LOOKBACK FOR DECLARATION KEYWORDS
                 for j in range(i - 1, max(-1, i - 5), -1):
                     if tokens[j][0] in Token.Keyword and tokens[j][1] in (
                         "def",
@@ -61,7 +61,7 @@ class SymbolExtractor:
                         break
             char_pos += len(tval)
 
-        # Remove duplicates on the same line
+        # REMOVE DUPLICATES ON THE SAME LINE
         unique_decls = {}
         for d in declarations:
             key = (d["start_line"], d["name"])
@@ -71,7 +71,7 @@ class SymbolExtractor:
 
         is_python = self.filename.endswith((".py", ".pyx", ".gd", ".yaml", ".yml"))
 
-        # 2. Find the end line for each declaration
+        # 2. FIND THE END LINE FOR EACH DECLARATION
         for d in declarations:
             start_line = d["start_line"]
             if is_python:
@@ -112,7 +112,7 @@ class SymbolExtractor:
                 else:
                     d["end_line"] = start_line
 
-        # 3. Build parent map to resolve scoped names (Class.method)
+        # 3. BUILD PARENT MAP TO RESOLVE SCOPED NAMES (CLASS.METHOD)
         parent_map = {}
         for d in declarations:
             parents = [
@@ -123,7 +123,7 @@ class SymbolExtractor:
                 and p["end_line"] >= d["end_line"]
             ]
             if parents:
-                # Ensure parent is strictly larger in scope, or if same scope, appeared earlier in the file.
+                # ENSURE PARENT IS STRICTLY LARGER IN SCOPE, OR IF SAME SCOPE, APPEARED EARLIER IN THE FILE.
                 valid_parents = [
                     p
                     for p in parents
@@ -159,7 +159,7 @@ class SymbolExtractor:
                 parts.append(curr["name"])
             return ".".join(reversed(parts))
 
-        # 4. Populate the symbols dictionary (handles overloads by appending)
+        # 4. POPULATE THE SYMBOLS DICTIONARY (HANDLES OVERLOADS BY APPENDING)
         for d in declarations:
             full_name = get_full_name(d)
             end_idx = min(d["end_line"] + 1, len(self.lines))

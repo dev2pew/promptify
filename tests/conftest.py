@@ -45,11 +45,11 @@ def test_sandbox():
     # IGNORED FILE
     (demo_dir / "secret.key").write_text("SUPER_SECRET_DATA", encoding="utf-8")
 
-    # .gitignore and test.log
+    # .GITIGNORE AND TEST.LOG
     (demo_dir / ".gitignore").write_text("*.log\n", encoding="utf-8")
     (demo_dir / "test.log").write_text("log data", encoding="utf-8")
 
-    # src dir
+    # SRC DIR
     src_dir = demo_dir / "src"
     src_dir.mkdir()
     (src_dir / "main.py").write_text("def main():\n    pass\n", encoding="utf-8")

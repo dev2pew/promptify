@@ -9,7 +9,7 @@ async def test_resolve_system_loop(app_components):
     _, resolver = app_components
     res = await resolver.resolve_system("<@file:trap.md>")
     assert strings["loop_detected"].format(match="<@file:trap.md>").strip() in res
-    assert "Folder PATH listing" in res  # [@project] resolved
+    assert "Folder PATH listing" in res  # [@PROJECT] RESOLVED
 
 
 async def test_resolve_user_single_pass(app_components):
