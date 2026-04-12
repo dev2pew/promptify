@@ -37,7 +37,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import pygments
+    import pygments # noqa: F401
     from pygments.lexers.markup import MarkdownLexer
     from prompt_toolkit.lexers import PygmentsLexer, Lexer
 
