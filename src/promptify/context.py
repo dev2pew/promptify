@@ -198,8 +198,8 @@ class ProjectContext:
             items = sorted(
                 list(children),
                 key=lambda x: (
-                    not (current_dir.lstrip("/") + "/" + x).rstrip("/")
-                    in self.indexer.dirs,
+                    (current_dir.lstrip("/") + "/" + x).rstrip("/")
+                    not in self.indexer.dirs,
                     x.lower(),
                 ),
             )
