@@ -70,6 +70,14 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.error_visible = False
         event.app.layout.focus(editor.main_window)
 
+    @custom_bindings.add("up", filter=editor_focus & has_completions_menu)
+    def _up_completion(event) -> None:
+        event.current_buffer.complete_previous()
+
+    @custom_bindings.add("down", filter=editor_focus & has_completions_menu)
+    def _down_completion(event) -> None:
+        event.current_buffer.complete_next()
+
     @custom_bindings.add(
         "enter",
         filter=editor_focus & has_completions_menu & ~is_completion_selected,

@@ -77,6 +77,16 @@ async def test_get_dir_contents(app_components):
     assert "app.py" not in res
 
 
+async def test_get_tree_contents(app_components):
+    """Tests fetching a scoped project tree via <@tree:path> implementation"""
+    context, _ = app_components
+    res = await context.get_tree_contents("src")
+    assert "tree_header_1" not in res  # TREE HEADER STRINGS RESOLVE TO EXACT OUTPUT
+    assert "main.py" in res
+    assert "utils.py" in res
+    assert "app.py" not in res
+
+
 async def test_generate_tree(app_components):
     """Tests project tree generation."""
     context, _ = app_components

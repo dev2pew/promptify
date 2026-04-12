@@ -78,11 +78,12 @@ the editor is powered by `prompt-toolkit` and supports standard IDE shortcuts...
 | :-- | :-- | :-- | :--: |
 | `<@file:path>` | attach file | `<@file:src/main.py>` | 📄 |
 | `<@file:path:range>` | attach sliced file<br><br>`first [n]`<br>`last [n]`<br>`[n]-[m]`<br>`#[n]` | `<@file:src/main.py:first 32>`<br>`<@file:src/main.py:last 16>`<br>`<@file:src/main.py:32-64>`<br>`<@file:src/main.py:#128>` | 📄↕️ |
-| `<@dir:path>` | attach folder | `<@dir:src/>` | 📁 |
+| `<@dir:path>` | attach folder | `<@dir:src>` | 📁 |
+| `<@tree:path>` | attach folder structure | `<@tree:src>` | 📁 |
 | `<@ext:list>` | attach files by extension | `<@ext:toml,py>` | 📄🔍 |
 | `<@symbol:path:name>` | attach class, method, function *(AST)* | `<@symbol:src/main.py:Class.method>` | 📄©️ |
 | `<@git:diff>` | attach working tree `diff` | `<@git:diff>` | 🔄⚖️ |
-| `<@git:diff:path>` | attach working tree `diff` for target | `<@git:diff:src/main.py>`<br>`<@git:diff:src/>` | 📄 / 📁 + ⚖️ |
+| `<@git:diff:path>` | attach working tree `diff` for target | `<@git:diff:src/main.py>`<br>`<@git:diff:src>` | 📄 / 📁 + ⚖️ |
 | `<@git:status>` | attach working tree `status` | `<@git:status>` | 🔄❔ |
 | `[@project]` | insert project structure | `[@project]` | 🧱 |
 

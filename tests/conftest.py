@@ -10,6 +10,7 @@ from promptify.core.config import CaseConfig
 from promptify.core.indexer import ProjectIndexer
 from promptify.core.context import ProjectContext
 from promptify.core.resolver import PromptResolver
+from promptify.core.mods import ModRegistry
 
 
 @pytest.fixture(scope="session")
@@ -82,6 +83,9 @@ async def app_components(test_sandbox):
     await indexer.build_index()
 
     context = ProjectContext(test_sandbox["demo"], case, indexer)
-    resolver = PromptResolver(context)
+    registry = ModRegistry()
+    registry.register_defaults()
+
+    resolver = PromptResolver(context, registry)
 
     return context, resolver
