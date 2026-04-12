@@ -1,6 +1,5 @@
 import re
 import sys
-import os
 
 from .logger import log
 from .indexer import ProjectIndexer
@@ -37,7 +36,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import pygments # noqa: F401
+    import pygments  # noqa: F401
     from pygments.lexers.markup import MarkdownLexer
     from prompt_toolkit.lexers import PygmentsLexer, Lexer
 
@@ -49,7 +48,7 @@ except ImportError:
     )
 
 try:
-    from rapidfuzz import process, fuzz # noqa: F401
+    from rapidfuzz import process, fuzz  # noqa: F401
 
     HAS_RAPIDFUZZ = True
 except ImportError:
