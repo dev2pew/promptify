@@ -766,7 +766,7 @@ press [Enter], [F1] or [^G] to close help
         bindings = merge_key_bindings([default_bindings, custom_bindings])
 
         toolbar_text = (
-            "[^G] help | [^S] save | [^Q] quit | <@file: / <@dir: / <@ext: /[@project]"
+            "[^G] help | [^S] save | [^Q] quit | <@file: / <@dir: / <@ext: / [@project]"
         )
         bottom_toolbar = Window(
             content=FormattedTextControl(toolbar_text), height=1, style="class:toolbar"
