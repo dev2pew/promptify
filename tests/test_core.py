@@ -1,6 +1,8 @@
 import pytest
 from pathlib import Path
 
+from promptify.i18n import strings
+
 pytestmark = pytest.mark.asyncio
 
 
@@ -24,7 +26,13 @@ class TestPromptifyCore:
         assert "This is line 4" in result
         assert "This is line 1" not in result
         assert "This is line 5" not in result
-        assert "(truncated, 17 lines omitted)" in result
+
+        expected_truncation = (
+            strings["truncation_notice"]
+            .format(prefix="# ", omitted=17, suffix="")
+            .strip()
+        )
+        assert expected_truncation in result
 
         # TEST "FIRST N" KEYWORD
         result_first = await resolver.resolve_user("<@file:app.py:first 2>")
@@ -41,8 +49,8 @@ class TestPromptifyCore:
 
         result = await resolver.resolve_user("<@file:app.py>")
 
-        # MATCH LOWERCASE STYLE IN CONTEXT.PY
-        assert "exceeds 5MB size limit" in result
+        expected_err = strings["err_file_too_large"].format(path="app.py").strip()
+        assert expected_err in result
 
     async def test_system_recursive_loop_prevention(self, app_components):
         """
@@ -54,8 +62,8 @@ class TestPromptifyCore:
         # TRAP.MD CONTAINS `<@FILE:TRAP.MD>`.
         result = await resolver.resolve_system("<@file:trap.md>")
 
-        # VERIFIED FORMATTED LOOP COMMENT MATCHES YOUR RETURN IN RESOLVER.PY
-        assert "<!-- loop detected" in result
+        expected_err = strings["loop_detected"].format(match="<@file:trap.md>").strip()
+        assert expected_err in result
 
         # RECURSIVE RESOLUTION CHECK (IT SHOULD STILL RESOLVE THE OTHER TAG [@PROJECT])
         assert "Folder PATH listing" in result
@@ -72,7 +80,10 @@ class TestPromptifyCore:
 
         # THE RAW TEXT SHOULD BE PRESENT, NOT THE LOOP DETECTION COMMENT
         assert "<@file:trap.md>" in result
-        assert "loop detected" not in result
+
+        # EXTRACT THE BASE STRING WITHOUT FORMATTING TO ENSURE IT'S NOT PRESENT
+        loop_str = strings["loop_detected"].split("-")[0].strip()
+        assert loop_str not in result
 
         # THE [@PROJECT] TAG INSIDE THE FILE SHOULD ALSO REMAIN RAW AND UN-EVALUATED
         assert "[@project]" in result

@@ -9,6 +9,7 @@ from watchdog.events import FileSystemEventHandler, FileSystemEvent
 from .logger import log
 from .models import FileMeta
 from .config import CaseConfig
+from .i18n import strings
 
 type FileIndex = dict[str, FileMeta]
 
@@ -32,7 +33,7 @@ class ProjectIndexer(FileSystemEventHandler):
 
     async def build_index(self) -> None:
         """Initial fast scan using os.scandir."""
-        log.info(f"indexing project - '{self.target_dir.name}'")
+        log.info(strings["indexing_project"].format(name=self.target_dir.name))
 
         def _scan(directory: Path):
             try:
@@ -66,7 +67,9 @@ class ProjectIndexer(FileSystemEventHandler):
 
         await asyncio.to_thread(_scan, self.target_dir)
         log.success(
-            f"indexed {len(self.files_by_rel)} files and {len(self.dirs)} directories"
+            strings["indexed_success"].format(
+                files=len(self.files_by_rel), dirs=len(self.dirs)
+            )
         )
 
     def start_watching(self) -> None:
@@ -76,9 +79,7 @@ class ProjectIndexer(FileSystemEventHandler):
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
         except Exception as e:
-            log.warning(
-                f"standard observer failed, falling back to 'PollingObserver' - {e}"
-            )
+            log.warning(strings["observer_fallback"].format(error=e))
             self._observer = PollingObserver()
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()

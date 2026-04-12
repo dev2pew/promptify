@@ -5,6 +5,7 @@ from typing import Iterable
 from .logger import log
 from .indexer import ProjectIndexer
 from .bindings import setup_keybindings
+from .i18n import strings
 
 try:
     from prompt_toolkit import Application
@@ -223,29 +224,7 @@ class InteractiveEditor:
         )
         self.result: str | None = None
 
-        help_text = """
-[ autocomplete mentions ]
-
-<@file:>   : attach file
-<@dir:>    : attach folder
-<@ext:>    : attach file extension
-[@project] : attach project structure
-
-[ navigation & editing ]
-
-^[S]       : save and generate prompt
-^[Q]       : quit without saving
-^[Arrow]   : move cursor (wrap)
-[Shift]    : select text
-^[C/X/V]   : copy / cut / paste
-^[Z/Y]     : undo / redo
-^[W]       : delete previous word
-^[/]       : toggle comment for current line/selection
-^[_]       : same as [^/]
-
-press [Enter], [F1] or ^[G] to close help
-        """.strip()
-
+        help_text = strings.get("help_text", "")
         self.help_buffer = Buffer(document=Document(help_text), read_only=True)
 
         self.help_window = Window(
@@ -266,9 +245,7 @@ press [Enter], [F1] or ^[G] to close help
         custom_bindings = setup_keybindings(self)
         bindings = merge_key_bindings([default_bindings, custom_bindings])
 
-        toolbar_text = (
-            "[^G] help | [^S] save |[^Q] quit | <@file: / <@dir: / <@ext: / [@project]"
-        )
+        toolbar_text = strings.get("toolbar_text", "")
         bottom_toolbar = Window(
             content=FormattedTextControl(toolbar_text), height=1, style="class:toolbar"
         )

@@ -4,6 +4,7 @@ from pathlib import Path
 import pathspec
 
 from .logger import log
+from .i18n import strings
 
 
 class CaseConfig:
@@ -35,13 +36,11 @@ class CaseConfig:
                     self.prompt_file = data.get("prompt", self.prompt_file)
                     self.legacy_file = data.get("legacy", self.legacy_file)
             except Exception as e:
-                log.warning(f"failed to parse config for '{self.name}' - {e}")
+                log.warning(
+                    strings["config_parse_failed"].format(name=self.name, error=e)
+                )
 
     def get_ignore_spec(self, target_project_dir: Path) -> pathspec.PathSpec:
-        """
-        Builds the pathspec. Appends .caseignore AFTER .gitignore
-        so that .caseignore rules (and negations `!`) take precedence.
-        """
         lines = [".git/", ".svn/", "__pycache__/", ".venv/", "node_modules/"]
 
         target_ignore_path = target_project_dir / ".gitignore"
@@ -50,7 +49,7 @@ class CaseConfig:
                 with open(target_ignore_path, "r", encoding="utf-8") as f:
                     lines.extend(f.readlines())
             except Exception as e:
-                log.warning(f"could not read '.gitignore' - {e}")
+                log.warning(strings["gitignore_read_failed"].format(error=e))
 
         case_ignore_path = self.case_dir / self.ignores_file
         if case_ignore_path.exists():
@@ -58,7 +57,7 @@ class CaseConfig:
                 with open(case_ignore_path, "r", encoding="utf-8") as f:
                     lines.extend(f.readlines())
             except Exception as e:
-                log.warning(f"could not read '.caseignore' - {e}")
+                log.warning(strings["caseignore_read_failed"].format(error=e))
 
         return pathspec.PathSpec.from_lines("gitignore", lines)
 
@@ -72,7 +71,6 @@ class CaseConfig:
             return False
 
         if file_path.is_file() and self.types and "*" not in self.types:
-            # ALLOW IF EITHER THE FULL NAME 'README.MD' OR THE EXTENSION '.PY' MATCHES
             if file_path.name not in self.types and file_path.suffix not in self.types:
                 return False
 
