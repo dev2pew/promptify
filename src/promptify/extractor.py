@@ -123,15 +123,41 @@ class SymbolExtractor:
                 and p["end_line"] >= d["end_line"]
             ]
             if parents:
-                direct_parent = min(
-                    parents, key=lambda p: p["end_line"] - p["start_line"]
-                )
-                parent_map[id(d)] = direct_parent
+                # Ensure parent is strictly larger in scope, or if same scope, appeared earlier in the file.
+                valid_parents = [
+                    p
+                    for p in parents
+                    if (
+                        p["end_line"] - p["start_line"]
+                        > d["end_line"] - d["start_line"]
+                    )
+                    or (
+                        p["end_line"] - p["start_line"]
+                        == d["end_line"] - d["start_line"]
+                        and p["token_idx"] < d["token_idx"]
+                    )
+                ]
+                if valid_parents:
+                    direct_parent = min(
+                        valid_parents,
+                        key=lambda p: (
+                            p["end_line"] - p["start_line"],
+                            -p["token_idx"],
+                        ),
+                    )
+                    parent_map[id(d)] = direct_parent
 
         def get_full_name(d):
-            if id(d) in parent_map:
-                return get_full_name(parent_map[id(d)]) + "." + d["name"]
-            return d["name"]
+            parts = [d["name"]]
+            curr = d
+            seen = {id(d)}
+            while id(curr) in parent_map:
+                curr = parent_map[id(curr)]
+                if id(curr) in seen:
+                    break
+                seen.add(id(curr))
+                parts.append(curr["name"])
+            return ".".join(reversed(parts))
 
         # 4. Populate the symbols dictionary (handles overloads by appending)
         for d in declarations:
