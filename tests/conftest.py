@@ -1,6 +1,5 @@
 import pytest
 import shutil
-import asyncio
 import sys
 from pathlib import Path
 
@@ -46,11 +45,21 @@ def test_sandbox():
     # IGNORED FILE
     (demo_dir / "secret.key").write_text("SUPER_SECRET_DATA", encoding="utf-8")
 
+    # .gitignore and test.log
+    (demo_dir / ".gitignore").write_text("*.log\n", encoding="utf-8")
+    (demo_dir / "test.log").write_text("log data", encoding="utf-8")
+
+    # src dir
+    src_dir = demo_dir / "src"
+    src_dir.mkdir()
+    (src_dir / "main.py").write_text("def main():\n    pass\n", encoding="utf-8")
+    (src_dir / "utils.py").write_text("def util():\n    pass\n", encoding="utf-8")
+
     # 3. GENERATE CASE CONFIGURATION
     (case_dir / "config.json").write_text(
         '{"name": "test_case", "types": ["*"]}', encoding="utf-8"
     )
-    (case_dir / ".caseignore").write_text("*.key", encoding="utf-8")
+    (case_dir / ".caseignore").write_text("*.key\n", encoding="utf-8")
     (case_dir / "system.md").write_text(
         "You are a helpful assistant.", encoding="utf-8"
     )
