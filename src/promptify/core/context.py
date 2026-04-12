@@ -2,7 +2,7 @@ import asyncio
 import aiofiles
 from pathlib import Path
 
-from .config import CaseConfig
+from .core.config import CaseConfig
 from .indexer import ProjectIndexer
 from .models import FileMeta, CachedContent
 from .constants import COMMENT_SYNTAX

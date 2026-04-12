@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pathspec
 
-from .logger import log
+from ..ui.logger import log
 from .i18n import strings
 
 
