@@ -6,13 +6,13 @@ import pyperclip
 import shutil
 from pathlib import Path
 
-from .logger import log
-from .ui import print_columnized, print_modes
-from .config import CaseConfig
-from .context import ProjectContext
-from .indexer import ProjectIndexer
-from .resolver import PromptResolver
-from .editor import InteractiveEditor
+from .ui.logger import log
+from .ui.ui import print_columnized, print_modes
+from .core.config import CaseConfig
+from .core.context import ProjectContext
+from .core.indexer import ProjectIndexer
+from .core.resolver import PromptResolver
+from .ui.editor import InteractiveEditor
 from .i18n import strings
 
 

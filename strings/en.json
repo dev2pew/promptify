@@ -49,5 +49,133 @@
     "working_tree_clean": "<!-- working tree clean -->",
     "symbol_not_found": "<!-- error: symbol '{symbol}' not found in {path} -->",
     "symbol_error": "<!-- error: {error} -->",
-    "invalid_syntax_window": "\n  invalid syntax in {path}:\n  {error}\n\n  press [Enter] to dismiss."
+    "invalid_syntax_window": "\n  invalid syntax in {path}:\n  {error}\n\n  press [Enter] to dismiss.",
+    "err_prompt_toolkit_missing": "'prompt_toolkit' library is missing. install it using: 'uv pip install prompt_toolkit'",
+    "err_pygments_missing": "'pygments' library is missing. syntax highlighting will be disabled. install it using: 'uv pip install pygments'",
+    "err_rapidfuzz_missing": "'rapidfuzz' library is missing. install it using: 'uv pip install rapidfuzz'",
+    "lines_available": "[{lines} lines available]",
+    "help_title": "Help",
+    "error_title": "Error",
+    "comment_syntax": {
+        "python": [
+            "# ",
+            ""
+        ],
+        "py": [
+            "# ",
+            ""
+        ],
+        "bash": [
+            "# ",
+            ""
+        ],
+        "sh": [
+            "# ",
+            ""
+        ],
+        "yaml": [
+            "# ",
+            ""
+        ],
+        "yml": [
+            "# ",
+            ""
+        ],
+        "ruby": [
+            "# ",
+            ""
+        ],
+        "rb": [
+            "# ",
+            ""
+        ],
+        "javascript": [
+            "// ",
+            ""
+        ],
+        "js": [
+            "// ",
+            ""
+        ],
+        "typescript": [
+            "// ",
+            ""
+        ],
+        "ts": [
+            "// ",
+            ""
+        ],
+        "java": [
+            "// ",
+            ""
+        ],
+        "c": [
+            "// ",
+            ""
+        ],
+        "cpp": [
+            "// ",
+            ""
+        ],
+        "csharp": [
+            "// ",
+            ""
+        ],
+        "cs": [
+            "// ",
+            ""
+        ],
+        "go": [
+            "// ",
+            ""
+        ],
+        "rust": [
+            "// ",
+            ""
+        ],
+        "rs": [
+            "// ",
+            ""
+        ],
+        "swift": [
+            "// ",
+            ""
+        ],
+        "php": [
+            "// ",
+            ""
+        ],
+        "html": [
+            "<!-- ",
+            " -->"
+        ],
+        "xml": [
+            "<!-- ",
+            " -->"
+        ],
+        "markdown": [
+            "<!-- ",
+            " -->"
+        ],
+        "md": [
+            "<!-- ",
+            " -->"
+        ],
+        "css": [
+            "/* ",
+            " */"
+        ],
+        "scss": [
+            "/* ",
+            " */"
+        ],
+        "sql": [
+            "-- ",
+            ""
+        ],
+        "lua": [
+            "-- ",
+            ""
+        ]
+    }
 }

@@ -3,10 +3,10 @@ import sys
 from typing import Iterable
 
 from .logger import log
-from .indexer import ProjectIndexer
+from .core.indexer import ProjectIndexer
 from .bindings import setup_keybindings
 from .i18n import strings
-from .models import FileMeta
+from .core.models import FileMeta
 
 try:
     from prompt_toolkit import Application

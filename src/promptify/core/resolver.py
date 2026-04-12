@@ -1,7 +1,7 @@
 import re
 import asyncio
 
-from .context import ProjectContext
+from .core.context import ProjectContext
 from .i18n import strings
 
 
