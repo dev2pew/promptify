@@ -47,6 +47,7 @@ The editor is powered by `prompt-toolkit` and supports standard IDE shortcuts...
 | `[Ctrl]` + `[S]` | Save and generate final prompt |
 | `[Ctrl]` + `[Q]` | Quit without saving |
 | `[Ctrl]` + `[G]` or `[F1]` | Toggle the Help overlay |
+| ... | ... |
 | Editing | |
 | `[Ctrl]` + `[C/X/V]` | Copy / Cut / Paste |
 | `[Ctrl]` + `[Z/Y]` | Undo / Redo |
@@ -55,11 +56,19 @@ The editor is powered by `prompt-toolkit` and supports standard IDE shortcuts...
 | `[Alt]` + `[Up/Down]` | Move current line up or down |
 | `[Ctrl]` + `[W]` | Delete previous word |
 | `[Ctrl]` + `[Delete]` | Delete next word |
+| `[Enter]` | Insert newline / Apply selected autocomplete |
+| ... | ... |
 | Navigation & Selection | |
 | `[Ctrl]` + `[A]` | Select All |
 | `[Shift]` + `[Arrows]` | Text selection |
 | `[Ctrl]` + `[Arrows]` | Move cursor word by word |
+| `[Shift]` + `[Ctrl]` + `[Arrows]` | Select word by word |
+| `[Home/End]` | Move cursor to the start or end of the line |
+| `[Shift]` + `[Home/End]` | Select to the start or end of the line |
 | `[Ctrl]` + `[Home/End]` | Move cursor to the start or end of the file |
+| `[Shift]` + `[Ctrl]` + `[Home/End]` | Select to the start or end of the file |
+| `[PageUp/PageDown]` | Move cursor up or down by 15 lines |
+| `[Shift]` + `[PageUp/PageDown]` | Select up or down by 15 lines |
 
 ---
 
@@ -89,7 +98,7 @@ Define your workflows in the `cases/` directory...
 cases/
 └── my-feature/
     ├── config.json    # Define allowed file types
-    ├── .caseignore    # Rules like *.log or secret.key
+    ├── .caseignore    # Rules like '*.log' or 'secret.key'
     ├── prompt.md      # Initial text for Interactive Mode
     └── legacy.md      # Template for Simple Mode
 
@@ -121,7 +130,7 @@ uv run ruff format src/ tests/
 
 ### INSTALL
 
-1. Get[uv](https://github.com/astral-sh/uv);
+1. Get [uv](https://github.com/astral-sh/uv);
 2. Setup using...
 
 ```bash
