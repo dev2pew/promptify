@@ -88,3 +88,33 @@ class TestPromptifyCore:
         # THE [@PROJECT] TAG INSIDE THE FILE SHOULD ALSO REMAIN RAW AND UN-EVALUATED
         assert "[@project]" in result
         assert "Folder PATH listing" not in result
+
+    async def test_git_mentions(self, app_components):
+        """Tests `<@git:status>` graceful handling in a non-git sandbox."""
+        context, resolver = app_components
+        result = await resolver.resolve_user("<@git:status>")
+
+        # Validates that it doesn't crash and returns one of the expected states
+        assert any(
+            state in result
+            for state in [
+                "error: git not available",
+                "working tree clean",
+                "git status error",
+            ]
+        )
+
+    async def test_symbol_mentions(self, app_components):
+        """Tests the `<@symbol:path:name>` AST extraction."""
+        context, resolver = app_components
+
+        # Inject a function into the sandbox app.py
+        app_path = context.target_dir / "app.py"
+        with open(app_path, "a") as f:
+            f.write("\n\ndef my_func():\n    print('hello')\n")
+
+        await context.indexer.build_index()
+
+        result = await resolver.resolve_user("<@symbol:app.py:my_func>")
+        assert "def my_func():" in result
+        assert "print('hello')" in result

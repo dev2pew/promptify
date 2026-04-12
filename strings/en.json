@@ -36,9 +36,18 @@
     "tree_header_2": "Folder PATH listing for {name}",
     "tree_header_3": "C:.",
     "loop_detected": "<!-- loop detected - '{match}' -->",
-    "help_text": "[ autocomplete mentions ]\n\n<@file:>   : attach file\n<@dir:>    : attach folder\n<@ext:>    : attach file extension\n[@project] : attach project structure\n\n[ navigation & editing ]\n\n^[S]       : save and generate prompt\n^[Q]       : quit without saving\n^[Arrow]   : move cursor (wrap)\n[Shift]    : select text\n^[C/X/V]   : copy / cut / paste\n^[Z/Y]     : undo / redo\n^[W]       : delete previous word\n^[/]       : toggle comment for current line/selection\n^[_]       : same as[^/]\n\npress [Enter], [F1] or ^[G] to close help",
-    "toolbar_text": "[^G] help | [^S] save | [^Q] quit | <@file: / <@dir: / <@ext: / [@project]",
+    "help_text": "[ autocomplete mentions ]\n\n<@file:>   : attach file\n<@dir:>    : attach folder\n<@ext:>    : attach file extension\n<@git:>    : attach diff or status\n<@symbol:> : attach function or class\n[@project] : attach project structure\n\n[ navigation & editing ]\n\n^[S]       : save and generate prompt\n^[Q]       : quit without saving\n^[Arrow]   : move cursor (wrap)\n[Shift]    : select text\n^[C/X/V]   : copy / cut / paste\n^[Z/Y]     : undo / redo\n^[W]       : delete previous word\n^[/]       : toggle comment for current line/selection\n[Tab]      : indent / autocomplete\n[S-Tab]    : unindent\n[A-Up/Dn]  : move line up / down\n\npress [Enter], [F1] or ^[G] to close help",
+    "toolbar_text": "[^G] help | [^S] save | [^Q] quit | <@file: / <@dir: / <@ext: / <@git: / <@symbol: / [@project]",
     "config_parse_failed": "failed to parse config for '{name}' - {error}",
     "gitignore_read_failed": "could not read '.gitignore' - {error}",
-    "caseignore_read_failed": "could not read '.caseignore' - {error}"
+    "caseignore_read_failed": "could not read '.caseignore' - {error}",
+    "git_not_found": "git executable not found in system path.",
+    "no_git_folder": "no .git folder found in '{path}'.",
+    "git_diff_error": "<!-- git diff error: {error} -->",
+    "git_status_error": "<!-- git status error: {error} -->",
+    "no_changes": "<!-- no changes -->",
+    "working_tree_clean": "<!-- working tree clean -->",
+    "symbol_not_found": "<!-- error: symbol '{symbol}' not found in {path} -->",
+    "symbol_error": "<!-- error: {error} -->",
+    "invalid_syntax_window": "\n  invalid syntax in {path}:\n  {error}\n\n  press [Enter] to dismiss."
 }

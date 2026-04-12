@@ -16,11 +16,18 @@ class ProjectContext:
     IO_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_READS)
     MAX_FILE_SIZE = MAX_FILE_SIZE
 
-    def __init__(self, target_dir: Path, case: CaseConfig, indexer: ProjectIndexer):
+    def __init__(
+        self,
+        target_dir: Path,
+        case: CaseConfig,
+        indexer: ProjectIndexer,
+        has_git: bool = False,
+    ):
         self.target_dir = target_dir
         self.case = case
         self.indexer = indexer
         self.cache: dict[str, CachedContent] = {}
+        self.has_git = has_git
 
     def is_sandboxed(self, path: Path) -> bool:
         """Enforces absolute sandboxing to the target_dir."""
@@ -72,9 +79,86 @@ class ProjectContext:
         results = [t.result() for t in tasks]
         return "\n".join(results)
 
+    async def get_symbol_content(self, query: str, symbol_name: str) -> str:
+        if not symbol_name:
+            return f"<!-- error: no symbol provided for {query} -->"
+
+        matches = self.indexer.find_matches(query)
+        if not matches:
+            return strings["err_file_not_found"].format(query=query)
+
+        meta = matches[0]
+        if meta.size > self.MAX_FILE_SIZE:
+            return strings["err_file_too_large"].format(path=meta.rel_path)
+
+        content = await self._read_cached(meta)
+
+        from .extractor import SymbolExtractor
+
+        try:
+            extractor = SymbolExtractor(content, meta.path.name)
+            extracted = extractor.extract(symbol_name)
+            if not extracted:
+                return strings.get(
+                    "symbol_not_found",
+                    "<!-- error: symbol '{symbol}' not found in {path} -->",
+                ).format(symbol=symbol_name, path=meta.rel_path)
+            return f"- `{meta.rel_path}:{symbol_name}`\n\n```{meta.ext}\n{extracted}\n```\n"
+        except ValueError as e:
+            return strings.get("symbol_error", "<!-- error: {error} -->").format(
+                error=e
+            )
+
+    async def get_git_diff(self, path: str | None = None) -> str:
+        if not self.has_git:
+            return "<!-- error: git not available -->"
+
+        cmd = ["git", "diff"]
+        if path:
+            cmd.extend(["--", path])
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            cwd=self.target_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            return strings.get(
+                "git_diff_error", "<!-- git diff error: {error} -->"
+            ).format(error=stderr.decode(errors="replace").strip())
+
+        diff_text = stdout.decode(errors="replace")
+        if not diff_text.strip():
+            return strings.get("no_changes", "<!-- no changes -->")
+        return f"```diff\n{diff_text}\n```\n"
+
+    async def get_git_status(self) -> str:
+        if not self.has_git:
+            return "<!-- error: git not available -->"
+
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "status",
+            "-s",
+            cwd=self.target_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            return strings.get(
+                "git_status_error", "<!-- git status error: {error} -->"
+            ).format(error=stderr.decode(errors="replace").strip())
+
+        status_text = stdout.decode(errors="replace")
+        if not status_text.strip():
+            return strings.get("working_tree_clean", "<!-- working tree clean -->")
+        return f"```\n{status_text}\n```\n"
+
     async def _read_and_format(self, meta: FileMeta, range_str: str | None) -> str:
         if meta.size > self.MAX_FILE_SIZE:
-            # THIS IS THE LINE THAT WAS CAUSING THE TEST FAILURE
             return strings["err_file_too_large"].format(path=meta.rel_path)
 
         if not self.is_sandboxed(meta.path):

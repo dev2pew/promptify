@@ -1,3 +1,6 @@
+import asyncio
+import aiofiles
+import re
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.filters import Condition, has_selection, has_focus
 from prompt_toolkit.selection import SelectionState
@@ -14,6 +17,10 @@ def setup_keybindings(editor) -> KeyBindings:
     @Condition
     def is_help_visible() -> bool:
         return editor.help_visible
+
+    @Condition
+    def is_error_visible() -> bool:
+        return editor.error_visible
 
     @Condition
     def has_completions_menu() -> bool:
@@ -55,6 +62,12 @@ def setup_keybindings(editor) -> KeyBindings:
     @custom_bindings.add("enter", filter=is_help_visible)
     def _close_help_esc(event) -> None:
         editor.help_visible = False
+        event.app.layout.focus(editor.main_window)
+
+    @custom_bindings.add("escape", filter=is_error_visible)
+    @custom_bindings.add("enter", filter=is_error_visible)
+    def _close_error(event) -> None:
+        editor.error_visible = False
         event.app.layout.focus(editor.main_window)
 
     @custom_bindings.add(
@@ -280,14 +293,60 @@ def setup_keybindings(editor) -> KeyBindings:
         b.selection_state = None
         b.insert_text("\n")
 
-    @custom_bindings.add(
-        "tab", filter=editor_focus & has_selection & ~has_completions_menu
-    )
-    def _tab_over_selection(event) -> None:
+    @custom_bindings.add("tab", filter=editor_focus & ~has_completions_menu)
+    def _tab(event) -> None:
         b = event.current_buffer
-        b.cut_selection()
-        b.selection_state = None
-        b.insert_text("    ")
+        doc = b.document
+        if b.selection_state:
+            start_row = doc.translate_index_to_position(
+                b.selection_state.original_cursor_position
+            )[0]
+            end_row = doc.cursor_position_row
+            if start_row > end_row:
+                start_row, end_row = end_row, start_row
+
+            lines = doc.lines[:]
+            for i in range(start_row, end_row + 1):
+                lines[i] = "    " + lines[i]
+
+            cursor_pos = b.cursor_position
+            b.text = "\n".join(lines)
+            b.cursor_position = cursor_pos + 4 * (end_row - start_row + 1)
+        else:
+            b.insert_text("    ")
+
+    @custom_bindings.add("s-tab", filter=editor_focus & ~has_completions_menu)
+    def _s_tab(event) -> None:
+        b = event.current_buffer
+        doc = b.document
+        if b.selection_state:
+            start_row = doc.translate_index_to_position(
+                b.selection_state.original_cursor_position
+            )[0]
+            end_row = doc.cursor_position_row
+            if start_row > end_row:
+                start_row, end_row = end_row, start_row
+        else:
+            start_row = end_row = doc.cursor_position_row
+
+        lines = doc.lines[:]
+        removed_total = 0
+        for i in range(start_row, end_row + 1):
+            if lines[i].startswith("    "):
+                lines[i] = lines[i][4:]
+                removed_total += 4
+            elif lines[i].startswith("\t"):
+                lines[i] = lines[i][1:]
+                removed_total += 1
+            elif lines[i].startswith(" "):
+                spaces = len(lines[i]) - len(lines[i].lstrip(" "))
+                to_remove = min(spaces, 4)
+                lines[i] = lines[i][to_remove:]
+                removed_total += to_remove
+
+        cursor_pos = b.cursor_position
+        b.text = "\n".join(lines)
+        b.cursor_position = max(0, cursor_pos - removed_total)
 
     @custom_bindings.add("left", filter=editor_focus & ~has_completions_menu)
     def _left(event) -> None:
@@ -328,6 +387,30 @@ def setup_keybindings(editor) -> KeyBindings:
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position += b.document.get_cursor_down_position(count=1)
+
+    @custom_bindings.add("escape", "up", filter=editor_focus & ~has_completions_menu)
+    def _move_line_up(event) -> None:
+        b = event.current_buffer
+        doc = b.document
+        row = doc.cursor_position_row
+        if row > 0:
+            lines = doc.lines[:]
+            lines[row - 1], lines[row] = lines[row], lines[row - 1]
+            col = doc.cursor_position_col
+            b.text = "\n".join(lines)
+            b.cursor_position = b.document.translate_row_col_to_index(row - 1, col)
+
+    @custom_bindings.add("escape", "down", filter=editor_focus & ~has_completions_menu)
+    def _move_line_down(event) -> None:
+        b = event.current_buffer
+        doc = b.document
+        row = doc.cursor_position_row
+        if row < doc.line_count - 1:
+            lines = doc.lines[:]
+            lines[row + 1], lines[row] = lines[row], lines[row + 1]
+            col = doc.cursor_position_col
+            b.text = "\n".join(lines)
+            b.cursor_position = b.document.translate_row_col_to_index(row + 1, col)
 
     @custom_bindings.add("c-_", filter=editor_focus)
     def _toggle_comment(event) -> None:
@@ -419,8 +502,35 @@ def setup_keybindings(editor) -> KeyBindings:
 
     @custom_bindings.add("c-s")
     def _save(event) -> None:
-        editor.result = editor.buffer.text
-        event.app.exit()
+        async def _do_save():
+            text = editor.buffer.text
+            matches = re.findall(r"<@symbol:([^>:]+):([^>]+)>", text)
+            for path, symbol in matches:
+                file_matches = editor.indexer.find_matches(path)
+                if not file_matches:
+                    continue
+                meta = file_matches[0]
+                try:
+                    async with aiofiles.open(
+                        meta.path, "r", encoding="utf-8", errors="replace"
+                    ) as f:
+                        content = await f.read()
+                    from .extractor import SymbolExtractor
+
+                    extractor = SymbolExtractor(content, meta.path.name)
+                    extractor.extract(symbol)
+                except ValueError as e:
+                    editor.error_message = str(e)
+                    editor.error_visible = True
+                    editor.error_buffer.text = f"\n  Invalid syntax in {meta.rel_path}:\n  {e}\n\n  Press [Enter] to dismiss."
+                    event.app.layout.focus(editor.error_window)
+                    event.app.invalidate()
+                    return
+
+            editor.result = text
+            event.app.exit()
+
+        asyncio.create_task(_do_save())
 
     @custom_bindings.add("c-q")
     def _quit(event) -> None:

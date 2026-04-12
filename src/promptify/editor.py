@@ -30,6 +30,11 @@ try:
     from prompt_toolkit.widgets import Frame
     from prompt_toolkit.lexers import Lexer
     from prompt_toolkit.filters import Condition
+    from prompt_toolkit.layout.processors import (
+        HighlightMatchingBracketProcessor,
+        Processor,
+        Transformation,
+    )
 except ImportError:
     log.error(
         "'prompt_toolkit' library is missing. install it using: 'uv pip install prompt_toolkit'"
@@ -57,12 +62,59 @@ except ImportError:
     sys.exit(1)
 
 
+class HighlightTrailingWhitespaceProcessor(Processor):
+    """Highlights trailing spaces and tabs at the end of each line."""
+
+    def apply_transformation(self, transformation_input):
+        fragments = transformation_input.fragments
+        if not fragments:
+            return Transformation(fragments)
+
+        line_text = "".join(text for style, text in fragments)
+        stripped = line_text.rstrip(" \t")
+
+        if len(stripped) == len(line_text):
+            return Transformation(fragments)
+
+        new_fragments = []
+        char_count = 0
+        for style, text in fragments:
+            if char_count >= len(stripped):
+                new_fragments.append(("class:trailing-whitespace", text))
+            elif char_count + len(text) > len(stripped):
+                split_idx = len(stripped) - char_count
+                new_fragments.append((style, text[:split_idx]))
+                new_fragments.append(("class:trailing-whitespace", text[split_idx:]))
+            else:
+                new_fragments.append((style, text))
+            char_count += len(text)
+
+        return Transformation(new_fragments)
+
+
+class EOFNewlineProcessor(Processor):
+    def apply_transformation(self, transformation_input):
+        document = transformation_input.document
+        lineno = transformation_input.lineno
+        tokens = transformation_input.fragments
+
+        if lineno == document.line_count - 1:
+            if document.text.endswith("\n") or not document.text:
+                tokens = tokens + [("class:eof-newline", "¶")]
+            else:
+                tokens = tokens + [("class:eof-newline", "∅")]
+
+        return Transformation(tokens)
+
+
 if HAS_PYGMENTS:
 
     class CustomPromptLexer(Lexer):
         def __init__(self):
             self.md_lexer = PygmentsLexer(MarkdownLexer)
-            self.pattern = re.compile(r"(\[@project\]|<@(file|dir|type|ext):[^>]*>?)")
+            self.pattern = re.compile(
+                r"(\[@project\]|<@(file|dir|type|ext|git|symbol):[^>]*>?)"
+            )
 
         def lex_document(self, document: Document):
             get_original_line = self.md_lexer.lex_document(document)
@@ -152,7 +204,27 @@ class MentionCompleter(Completer):
                     pass
             return
 
-        match_path = re.search(r"<@(file|dir|type|ext):([^><]*)$", text_before_cursor)
+        match_git_diff = re.search(r"<@git:diff:([^><]*)$", text_before_cursor)
+        if match_git_diff:
+            partial_val = match_git_diff.group(1)
+            candidates = list(self.indexer.files_by_rel.keys()) + list(
+                self.indexer.dirs
+            )
+            if not partial_val:
+                for c in sorted(candidates)[:15]:
+                    yield Completion(c + ">", start_position=0, display=c)
+                return
+            results = process.extract(partial_val, candidates, limit=15)
+            matched_items = [res[0] for res in results if res[1] > 40]
+            if not matched_items:
+                matched_items = [res[0] for res in results]
+            for c in matched_items:
+                yield Completion(c + ">", start_position=-len(partial_val), display=c)
+            return
+
+        match_path = re.search(
+            r"<@(file|dir|type|ext|symbol):([^><]*)$", text_before_cursor
+        )
         if match_path:
             call_type = match_path.group(1)
             partial_val = match_path.group(2)
@@ -172,7 +244,7 @@ class MentionCompleter(Completer):
                 return
 
             candidates = []
-            if call_type == "file":
+            if call_type in ("file", "symbol"):
                 candidates = list(self.indexer.files_by_rel.keys())
             elif call_type == "dir":
                 candidates = list(self.indexer.dirs)
@@ -191,10 +263,18 @@ class MentionCompleter(Completer):
                 yield Completion(c + ">", start_position=-len(partial_val), display=c)
             return
 
+        match_git = re.search(r"<@git:([^><:]*)$", text_before_cursor)
+        if match_git:
+            partial = match_git.group(1)
+            for c in ["diff>", "status>", "diff:"]:
+                if c.startswith(partial.lower()):
+                    yield Completion(c, start_position=-len(partial), display=c)
+            return
+
         match_tag = re.search(r"<@([^><:]*)$", text_before_cursor)
         if match_tag:
             partial = match_tag.group(1)
-            for tag in ["file:", "dir:", "ext:"]:
+            for tag in ["file:", "dir:", "ext:", "git:", "symbol:"]:
                 if tag.startswith(partial.lower()):
                     yield Completion(
                         tag, start_position=-len(partial), display=f"<@{tag}"
@@ -217,6 +297,7 @@ class InteractiveEditor:
         self, initial_text: str, indexer: ProjectIndexer, show_help: bool = False
     ):
         self.help_visible = show_help
+        self.indexer = indexer
         self.buffer = Buffer(
             document=Document(initial_text, cursor_position=0),
             completer=MentionCompleter(indexer),
@@ -235,9 +316,29 @@ class InteractiveEditor:
             height=Dimension(preferred=24, max=40),
         )
 
+        self.error_visible = False
+        self.error_message = ""
+        self.error_buffer = Buffer(document=Document(""), read_only=True)
+        self.error_window = Window(
+            content=BufferControl(buffer=self.error_buffer),
+            style="class:error-text",
+            wrap_lines=True,
+            width=Dimension(preferred=60, max=80),
+            height=Dimension(preferred=10, max=20),
+        )
+
         lexer = CustomPromptLexer() if HAS_PYGMENTS else None
+
+        processors = [
+            HighlightTrailingWhitespaceProcessor(),
+            HighlightMatchingBracketProcessor(),
+            EOFNewlineProcessor(),
+        ]
+
         self.main_window = Window(
-            content=BufferControl(buffer=self.buffer, lexer=lexer)
+            content=BufferControl(
+                buffer=self.buffer, lexer=lexer, input_processors=processors
+            )
         )
 
     async def run_async(self) -> str | None:
@@ -275,6 +376,29 @@ class InteractiveEditor:
             filter=Condition(lambda: self.help_visible),
         )
 
+        error_frame = Frame(
+            body=self.error_window,
+            title="Error",
+            style="class:error-frame",
+        )
+
+        error_overlay = ConditionalContainer(
+            content=HSplit(
+                [
+                    Window(height=Dimension(weight=1)),
+                    VSplit(
+                        [
+                            Window(width=Dimension(weight=1)),
+                            error_frame,
+                            Window(width=Dimension(weight=1)),
+                        ]
+                    ),
+                    Window(height=Dimension(weight=1)),
+                ]
+            ),
+            filter=Condition(lambda: self.error_visible),
+        )
+
         layout = Layout(
             FloatContainer(
                 content=body,
@@ -286,6 +410,13 @@ class InteractiveEditor:
                     ),
                     Float(
                         content=help_overlay,
+                        top=0,
+                        bottom=0,
+                        left=0,
+                        right=0,
+                    ),
+                    Float(
+                        content=error_overlay,
                         top=0,
                         bottom=0,
                         left=0,
@@ -305,6 +436,12 @@ class InteractiveEditor:
                 "help-text": "bg:#222222 fg:#cccccc",
                 "help-header": "fg:#00ff00 bold",
                 "shortcut": "fg:#ffff00 bold",
+                "error-frame": "bg:#440000 fg:#ffffff",
+                "error-text": "bg:#440000 fg:#ffaaaa",
+                "trailing-whitespace": "bg:#ff0000",
+                "eof-newline": "fg:#888888",
+                "matching-bracket.cursor": "bg:#aaaaaa fg:#000000",
+                "matching-bracket.other": "bg:#aaaaaa fg:#000000",
             }
         )
 

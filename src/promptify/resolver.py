@@ -13,7 +13,7 @@ class PromptResolver:
     """
 
     PATTERN = re.compile(
-        r"(<@(file|dir|type|ext):([^>:]+?)(?::([a-zA-Z0-9\-\#\ ]+))?>|\[@project\])"
+        r"(<@(file|dir|type|ext|git|symbol):([^>:]+?)(?::([^>]+))?>|\[@project\])"
     )
 
     def __init__(self, context: ProjectContext):
@@ -91,5 +91,12 @@ class PromptResolver:
             return await self.context.get_dir_contents(query)
         elif call_type in ("type", "ext"):
             return await self.context.get_type_contents(query)
+        elif call_type == "git":
+            if query == "status":
+                return await self.context.get_git_status()
+            elif query == "diff":
+                return await self.context.get_git_diff(range_str)
+        elif call_type == "symbol":
+            return await self.context.get_symbol_content(query, range_str)
 
         return full_match
