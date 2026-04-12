@@ -10,6 +10,8 @@ from .logger import log
 from .models import FileMeta
 from .config import CaseConfig
 
+type FileIndex = dict[str, FileMeta]
+
 
 class ProjectIndexer(FileSystemEventHandler):
     """
@@ -22,7 +24,7 @@ class ProjectIndexer(FileSystemEventHandler):
         self.case = case
         self.spec = case.get_ignore_spec(target_dir)
 
-        self.files_by_rel: dict[str, FileMeta] = {}
+        self.files_by_rel: FileIndex = {}
         self.dirs: set[str] = set()
 
         self._observer = None
@@ -38,8 +40,6 @@ class ProjectIndexer(FileSystemEventHandler):
                     for entry in it:
                         path = Path(entry.path)
 
-                        # CENTRALIZED CHECK: HANDLES BOTH .GITIGNORE/.CASEIGNORE
-                        # AND THE FILENAME/EXTENSION WHITELIST (README.MD, .PY, ETC.)
                         if not self.case.is_file_allowed(
                             path, self.target_dir, self.spec
                         ):
@@ -134,11 +134,9 @@ class ProjectIndexer(FileSystemEventHandler):
         """Supports exact, globbing, and fuzzy partial path matching."""
         query = query.replace("\\", "/")
 
-        # 1. EXACT MATCH
         if query in self.files_by_rel:
             return [self.files_by_rel[query]]
 
-        # 2. GLOB MATCH
         if "*" in query or "?" in query or "**" in query:
             return [
                 meta
@@ -146,13 +144,11 @@ class ProjectIndexer(FileSystemEventHandler):
                 if fnmatch.fnmatch(p, query) or Path(p).match(query)
             ]
 
-        # 3. FUZZY PARTIAL MATCH (E.G. APP.TS -> SRC/APP/APP.TS)
         query_lower = query.lower()
         matches = [
             meta for p, meta in self.files_by_rel.items() if query_lower in p.lower()
         ]
 
-        # SCORE EXACT BASENAME HITS HIGHER
         matches.sort(
             key=lambda m: (m.path.name.lower() != query_lower, len(m.rel_path))
         )

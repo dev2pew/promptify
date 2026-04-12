@@ -1,6 +1,7 @@
 import sys
 import datetime
 import asyncio
+import aiofiles
 from pathlib import Path
 
 from .logger import log
@@ -20,29 +21,34 @@ class App:
         self.outs_dir = self.root_dir / "outs"
         self.ensure_directories()
 
-    def ensure_directories(self):
+    def ensure_directories(self) -> None:
         for d in [self.cases_dir, self.data_dir, self.outs_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
-    def get_last_path(self, case_name: str) -> str:
+    async def get_last_path(self, case_name: str) -> str:
         path_file = self.data_dir / case_name / "last.dat"
-        return (
-            path_file.read_text(encoding="utf-8").strip() if path_file.exists() else ""
-        )
+        if path_file.exists():
+            async with aiofiles.open(path_file, "r", encoding="utf-8") as f:
+                return (await f.read()).strip()
+        return ""
 
-    def save_last_path(self, case_name: str, path: str):
+    async def save_last_path(self, case_name: str, path: str) -> None:
         (self.data_dir / case_name).mkdir(parents=True, exist_ok=True)
-        (self.data_dir / case_name / "last.dat").write_text(path, encoding="utf-8")
+        async with aiofiles.open(
+            self.data_dir / case_name / "last.dat", "w", encoding="utf-8"
+        ) as f:
+            await f.write(path)
 
-    def save_output(self, case_name: str, content: str):
+    async def save_output(self, case_name: str, content: str) -> None:
         now = datetime.datetime.now()
         out_dir = self.outs_dir / case_name / f"{now.year}_{now.month}_{now.day}"
         out_dir.mkdir(parents=True, exist_ok=True)
         filepath = out_dir / f"{now.strftime('%H_%M_%S')}.md"
-        filepath.write_text(content, encoding="utf-8")
+        async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
+            await f.write(content)
         log.success(f"successfully saved output - '{filepath}'")
 
-    async def run(self):
+    async def run(self) -> None:
         print(">>> welcome to promptify ---")
 
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
@@ -55,7 +61,7 @@ class App:
         print_columnized([c.name for c in cases])
 
         try:
-            case_input = log.input("select case >> ").strip()
+            case_input = (await log.input_async("select case >> ")).strip()
             if not case_input:
                 log.warning("operation cancelled")
                 return
@@ -68,20 +74,18 @@ class App:
             return
 
         case = CaseConfig(selected_case_dir)
-        last_path = self.get_last_path(case.name)
+        last_path = await self.get_last_path(case.name)
         target_path_str = (
-            log.input(f"enter target project path ('{last_path}') >> ").strip()
-            or last_path
-        )
+            await log.input_async(f"enter target project path ('{last_path}') >> ")
+        ).strip() or last_path
 
         target_dir = Path(target_path_str).resolve()
         if not target_dir.is_dir():
             log.error(f"directory '{target_dir}' does not exist")
             return
 
-        self.save_last_path(case.name, str(target_dir))
+        await self.save_last_path(case.name, str(target_dir))
 
-        # CORE COMPONENTS BOOTSTRAPPING
         indexer = ProjectIndexer(target_dir, case)
         await indexer.build_index()
         indexer.start_watching()
@@ -98,7 +102,7 @@ class App:
         )
 
         try:
-            mode_input = log.input("select mode >> ").strip()
+            mode_input = (await log.input_async("select mode >> ")).strip()
             if not mode_input:
                 log.warning("operation cancelled.")
                 return
@@ -117,26 +121,27 @@ class App:
         finally:
             indexer.stop_watching()
 
-    async def run_legacy_mode(self, case: CaseConfig, resolver: PromptResolver):
+    async def run_legacy_mode(self, case: CaseConfig, resolver: PromptResolver) -> None:
         legacy_path = case.case_dir / case.legacy_file
         if not legacy_path.exists():
             log.error(f"legacy file '{legacy_path}' not found")
             return
 
         log.normal("processing legacy template")
-        content = legacy_path.read_text(encoding="utf-8")
+        async with aiofiles.open(legacy_path, "r", encoding="utf-8") as f:
+            content = await f.read()
 
-        # CHANGED: USING RESOLVE_USER (SINGLE-PASS) FOR SAFETY AGAINST SOURCE CODE MENTIONS
         resolved_content = await resolver.resolve_user(content)
-        self.save_output(case.name, resolved_content)
+        await self.save_output(case.name, resolved_content)
 
     async def run_interactive_mode(
         self, case: CaseConfig, resolver: PromptResolver, indexer: ProjectIndexer
-    ):
+    ) -> None:
         prompt_path = case.case_dir / case.prompt_file
-        initial_text = (
-            prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else ""
-        )
+        initial_text = ""
+        if prompt_path.exists():
+            async with aiofiles.open(prompt_path, "r", encoding="utf-8") as f:
+                initial_text = await f.read()
 
         editor = InteractiveEditor(initial_text, indexer)
         edited_text = await editor.run_async()
@@ -147,7 +152,7 @@ class App:
 
         log.normal("resolving mentions")
         final_output = await resolver.resolve_user(edited_text)
-        self.save_output(case.name, final_output)
+        await self.save_output(case.name, final_output)
 
 
 def cli():
@@ -157,7 +162,3 @@ def cli():
         print()
         log.warning("exiting")
         sys.exit(0)
-
-
-if __name__ == "__main__":
-    cli()
