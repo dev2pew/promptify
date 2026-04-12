@@ -6,6 +6,7 @@ import pathspec
 
 from .logger import log
 
+
 class CaseConfig:
     def __init__(self, case_dir: Path):
         self.case_dir = case_dir
@@ -60,9 +61,7 @@ class CaseConfig:
             except Exception as e:
                 log.warning(f"could not read '.caseignore' - {e}")
 
-        return pathspec.PathSpec.from_lines(
-            'gitignore', lines
-        )
+        return pathspec.PathSpec.from_lines("gitignore", lines)
 
     def is_file_allowed(
         self, file_path: Path, target_project_dir: Path, spec: pathspec.PathSpec

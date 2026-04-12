@@ -52,7 +52,7 @@ class PromptResolver:
             parts.append(repl)
             last_idx = m.end()
 
-        parts.append(text[last_idx :])
+        parts.append(text[last_idx:])
         return "".join(parts)
 
     async def resolve_user(self, text: str) -> str:
@@ -73,7 +73,7 @@ class PromptResolver:
             parts.append(repl)
             last_idx = m.end()
 
-        parts.append(text[last_idx :])
+        parts.append(text[last_idx:])
         return "".join(parts)
 
     async def _process_match(self, match: re.Match) -> str:

@@ -14,6 +14,7 @@ from .indexer import ProjectIndexer
 from .resolver import PromptResolver
 from .editor import InteractiveEditor
 
+
 class App:
     def __init__(self):
         self.root_dir = Path(__file__).parent.parent.parent.resolve()
@@ -28,7 +29,9 @@ class App:
 
     def get_last_path(self, case_name: str) -> str:
         path_file = self.data_dir / case_name / "last.dat"
-        return path_file.read_text(encoding="utf-8").strip() if path_file.exists() else ""
+        return (
+            path_file.read_text(encoding="utf-8").strip() if path_file.exists() else ""
+        )
 
     def save_last_path(self, case_name: str, path: str):
         (self.data_dir / case_name).mkdir(parents=True, exist_ok=True)
@@ -69,7 +72,10 @@ class App:
 
         case = CaseConfig(selected_case_dir)
         last_path = self.get_last_path(case.name)
-        target_path_str = log.input(f"enter target project path ('{last_path}') >> ").strip() or last_path
+        target_path_str = (
+            log.input(f"enter target project path ('{last_path}') >> ").strip()
+            or last_path
+        )
 
         target_dir = Path(target_path_str).resolve()
         if not target_dir.is_dir():
@@ -87,10 +93,12 @@ class App:
         resolver = PromptResolver(context)
 
         print("\n[available modes]")
-        print_modes([
-            ("simple mode", "static fixed prompt based off a template"),
-            ("interactive mode", "rich CLI text editor with autocomplete"),
-        ])
+        print_modes(
+            [
+                ("simple mode", "static fixed prompt based off a template"),
+                ("interactive mode", "rich CLI text editor with autocomplete"),
+            ]
+        )
 
         try:
             mode_input = log.input("select mode >> ").strip()
@@ -123,9 +131,13 @@ class App:
         resolved_content = await resolver.resolve_system(content)
         self.save_output(case.name, resolved_content)
 
-    async def run_interactive_mode(self, case: CaseConfig, resolver: PromptResolver, indexer: ProjectIndexer):
+    async def run_interactive_mode(
+        self, case: CaseConfig, resolver: PromptResolver, indexer: ProjectIndexer
+    ):
         prompt_path = case.case_dir / case.prompt_file
-        initial_text = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else ""
+        initial_text = (
+            prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else ""
+        )
 
         editor = InteractiveEditor(initial_text, indexer)
         edited_text = await editor.run_async()
@@ -138,6 +150,7 @@ class App:
         # Notice we use resolve_user, strictly enforcing a single pass
         final_output = await resolver.resolve_user(edited_text)
         self.save_output(case.name, final_output)
+
 
 if __name__ == "__main__":
     try:

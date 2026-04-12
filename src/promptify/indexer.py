@@ -10,11 +10,13 @@ from .logger import log
 from .models import FileMeta
 from .config import CaseConfig
 
+
 class ProjectIndexer(FileSystemEventHandler):
     """
     Maintains an in-memory, rapidly searchable index of project files.
     Utilizes watchdog to keep metadata strictly synchronized.
     """
+
     def __init__(self, target_dir: Path, case: CaseConfig):
         self.target_dir = target_dir
         self.case = case
@@ -35,7 +37,9 @@ class ProjectIndexer(FileSystemEventHandler):
                 with os.scandir(directory) as it:
                     for entry in it:
                         path = Path(entry.path)
-                        rel_path_str = str(path.relative_to(self.target_dir)).replace("\\", "/")
+                        rel_path_str = str(path.relative_to(self.target_dir)).replace(
+                            "\\", "/"
+                        )
 
                         # Apply ignores
                         match_path = rel_path_str + ("/" if entry.is_dir() else "")
@@ -56,13 +60,15 @@ class ProjectIndexer(FileSystemEventHandler):
                                 rel_path=rel_path_str,
                                 ext=path.suffix.lstrip(".").lower(),
                                 size=stat.st_size,
-                                mtime=stat.st_mtime
+                                mtime=stat.st_mtime,
                             )
             except PermissionError:
                 pass
 
         await asyncio.to_thread(_scan, self.target_dir)
-        log.success(f"indexed {len(self.files_by_rel)} files and {len(self.dirs)} directories")
+        log.success(
+            f"indexed {len(self.files_by_rel)} files and {len(self.dirs)} directories"
+        )
 
     def start_watching(self) -> None:
         """Bootstraps Watchdog, falling back to Polling for network/container mounts."""
@@ -71,7 +77,9 @@ class ProjectIndexer(FileSystemEventHandler):
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
         except Exception as e:
-            log.warning(f"standard observer failed, falling back to 'PollingObserver' - {e}")
+            log.warning(
+                f"standard observer failed, falling back to 'PollingObserver' - {e}"
+            )
             self._observer = PollingObserver()
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
@@ -101,10 +109,14 @@ class ProjectIndexer(FileSystemEventHandler):
                     self.dirs.discard(rel_path_str)
 
             if event.event_type in ("created", "modified", "moved"):
-                dest_path = Path(event.dest_path) if hasattr(event, "dest_path") else path
+                dest_path = (
+                    Path(event.dest_path) if hasattr(event, "dest_path") else path
+                )
 
                 if dest_path.exists():
-                    dest_rel = str(dest_path.relative_to(self.target_dir)).replace("\\", "/")
+                    dest_rel = str(dest_path.relative_to(self.target_dir)).replace(
+                        "\\", "/"
+                    )
                     if dest_path.is_file():
                         stat = dest_path.stat()
                         self.files_by_rel[dest_rel] = FileMeta(
@@ -112,7 +124,7 @@ class ProjectIndexer(FileSystemEventHandler):
                             rel_path=dest_rel,
                             ext=dest_path.suffix.lstrip(".").lower(),
                             size=stat.st_size,
-                            mtime=stat.st_mtime
+                            mtime=stat.st_mtime,
                         )
                     else:
                         self.dirs.add(dest_rel)
@@ -130,23 +142,25 @@ class ProjectIndexer(FileSystemEventHandler):
         # 2. Glob Match
         if "*" in query or "?" in query or "**" in query:
             return [
-                meta for p, meta in self.files_by_rel.items()
+                meta
+                for p, meta in self.files_by_rel.items()
                 if fnmatch.fnmatch(p, query) or Path(p).match(query)
             ]
 
         # 3. Fuzzy Partial Match (e.g. app.ts -> src/app/app.ts)
         query_lower = query.lower()
         matches = [
-            meta for p, meta in self.files_by_rel.items()
-            if query_lower in p.lower()
+            meta for p, meta in self.files_by_rel.items() if query_lower in p.lower()
         ]
 
         # Score exact basename hits higher
-        matches.sort(key=lambda m: (m.path.name.lower() != query_lower, len(m.rel_path)))
+        matches.sort(
+            key=lambda m: (m.path.name.lower() != query_lower, len(m.rel_path))
+        )
         return matches
 
     def get_by_extensions(self, exts: list[str]) -> list[FileMeta]:
-        exts_clean = {e.strip().lstrip('.').lower() for e in exts}
+        exts_clean = {e.strip().lstrip(".").lower() for e in exts}
         return [m for m in self.files_by_rel.values() if m.ext in exts_clean]
 
     def get_all_extensions(self) -> list[str]:
