@@ -158,7 +158,28 @@ class InteractiveEditor:
             event.app.exit()
 
         bindings = merge_key_bindings([default_bindings, custom_bindings])
-        layout = Layout(HSplit([self.main_window, Window(content=FormattedTextControl("[^S] save | [^Q] quit | <@file: / <@ext: | [@project]"), height=1, style="class:toolbar")]))
+
+        body = HSplit([
+            self.main_window,
+            Window(
+                content=FormattedTextControl("[^S] save | [^Q] quit | <@file: / <@ext: | [@project]"),
+                height=1,
+                style="class:toolbar"
+            )
+        ])
+
+        layout = Layout(
+            FloatContainer(
+                content=body,
+                floats=[
+                    Float(
+                        xcursor=True,
+                        ycursor=True,
+                        content=CompletionsMenu(max_height=12, scroll_offset=1),
+                    )
+                ]
+            )
+        )
 
         style = Style.from_dict({
             "toolbar": "bg:#333333 #ffffff",
