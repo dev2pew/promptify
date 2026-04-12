@@ -63,9 +63,7 @@ if HAS_PYGMENTS:
     class CustomPromptLexer(Lexer):
         def __init__(self):
             self.md_lexer = PygmentsLexer(MarkdownLexer)
-            self.pattern = re.compile(
-                r"(\[@project\]|<@(file|dir|type|ext):[^>]*>?)"
-            )
+            self.pattern = re.compile(r"(\[@project\]|<@(file|dir|type|ext):[^>]*>?)")
 
         def lex_document(self, document):
             get_original_line = self.md_lexer.lex_document(document)
@@ -145,9 +143,11 @@ class MentionCompleter(Completer):
             meta = self.indexer.files_by_rel.get(file_path)
             if meta:
                 try:
-                    with open(meta.path, 'rb') as f:
+                    with open(meta.path, "rb") as f:
                         lines = sum(1 for _ in f)
-                    yield Completion("", start_position=0, display=f"[{lines} lines available]")
+                    yield Completion(
+                        "", start_position=0, display=f"[{lines} lines available]"
+                    )
                 except Exception:
                     pass
             return
@@ -160,13 +160,17 @@ class MentionCompleter(Completer):
 
             # Support appending multiple extensions with commas without closing tag
             if call_type in ("type", "ext"):
-                parts = partial_val.split(',')
+                parts = partial_val.split(",")
                 current_val = parts[-1]
                 candidates = self.indexer.get_all_extensions()
 
-                matched_items = [c for c in candidates if current_val.lower() in c.lower()]
+                matched_items = [
+                    c for c in candidates if current_val.lower() in c.lower()
+                ]
                 for c in matched_items[:15]:
-                    yield Completion(c + ",", start_position=-len(current_val), display=c)
+                    yield Completion(
+                        c + ",", start_position=-len(current_val), display=c
+                    )
                 return
 
             candidates = []

@@ -6,23 +6,46 @@ from .config import CaseConfig
 from .indexer import ProjectIndexer
 from .models import FileMeta, CachedContent
 
+
 class ProjectContext:
     """Provides sandboxed, asynchronous, size-limited access to project resources."""
 
     # Restrict concurrent I/O to avoid exhausting file descriptors
     IO_SEMAPHORE = asyncio.Semaphore(100)
-    MAX_FILE_SIZE = 5 * 1024 * 1024 # 5MB limit for single file reads
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB limit for single file reads
 
     # Language aware commenting syntax mapping
     COMMENT_SYNTAX = {
-        "python": ("# ", ""), "py": ("# ", ""), "bash": ("# ", ""), "sh": ("# ", ""),
-        "yaml": ("# ", ""), "yml": ("# ", ""), "ruby": ("# ", ""), "rb": ("# ", ""),
-        "javascript": ("// ", ""), "js": ("// ", ""), "typescript": ("// ", ""), "ts": ("// ", ""),
-        "java": ("// ", ""), "c": ("// ", ""), "cpp": ("// ", ""), "csharp": ("// ", ""),
-        "cs": ("// ", ""), "go": ("// ", ""), "rust": ("// ", ""), "rs": ("// ", ""),
-        "swift": ("// ", ""), "php": ("// ", ""), "html": ("<!-- ", " -->"),
-        "xml": ("<!-- ", " -->"), "markdown": ("<!-- ", " -->"), "md": ("<!-- ", " -->"),
-        "css": ("/* ", " */"), "scss": ("/* ", " */"), "sql": ("-- ", ""), "lua": ("-- ", "")
+        "python": ("# ", ""),
+        "py": ("# ", ""),
+        "bash": ("# ", ""),
+        "sh": ("# ", ""),
+        "yaml": ("# ", ""),
+        "yml": ("# ", ""),
+        "ruby": ("# ", ""),
+        "rb": ("# ", ""),
+        "javascript": ("// ", ""),
+        "js": ("// ", ""),
+        "typescript": ("// ", ""),
+        "ts": ("// ", ""),
+        "java": ("// ", ""),
+        "c": ("// ", ""),
+        "cpp": ("// ", ""),
+        "csharp": ("// ", ""),
+        "cs": ("// ", ""),
+        "go": ("// ", ""),
+        "rust": ("// ", ""),
+        "rs": ("// ", ""),
+        "swift": ("// ", ""),
+        "php": ("// ", ""),
+        "html": ("<!-- ", " -->"),
+        "xml": ("<!-- ", " -->"),
+        "markdown": ("<!-- ", " -->"),
+        "md": ("<!-- ", " -->"),
+        "css": ("/* ", " */"),
+        "scss": ("/* ", " */"),
+        "sql": ("-- ", ""),
+        "lua": ("-- ", ""),
     }
 
     def __init__(self, target_dir: Path, case: CaseConfig, indexer: ProjectIndexer):
@@ -45,20 +68,25 @@ class ProjectContext:
             return f"<!-- error... no files matching '{query}' found -->\n"
 
         async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(self._read_and_format(meta, range_str)) for meta in matches]
+            tasks = [
+                tg.create_task(self._read_and_format(meta, range_str))
+                for meta in matches
+            ]
 
         results = [t.result() for t in tasks]
         return "\n".join(results)
 
     async def get_type_contents(self, exts_str: str) -> str:
-        exts = [e for e in exts_str.split(',')]
+        exts = [e for e in exts_str.split(",")]
         matches = self.indexer.get_by_extensions(exts)
 
         if not matches:
             return f"<!-- no files found for types '{exts_str}' -->\n"
 
         async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(self._read_and_format(meta, None)) for meta in matches]
+            tasks = [
+                tg.create_task(self._read_and_format(meta, None)) for meta in matches
+            ]
 
         results = [t.result() for t in tasks]
         return "\n".join(results)
@@ -66,13 +94,17 @@ class ProjectContext:
     async def get_dir_contents(self, dir_query: str) -> str:
         # Match all files starting with the directory path
         clean_dir = dir_query.lstrip("/\\")
-        matches = [m for p, m in self.indexer.files_by_rel.items() if p.startswith(clean_dir)]
+        matches = [
+            m for p, m in self.indexer.files_by_rel.items() if p.startswith(clean_dir)
+        ]
 
         if not matches:
             return f"<!-- directory '{dir_query}' is empty or not found -->\n"
 
         async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(self._read_and_format(meta, None)) for meta in matches]
+            tasks = [
+                tg.create_task(self._read_and_format(meta, None)) for meta in matches
+            ]
 
         results = [t.result() for t in tasks]
         return "\n".join(results)
@@ -91,7 +123,9 @@ class ProjectContext:
             lines, omitted = self._apply_range(lines, range_str)
             if omitted > 0:
                 prefix, suffix = self.COMMENT_SYNTAX.get(meta.ext, ("// ", ""))
-                lines.append(f"\n{prefix}... (truncated, {omitted} lines omitted){suffix}\n")
+                lines.append(
+                    f"\n{prefix}... (truncated, {omitted} lines omitted){suffix}\n"
+                )
 
         final_content = "".join(lines)
         return f"- `{meta.rel_path}`\n\n```{meta.ext}\n{final_content}\n```\n"
@@ -102,7 +136,9 @@ class ProjectContext:
             return cached.text
 
         async with self.IO_SEMAPHORE:
-            async with aiofiles.open(meta.path, "r", encoding="utf-8", errors="replace") as f:
+            async with aiofiles.open(
+                meta.path, "r", encoding="utf-8", errors="replace"
+            ) as f:
                 content = await f.read()
 
         self.cache[meta.rel_path] = CachedContent(text=content, mtime=meta.mtime)
@@ -117,26 +153,30 @@ class ProjectContext:
             try:
                 n = int(range_str.split()[1])
                 return lines[:n], max(0, total - n)
-            except ValueError: pass
+            except ValueError:
+                pass
 
         elif range_str.startswith("last "):
             try:
                 n = int(range_str.split()[1])
                 return lines[-n:], max(0, total - n)
-            except ValueError: pass
+            except ValueError:
+                pass
 
         elif "-" in range_str:
             try:
                 r = range_str.replace("#l", "").replace("l", "")
                 s, e = map(int, r.split("-"))
-                return lines[max(0, s-1):e], max(0, total - (e - max(0, s-1)))
-            except ValueError: pass
+                return lines[max(0, s - 1) : e], max(0, total - (e - max(0, s - 1)))
+            except ValueError:
+                pass
 
         elif range_str.startswith("#l"):
             try:
                 n = int(range_str.replace("#l", ""))
-                return lines[max(0, n-1):n], max(0, total - 1)
-            except ValueError: pass
+                return lines[max(0, n - 1) : n], max(0, total - 1)
+            except ValueError:
+                pass
 
         return lines, 0
 
@@ -147,15 +187,22 @@ class ProjectContext:
             children = set()
             for p in self.indexer.files_by_rel:
                 if p.startswith(current_dir) and p != current_dir:
-                    rel = p[len(current_dir):].lstrip("/")
+                    rel = p[len(current_dir) :].lstrip("/")
                     children.add(rel.split("/")[0])
 
             for d in self.indexer.dirs:
                 if d.startswith(current_dir) and d != current_dir:
-                    rel = d[len(current_dir):].lstrip("/")
+                    rel = d[len(current_dir) :].lstrip("/")
                     children.add(rel.split("/")[0])
 
-            items = sorted(list(children), key=lambda x: (not (current_dir.lstrip("/") + "/" + x).rstrip("/") in self.indexer.dirs, x.lower()))
+            items = sorted(
+                list(children),
+                key=lambda x: (
+                    not (current_dir.lstrip("/") + "/" + x).rstrip("/")
+                    in self.indexer.dirs,
+                    x.lower(),
+                ),
+            )
 
             for i, item in enumerate(items):
                 is_last = i == len(items) - 1
