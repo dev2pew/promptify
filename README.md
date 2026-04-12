@@ -43,12 +43,23 @@ The editor is powered by `prompt-toolkit` and supports standard IDE shortcuts...
 
 | Hotkey | Action |
 | :-- | :-- |
+| App Controls | |
 | `[Ctrl]` + `[S]` | Save and generate final prompt |
+| `[Ctrl]` + `[Q]` | Quit without saving |
 | `[Ctrl]` + `[G]` or `[F1]` | Toggle the Help overlay |
+| Editing | |
+| `[Ctrl]` + `[C/X/V]` | Copy / Cut / Paste |
+| `[Ctrl]` + `[Z/Y]` | Undo / Redo |
 | `[Ctrl]` + `[/]` | Context-aware commenting (wraps selection in `#` or `//` based on cursor position) |
 | `[Tab]` / `[Shift]` + `[Tab]` | Trigger autocomplete / Indent / Unindent (4 spaces) |
 | `[Alt]` + `[Up/Down]` | Move current line up or down |
+| `[Ctrl]` + `[W]` | Delete previous word |
+| `[Ctrl]` + `[Delete]` | Delete next word |
+| Navigation & Selection | |
+| `[Ctrl]` + `[A]` | Select All |
 | `[Shift]` + `[Arrows]` | Text selection |
+| `[Ctrl]` + `[Arrows]` | Move cursor word by word |
+| `[Ctrl]` + `[Home/End]` | Move cursor to the start or end of the file |
 
 ---
 
@@ -59,11 +70,12 @@ The editor is powered by `prompt-toolkit` and supports standard IDE shortcuts...
 | Tag | Description | Example |
 | :-- | :-- | :-- |
 | `<@file:path>` | Attaches a specific file. | `<@file:src/main.py>` |
-| `<@file:path:range>` | Attaches a specific line slice. | `<@file:app.py:10-20>` or `first 50` |
+| `<@file:path:range>` | Attaches a specific line slice. Supports `first N`, `last N`, `N-M`, or `#LN`. | `<@file:app.py:10-20>` or `<@file:app.py:first 50>` |
 | `<@dir:path>` | Attaches all allowed files in a folder. | `<@dir:src/utils>` |
-| `<@ext:list>` | Attaches files by extension. | `<@ext:py,ts>` |
-| `<@symbol:path:name>` | Attaches a specific class, method, or function. | `<@symbol:src/app.py:MyClass.my_method>` |
-| `<@git:diff>` | Attaches the current working tree diff. | `<@git:diff>` or `<@git:diff:src/>` |
+| `<@ext:list>` | Attaches files by extension (comma-separated). | `<@ext:py,ts>` |
+| `<@symbol:path:name>` | Attaches a specific class, method, or function using AST extraction. | `<@symbol:src/app.py:MyClass.my_method>` |
+| `<@git:diff>` | Attaches the current working tree diff. | `<@git:diff>` |
+| `<@git:diff:path>` | Attaches the working tree diff for a specific file or folder. | `<@git:diff:src/>` |
 | `<@git:status>` | Attaches the current working tree status. | `<@git:status>` |
 | `[@project]` | Generates a TREE /F style directory map. | `[@project]` |
 
@@ -109,7 +121,7 @@ uv run ruff format src/ tests/
 
 ### INSTALL
 
-1. Get [uv](https://github.com/astral-sh/uv);
+1. Get[uv](https://github.com/astral-sh/uv);
 2. Setup using...
 
 ```bash
