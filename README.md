@@ -10,12 +10,12 @@
 
 ### GENERAL
 
-- Built on `asyncio` with structured concurrency (`TaskGroup`) and `aiofiles` for fully non-blocking, high-performance file I/O and mention resolution;
-- Uses `watchdog` to maintain an in-memory map of your project, paired with `rapidfuzz` for ultra-fast, near-instant fuzzy autocomplete even in massive codebases;
-- Strict path validation ensures the tool never reads files outside of your specified project directory;
-- Automatically detects language extensions to wrap code in appropriate Markdown fences (e.g., `python`);
-- Advanced AST-like symbol extraction powered by `pygments` to target specific classes and methods;
-- Native `git` integration for pulling working tree status and diffs.
+- built on `asyncio` with structured concurrency (`TaskGroup`) and `aiofiles` for fully non-blocking, high-performance file I/O and mention resolution;
+- uses `watchdog` to maintain an in-memory map of your project, paired with `rapidfuzz` for ultra-fast, near-instant fuzzy autocomplete even in massive codebases;
+- strict path validation ensures the tool never reads files outside of your specified project directory;
+- automatically detects language extensions to wrap code in appropriate Markdown fences (e.g., `python`);
+- advanced AST-like symbol extraction powered by `pygments` to target specific classes and methods;
+- native `git` integration for pulling working tree status and diffs.
 
 ### MODES
 
@@ -31,9 +31,9 @@ Also known as legacy mode. Perfect for static, repeatable workflows. It reads a 
 
 A rich terminal-based text editor for crafting complex, one-off prompts.
 
-- Type `<@` to trigger a fuzzy-search menu for files, folders, extensions, symbols, and git commands;
-- Resolves mentions exactly once. This prevents "Prompt Leaks"—if your source code contains `<@file:...>` strings, `promptify` treats them as static text rather than trying to resolve them recursively;
-- Features real-time syntax highlighting, trailing whitespace detection, EOF newline indicators, and matching bracket highlighting.
+- type `<@` to trigger a fuzzy-search menu for files, folders, extensions, symbols, and git commands;
+- resolves mentions exactly once. This prevents "Prompt Leaks"—if your source code contains `<@file:...>` strings, `promptify` treats them as static text rather than trying to resolve them recursively;
+- features real-time syntax highlighting, trailing whitespace detection, EOF newline indicators, and matching bracket highlighting.
 
 ##### CONTROLS
 
@@ -108,9 +108,9 @@ cases/
 
 `promptify` is built with a "Test-First" mentality.
 
-- 100% Green Suite: All core logic is verified via `pytest` and `pytest-asyncio`, with graceful CI/CD console fallbacks;
-- Dynamic Sandbox: Tests generate a temporary filesystem to verify indexing, line-slicing, and loop prevention without touching your actual data;
-- Linting: Strictly formatted and linted using Ruff for Python 3.13+ compatibility.
+- all core logic is verified via `pytest` and `pytest-asyncio`, with graceful CI/CD console fallbacks;
+- tests generate a temporary filesystem to verify indexing, line-slicing, and loop prevention without touching your actual data;
+- strictly formatted and linted using Ruff for Python 3.13+ compatibility.
 
 Run Tests...
 
@@ -156,10 +156,10 @@ uv run python -m promptify
 
 ### GUARDS
 
-- Prevents reading files larger than 5MB; (configurable)
-- If using `resolve_system`, the engine detects infinite loops (e.g., `A.md` calls `A.md`) and neutralizes them with an HTML warning comment;
-- Limits concurrent file reads to 100 to prevent OS file descriptor exhaustion;
-- Gracefully handles missing `git` installations or missing `.git` repositories.
+- prevents reading files larger than 5MB; (configurable)
+- if using `resolve_system`, the engine detects infinite loops (e.g., `A.md` calls `A.md`) and neutralizes them with an HTML warning comment;
+- limits concurrent file reads to 100 to prevent OS file descriptor exhaustion;
+- gracefully handles missing `git` installations or missing `.git` repositories.
 
 ## DEMO
 
