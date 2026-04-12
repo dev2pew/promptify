@@ -2,14 +2,9 @@ import json
 import sys
 from pathlib import Path
 
+import pathspec
+
 from logger import log
-
-try:
-    import pathspec
-except ImportError:
-    log.error("'pathspec' library is missing. install it using: 'pip install pathspec'")
-    sys.exit(1)
-
 
 class CaseConfig:
     def __init__(self, case_dir: Path):
@@ -17,7 +12,7 @@ class CaseConfig:
         self.config_file = case_dir / "config.json"
 
         self.name = case_dir.name
-        self.types = []
+        self.types: list[str] = []
         self.ignores_file = ".caseignore"
         self.system_file = "system.md"
         self.prompt_file = "prompt.md"
@@ -25,7 +20,7 @@ class CaseConfig:
 
         self.load_config()
 
-    def load_config(self):
+    def load_config(self) -> None:
         if self.config_file.exists():
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
@@ -40,22 +35,30 @@ class CaseConfig:
                     self.prompt_file = data.get("prompt", self.prompt_file)
                     self.legacy_file = data.get("legacy", self.legacy_file)
             except Exception as e:
-                log.warning(f"failed to parse config for {self.name}: {e}")
+                log.warning(f"failed to parse config for '{self.name}' - {e}")
 
     def get_ignore_spec(self, target_project_dir: Path) -> pathspec.PathSpec:
-        lines = []
-
-        case_ignore_path = self.case_dir / self.ignores_file
-        if case_ignore_path.exists():
-            with open(case_ignore_path, "r", encoding="utf-8") as f:
-                lines.extend(f.readlines())
+        """
+        Builds the pathspec. Appends .caseignore AFTER .gitignore
+        so that .caseignore rules (and negations `!`) take precedence.
+        """
+        lines = [".git/", ".svn/", "__pycache__/", ".venv/", "node_modules/"]
 
         target_ignore_path = target_project_dir / ".gitignore"
         if target_ignore_path.exists():
-            with open(target_ignore_path, "r", encoding="utf-8") as f:
-                lines.extend(f.readlines())
+            try:
+                with open(target_ignore_path, "r", encoding="utf-8") as f:
+                    lines.extend(f.readlines())
+            except Exception as e:
+                log.warning(f"could not read '.gitignore' - {e}")
 
-        lines.extend([".git/", ".svn/", "__pycache__/"])
+        case_ignore_path = self.case_dir / self.ignores_file
+        if case_ignore_path.exists():
+            try:
+                with open(case_ignore_path, "r", encoding="utf-8") as f:
+                    lines.extend(f.readlines())
+            except Exception as e:
+                log.warning(f"could not read '.caseignore' - {e}")
 
         return pathspec.PathSpec.from_lines(
             pathspec.patterns.GitWildMatchPattern, lines
