@@ -6,5 +6,6 @@ uv.exe run ruff check --fix src/
 
 ECHO [i] formatting...
 uv.exe run ruff format src/
+uv.exe run ruff format tests/
 
 ECHO [+] all done.
