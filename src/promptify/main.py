@@ -81,7 +81,7 @@ class App:
 
         self.save_last_path(case.name, str(target_dir))
 
-        # Core Components Bootstrapping
+        # CORE COMPONENTS BOOTSTRAPPING
         indexer = ProjectIndexer(target_dir, case)
         await indexer.build_index()
         indexer.start_watching()
@@ -125,7 +125,9 @@ class App:
 
         log.normal("processing legacy template")
         content = legacy_path.read_text(encoding="utf-8")
-        resolved_content = await resolver.resolve_system(content)
+
+        # CHANGED: USING RESOLVE_USER (SINGLE-PASS) FOR SAFETY AGAINST SOURCE CODE MENTIONS
+        resolved_content = await resolver.resolve_user(content)
         self.save_output(case.name, resolved_content)
 
     async def run_interactive_mode(
@@ -144,13 +146,11 @@ class App:
             return
 
         log.normal("resolving mentions")
-        # Notice we use resolve_user, strictly enforcing a single pass
         final_output = await resolver.resolve_user(edited_text)
         self.save_output(case.name, final_output)
 
 
 def cli():
-    """Entry point for the console script."""
     try:
         asyncio.run(App().run())
     except KeyboardInterrupt:

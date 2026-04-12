@@ -30,10 +30,10 @@ class PromptResolver:
         async def _resolve_and_recurse(m: re.Match) -> str:
             full_match = m.group(0)
             if full_match in seen:
-                # FIX: Must return the comment so the test can verify the loop was caught
+                # FIX: MUST RETURN THE COMMENT SO THE TEST CAN VERIFY THE LOOP WAS CAUGHT
                 return f"<!-- loop detected - '{full_match}' -->"
 
-            # Clone the seen set for this specific branch of the recursion
+            # CLONE THE SEEN SET FOR THIS SPECIFIC BRANCH OF THE RECURSION
             branch_seen = seen.copy()
             branch_seen.add(full_match)
 

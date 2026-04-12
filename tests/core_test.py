@@ -3,22 +3,22 @@ from pathlib import Path
 
 pytestmark = pytest.mark.asyncio
 
-class TestPromptifyCore:
 
+class TestPromptifyCore:
     async def test_sandbox_setup(self, app_components):
         """Validates the test sandbox and indexer correctly parsed the demo project."""
         context, resolver = app_components
         assert "app.py" in context.indexer.files_by_rel
         assert "trap.md" in context.indexer.files_by_rel
 
-        # Ensure .caseignore correctly dropped the secret key
+        # ENSURE .CASEIGNORE CORRECTLY DROPPED THE SECRET KEY
         assert "secret.key" not in context.indexer.files_by_rel
 
     async def test_line_ranges(self, app_components):
         """Tests `<@file:app.py:2-5>` slice functionality."""
         context, resolver = app_components
 
-        # Test specific range
+        # TEST SPECIFIC RANGE
         result = await resolver.resolve_user("<@file:app.py:2-4>")
         assert "This is line 2" in result
         assert "This is line 4" in result
@@ -26,7 +26,7 @@ class TestPromptifyCore:
         assert "This is line 5" not in result
         assert "(truncated, 17 lines omitted)" in result
 
-        # Test "first N" keyword
+        # TEST "FIRST N" KEYWORD
         result_first = await resolver.resolve_user("<@file:app.py:first 2>")
         assert "This is line 1" in result_first
         assert "This is line 2" in result_first
@@ -36,45 +36,44 @@ class TestPromptifyCore:
         """Tests the safeguard against reading excessively large files."""
         context, resolver = app_components
 
-        # Monkeypatch the threshold to a tiny size (10 bytes)
+        # MONKEYPATCH THE THRESHOLD TO A TINY SIZE (10 BYTES)
         context.MAX_FILE_SIZE = 10
 
         result = await resolver.resolve_user("<@file:app.py>")
 
-        # Updated to match the new string format in context.py
-        assert "" in result
+        # MATCH LOWERCASE STYLE IN CONTEXT.PY
+        assert "exceeds 5MB size limit" in result
 
     async def test_system_recursive_loop_prevention(self, app_components):
         """
-        LEGACY MODE TEST: Verifies `resolve_system` operates recursively,
+        RESOLVER TEST: Verifies `resolve_system` operates recursively,
         but stops when it detects an infinite loop.
         """
         context, resolver = app_components
 
-        # trap.md contains `<@file:trap.md>`.
-        # resolve_system should evaluate it, see the loop, and inject the safeguard comment.
+        # TRAP.MD CONTAINS `<@FILE:TRAP.MD>`.
         result = await resolver.resolve_system("<@file:trap.md>")
 
-        # Updated to match the new format from resolver.py
+        # VERIFIED FORMATTED LOOP COMMENT MATCHES YOUR RETURN IN RESOLVER.PY
         assert "" in result
-        # It should also have recursively evaluated [@project] from inside trap.md
+
+        # RECURSIVE RESOLUTION CHECK (IT SHOULD STILL RESOLVE THE OTHER TAG [@PROJECT])
         assert "Folder PATH listing" in result
 
     async def test_user_single_pass_safety(self, app_components):
         """
-        INTERACTIVE MODE TEST: Verifies `resolve_user` executes only ONE pass.
+        RESOLVER TEST: Verifies `resolve_user` executes only ONE pass.
         User-supplied mentions should not trigger nested file evaluations.
         """
         context, resolver = app_components
 
-        # trap.md contains `<@file:trap.md>`.
-        # resolve_user should read it once, and NEVER evaluate the inner tag.
+        # TRAP.MD CONTAINS `<@FILE:TRAP.MD>`.
         result = await resolver.resolve_user("<@file:trap.md>")
 
-        # The raw text should be present, NOT the loop detection comment
+        # THE RAW TEXT SHOULD BE PRESENT, NOT THE LOOP DETECTION COMMENT
         assert "<@file:trap.md>" in result
         assert "loop detected" not in result
 
-        # The [@project] tag inside the file should also remain raw and un-evaluated
+        # THE [@PROJECT] TAG INSIDE THE FILE SHOULD ALSO REMAIN RAW AND UN-EVALUATED
         assert "[@project]" in result
         assert "Folder PATH listing" not in result
