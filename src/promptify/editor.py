@@ -49,7 +49,7 @@ except ImportError:
     )
 
 try:
-    from rapidfuzz import process, fuzz
+    from rapidfuzz import process, fuzz # noqa: F401
 
     HAS_RAPIDFUZZ = True
 except ImportError:
