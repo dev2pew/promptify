@@ -518,7 +518,8 @@ def setup_keybindings(editor) -> KeyBindings:
                     from .extractor import SymbolExtractor
 
                     extractor = SymbolExtractor(content, meta.path.name)
-                    extractor.extract(symbol)
+                    if not extractor.extract(symbol):
+                        raise ValueError(f"symbol '{symbol}' not found")
                 except ValueError as e:
                     editor.error_message = str(e)
                     editor.error_visible = True

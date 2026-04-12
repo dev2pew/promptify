@@ -6,6 +6,7 @@ from .logger import log
 from .indexer import ProjectIndexer
 from .bindings import setup_keybindings
 from .i18n import strings
+from .models import FileMeta
 
 try:
     from prompt_toolkit import Application
@@ -183,6 +184,24 @@ class MentionCompleter(Completer):
 
     def __init__(self, indexer: ProjectIndexer):
         self.indexer = indexer
+        self._symbol_cache: dict[str, tuple[float, list[str]]] = {}
+
+    def _get_symbols_for_file(self, meta: FileMeta) -> list[str]:
+        cached = self._symbol_cache.get(meta.rel_path)
+        if cached and cached[0] == meta.mtime:
+            return cached[1]
+
+        try:
+            with open(meta.path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            from .extractor import SymbolExtractor
+
+            extractor = SymbolExtractor(content, meta.path.name)
+            symbols = list(extractor.symbols.keys())
+            self._symbol_cache[meta.rel_path] = (meta.mtime, symbols)
+            return symbols
+        except Exception:
+            return []
 
     def get_completions(
         self, document: Document, complete_event: CompleteEvent
@@ -229,6 +248,43 @@ class MentionCompleter(Completer):
             call_type = match_path.group(1)
             partial_val = match_path.group(2)
 
+            if call_type == "symbol":
+                parts = partial_val.split(":", 1)
+                if len(parts) == 1:
+                    candidates = list(self.indexer.files_by_rel.keys())
+                    if not parts[0]:
+                        for c in sorted(candidates)[:15]:
+                            yield Completion(c + ":", start_position=0, display=c)
+                        return
+                    results = process.extract(parts[0], candidates, limit=15)
+                    matched_items = [res[0] for res in results if res[1] > 40] or [
+                        res[0] for res in results
+                    ]
+                    for c in matched_items:
+                        yield Completion(
+                            c + ":", start_position=-len(parts[0]), display=c
+                        )
+                    return
+                elif len(parts) == 2:
+                    file_path = parts[0]
+                    symbol_partial = parts[1]
+                    if file_path in self.indexer.files_by_rel:
+                        meta = self.indexer.files_by_rel[file_path]
+                        symbols = self._get_symbols_for_file(meta)
+                        if not symbol_partial:
+                            for s in sorted(symbols)[:15]:
+                                yield Completion(s + ">", start_position=0, display=s)
+                            return
+                        results = process.extract(symbol_partial, symbols, limit=15)
+                        matched_items = [res[0] for res in results if res[1] > 40] or [
+                            res[0] for res in results
+                        ]
+                        for s in matched_items:
+                            yield Completion(
+                                s + ">", start_position=-len(symbol_partial), display=s
+                            )
+                    return
+
             if call_type in ("type", "ext"):
                 parts = partial_val.split(",")
                 current_val = parts[-1]
@@ -244,7 +300,7 @@ class MentionCompleter(Completer):
                 return
 
             candidates = []
-            if call_type in ("file", "symbol"):
+            if call_type == "file":
                 candidates = list(self.indexer.files_by_rel.keys())
             elif call_type == "dir":
                 candidates = list(self.indexer.dirs)
