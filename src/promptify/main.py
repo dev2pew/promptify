@@ -149,11 +149,15 @@ class App:
         self.save_output(case.name, final_output)
 
 
-if __name__ == "__main__":
+def cli():
+    """Entry point for the console script."""
     try:
-        # Utilizing Python 3.11+ high level asyncio runner
         asyncio.run(App().run())
     except KeyboardInterrupt:
         print()
         log.warning("exiting")
         sys.exit(0)
+
+
+if __name__ == "__main__":
+    cli()
