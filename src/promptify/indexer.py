@@ -41,7 +41,7 @@ class ProjectIndexer(FileSystemEventHandler):
                             "\\", "/"
                         )
 
-                        # Apply ignores
+                        # APPLY IGNORES
                         match_path = rel_path_str + ("/" if entry.is_dir() else "")
                         if self.spec.match_file(match_path):
                             continue
@@ -135,11 +135,11 @@ class ProjectIndexer(FileSystemEventHandler):
         """Supports exact, globbing, and fuzzy partial path matching."""
         query = query.replace("\\", "/")
 
-        # 1. Exact Match
+        # 1. EXACT MATCH
         if query in self.files_by_rel:
             return [self.files_by_rel[query]]
 
-        # 2. Glob Match
+        # 2. GLOB MATCH
         if "*" in query or "?" in query or "**" in query:
             return [
                 meta
@@ -147,13 +147,13 @@ class ProjectIndexer(FileSystemEventHandler):
                 if fnmatch.fnmatch(p, query) or Path(p).match(query)
             ]
 
-        # 3. Fuzzy Partial Match (e.g. app.ts -> src/app/app.ts)
+        # 3. FUZZY PARTIAL MATCH (E.G. APP.TS -> SRC/APP/APP.TS)
         query_lower = query.lower()
         matches = [
             meta for p, meta in self.files_by_rel.items() if query_lower in p.lower()
         ]
 
-        # Score exact basename hits higher
+        # SCORE EXACT BASENAME HITS HIGHER
         matches.sort(
             key=lambda m: (m.path.name.lower() != query_lower, len(m.rel_path))
         )

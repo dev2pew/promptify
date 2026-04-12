@@ -10,11 +10,11 @@ from .models import FileMeta, CachedContent
 class ProjectContext:
     """Provides sandboxed, asynchronous, size-limited access to project resources."""
 
-    # Restrict concurrent I/O to avoid exhausting file descriptors
+    # RESTRICT CONCURRENT I/O TO AVOID EXHAUSTING FILE DESCRIPTORS
     IO_SEMAPHORE = asyncio.Semaphore(100)
-    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB limit for single file reads
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB LIMIT FOR SINGLE FILE READS
 
-    # Language aware commenting syntax mapping
+    # LANGUAGE AWARE COMMENTING SYNTAX MAPPING
     COMMENT_SYNTAX = {
         "python": ("# ", ""),
         "py": ("# ", ""),
@@ -92,7 +92,7 @@ class ProjectContext:
         return "\n".join(results)
 
     async def get_dir_contents(self, dir_query: str) -> str:
-        # Match all files starting with the directory path
+        # MATCH ALL FILES STARTING WITH THE DIRECTORY PATH
         clean_dir = dir_query.lstrip("/\\")
         matches = [
             m for p, m in self.indexer.files_by_rel.items() if p.startswith(clean_dir)

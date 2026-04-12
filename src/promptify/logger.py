@@ -2,7 +2,7 @@ import sys
 import os
 import datetime
 
-# Enable ANSI escape sequence processing for Windows cmd.exe
+# ENABLE ANSI ESCAPE SEQUENCE PROCESSING FOR WINDOWS CMD.EXE
 if os.name == "nt":
     try:
         import ctypes
@@ -11,10 +11,10 @@ if os.name == "nt":
         handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
         mode = ctypes.c_uint32()
         kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-        # 0x0004 is ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        # 0X0004 IS ENABLE_VIRTUAL_TERMINAL_PROCESSING
         kernel32.SetConsoleMode(handle, mode.value | 0x0004)
     except Exception:
-        # Fallback hack that often forces ANSI rendering on Windows
+        # FALLBACK HACK THAT OFTEN FORCES ANSI RENDERING ON WINDOWS
         os.system("")
 
 
@@ -37,11 +37,11 @@ class Logger:
         sys.stdout.flush()
 
     def normal(self, message, **kwargs):
-        self._print("[>]", "34", message, **kwargs)  # Blue
+        self._print("[>]", "34", message, **kwargs)  # BLUE
 
     def input(self, message):
         RESET = "\033[0m"
-        COLOR = "\033[36m"  # Cyan
+        COLOR = "\033[36m"  # CYAN
         timestamp = self._get_timestamp()
         formatted_message = f"{timestamp}{COLOR}[<]{RESET} {message}"
         try:
@@ -52,23 +52,23 @@ class Logger:
             sys.exit(0)
 
     def error(self, message, **kwargs):
-        self._print("[e]", "31", message, **kwargs)  # Red
+        self._print("[e]", "31", message, **kwargs)  # RED
 
     def success(self, message, **kwargs):
-        self._print("[+]", "32", message, **kwargs)  # Green
+        self._print("[+]", "32", message, **kwargs)  # GREEN
 
     def warning(self, message, **kwargs):
-        self._print("[w]", "33", message, **kwargs)  # Yellow
+        self._print("[w]", "33", message, **kwargs)  # YELLOW
 
     def info(self, message, **kwargs):
-        self._print("[i]", "94", message, **kwargs)  # Light Blue
+        self._print("[i]", "94", message, **kwargs)  # LIGHT BLUE
 
     def notice(self, message, **kwargs):
-        self._print("[*]", "35", message, **kwargs)  # Magenta
+        self._print("[*]", "35", message, **kwargs)  # MAGENTA
 
     def verbose(self, message, level=2, **kwargs):
         if self.verbosity >= level:
-            self._print("[v]", "90", message, **kwargs)  # Gray
+            self._print("[v]", "90", message, **kwargs)  # GRAY
 
     def custom(self, prefix, color_code, message, **kwargs):
         self._print(prefix, color_code, message, **kwargs)

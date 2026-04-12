@@ -36,7 +36,7 @@ except ImportError:
     sys.exit(1)
 
 try:
-    import pygments  # noqa: F401
+    import pygments  # NOQA: F401
     from pygments.lexers.markup import MarkdownLexer
     from prompt_toolkit.lexers import PygmentsLexer, Lexer
 
@@ -48,7 +48,7 @@ except ImportError:
     )
 
 try:
-    from rapidfuzz import process, fuzz  # noqa: F401
+    from rapidfuzz import process, fuzz  # NOQA: F401
 
     HAS_RAPIDFUZZ = True
 except ImportError:
@@ -135,7 +135,7 @@ class MentionCompleter(Completer):
     def get_completions(self, document: Document, complete_event):
         text_before_cursor = document.text_before_cursor
 
-        # Handle Line Ranges for files (ex. <@file:src/app.ts:) -> Show line count
+        # HANDLE LINE RANGES FOR FILES (EX. <@FILE:SRC/APP.TS:) -> SHOW LINE COUNT
         match_range = re.search(r"<@file:([^>:]+):([^><]*)$", text_before_cursor)
         if match_range:
             file_path = match_range.group(1)
@@ -151,13 +151,13 @@ class MentionCompleter(Completer):
                     pass
             return
 
-        # Use[^><] to prevent unclosed tags from breaking the regex match
+        # USE[^><] TO PREVENT UNCLOSED TAGS FROM BREAKING THE REGEX MATCH
         match_path = re.search(r"<@(file|dir|type|ext):([^><]*)$", text_before_cursor)
         if match_path:
             call_type = match_path.group(1)
             partial_val = match_path.group(2)
 
-            # Support appending multiple extensions with commas without closing tag
+            # SUPPORT APPENDING MULTIPLE EXTENSIONS WITH COMMAS WITHOUT CLOSING TAG
             if call_type in ("type", "ext"):
                 parts = partial_val.split(",")
                 current_val = parts[-1]
@@ -179,7 +179,7 @@ class MentionCompleter(Completer):
                 candidates = list(self.indexer.dirs)
 
             if not partial_val:
-                # Return top 15 alphabetically if no input
+                # RETURN TOP 15 ALPHABETICALLY IF NO INPUT
                 for c in sorted(candidates)[:15]:
                     yield Completion(c + ">", start_position=0, display=c)
                 return
@@ -187,25 +187,25 @@ class MentionCompleter(Completer):
             matched_items = []
 
             if HAS_RAPIDFUZZ:
-                # Use RapidFuzz for high-performance fuzzy matching
+                # USE RAPIDFUZZ FOR HIGH-PERFORMANCE FUZZY MATCHING
                 results = process.extract(partial_val, candidates, limit=15)
-                # Filter out extremely poor matches, fallback to all if none are great
+                # FILTER OUT EXTREMELY POOR MATCHES, FALLBACK TO ALL IF NONE ARE GREAT
                 matched_items = [res[0] for res in results if res[1] > 40]
                 if not matched_items:
                     matched_items = [res[0] for res in results]
             else:
-                # Fallback: Custom Substring & Subsequence Matcher
+                # FALLBACK: CUSTOM SUBSTRING & SUBSEQUENCE MATCHER
                 matches = []
                 lower_val = partial_val.lower().replace("\\", "/")
 
                 for c in candidates:
                     lower_c = c.lower()
                     if lower_val in lower_c:
-                        # Exact substring match gets a high score (shorter strings rank higher)
+                        # EXACT SUBSTRING MATCH GETS A HIGH SCORE (SHORTER STRINGS RANK HIGHER)
                         score = 100 - len(lower_c)
                         matches.append((c, score))
                     else:
-                        # Subsequence match (e.g., "2md" matches "2.md")
+                        # SUBSEQUENCE MATCH (E.G., "2MD" MATCHES "2.MD")
                         it = iter(lower_c)
                         if all(char in it for char in lower_val):
                             score = 50 - len(lower_c)
@@ -218,7 +218,7 @@ class MentionCompleter(Completer):
                 yield Completion(c + ">", start_position=-len(partial_val), display=c)
             return
 
-        # Match <@ for file/dir/ext tag suggestions (preventing unclosed tags from breaking it)
+        # MATCH <@ FOR FILE/DIR/EXT TAG SUGGESTIONS (PREVENTING UNCLOSED TAGS FROM BREAKING IT)
         match_tag = re.search(r"<@([^><:]*)$", text_before_cursor)
         if match_tag:
             partial = match_tag.group(1)
@@ -229,7 +229,7 @@ class MentionCompleter(Completer):
                     )
             return
 
-        # Match [@ for project suggestion
+        # MATCH [@ FOR PROJECT SUGGESTION
         match_project = re.search(r"\[@([^\]\[]*)$", text_before_cursor)
         if match_project:
             partial = match_project.group(1)
@@ -271,7 +271,7 @@ class InteractiveEditor:
         default_bindings = load_key_bindings()
         custom_bindings = KeyBindings()
 
-        # --- Help Window Setup ---
+        # --- HELP WINDOW SETUP ---
         help_text = """
 [ autocomplete mentions ]
 
@@ -297,12 +297,12 @@ press [Enter], [F1] or [^G] to close help
 
         self.help_buffer = Buffer(document=Document(help_text), read_only=True)
 
-        # Use flexible Dimensions. It will prefer 65x24, but will safely shrink
-        # down to 1x1 if the terminal is extremely small, preventing crashes.
+        # USE FLEXIBLE DIMENSIONS. IT WILL PREFER 65X24, BUT WILL SAFELY SHRINK
+        # DOWN TO 1X1 IF THE TERMINAL IS EXTREMELY SMALL, PREVENTING CRASHES.
         self.help_window = Window(
             content=BufferControl(
                 buffer=self.help_buffer, lexer=HelpLexer()
-            ),  # <-- Lexer applied
+            ),  # <-- LEXER APPLIED
             style="class:help-text",
             wrap_lines=False,
             width=Dimension(preferred=65, max=100),
@@ -332,7 +332,7 @@ press [Enter], [F1] or [^G] to close help
                     original_cursor_position=b.cursor_position
                 )
 
-        # --- Help Window Toggles ---
+        # --- HELP WINDOW TOGGLES ---
         @custom_bindings.add("f1")
         @custom_bindings.add("c-g")
         def _toggle_help(event):
@@ -348,7 +348,7 @@ press [Enter], [F1] or [^G] to close help
             self.help_visible = False
             event.app.layout.focus(self.main_window)
 
-        # --- Autocomplete Selection ---
+        # --- AUTOCOMPLETE SELECTION ---
         @custom_bindings.add(
             "enter",
             filter=editor_focus & has_completions_menu & ~is_completion_selected,
@@ -581,7 +581,7 @@ press [Enter], [F1] or [^G] to close help
             b.selection_state = None
             b.insert_text("    ")
 
-        # --- Arrow Keys (Line Wrapping & Autocomplete Fix) ---
+        # --- ARROW KEYS (LINE WRAPPING & AUTOCOMPLETE FIX) ---
         @custom_bindings.add("left", filter=editor_focus & ~has_completions_menu)
         def _left(event):
             b = event.current_buffer
@@ -622,15 +622,15 @@ press [Enter], [F1] or [^G] to close help
             b.selection_state = None
             b.cursor_position += b.document.get_cursor_down_position(count=1)
 
-        # --- Context-Aware Commenting ---
+        # --- CONTEXT-AWARE COMMENTING ---
         @custom_bindings.add(
             "c-_", filter=editor_focus
-        )  # Terminals often send c-_ for Ctrl+/
+        )  # TERMINALS OFTEN SEND C-_ FOR CTRL+/
         def _toggle_comment(event):
             b = event.current_buffer
             doc = b.document
 
-            # 1. Detect language context by scanning upwards for code block fences
+            # 1. DETECT LANGUAGE CONTEXT BY SCANNING UPWARDS FOR CODE BLOCK FENCES
             lines_before = doc.lines[: doc.cursor_position_row]
             in_block = False
             lang = "markdown"
@@ -681,7 +681,7 @@ press [Enter], [F1] or [^G] to close help
             else:
                 prefix, suffix = COMMENT_SYNTAX.get(lang, ("# ", ""))
 
-            # 2. Determine selection range
+            # 2. DETERMINE SELECTION RANGE
             if b.selection_state:
                 start_row = doc.translate_index_to_position(
                     b.selection_state.original_cursor_position
@@ -695,7 +695,7 @@ press [Enter], [F1] or [^G] to close help
             lines = doc.lines
             target_lines = lines[start_row : end_row + 1]
 
-            # 3. Check if all target lines are already commented
+            # 3. CHECK IF ALL TARGET LINES ARE ALREADY COMMENTED
             all_commented = True
             for line in target_lines:
                 s = line.lstrip()
@@ -708,7 +708,7 @@ press [Enter], [F1] or [^G] to close help
                     all_commented = False
                     break
 
-            # 4. Apply toggle
+            # 4. APPLY TOGGLE
             new_lines = list(lines)
             for i in range(start_row, end_row + 1):
                 line = new_lines[i]
@@ -719,7 +719,7 @@ press [Enter], [F1] or [^G] to close help
                     continue
 
                 if all_commented:
-                    # Uncomment
+                    # UNCOMMENT
                     if s.startswith(prefix):
                         s = s[len(prefix) :]
                     elif s.startswith(prefix.strip()):
@@ -732,10 +732,10 @@ press [Enter], [F1] or [^G] to close help
                             s = s[: -len(suffix.strip())]
                     new_lines[i] = indent + s
                 else:
-                    # Comment
+                    # COMMENT
                     new_lines[i] = indent + prefix + s + suffix
 
-            # 5. Restore cursor position safely
+            # 5. RESTORE CURSOR POSITION SAFELY
             cursor_row = doc.cursor_position_row
             cursor_col = doc.cursor_position_col
 
@@ -780,19 +780,19 @@ press [Enter], [F1] or [^G] to close help
             style="class:help-frame",
         )
 
-        # Use HSplit and VSplit with weight=1 spacers to perfectly center the frame
+        # USE HSPLIT AND VSPLIT WITH WEIGHT=1 SPACERS TO PERFECTLY CENTER THE FRAME
         help_overlay = ConditionalContainer(
             content=HSplit(
                 [
-                    Window(height=Dimension(weight=1)),  # Top spacer
+                    Window(height=Dimension(weight=1)),  # TOP SPACER
                     VSplit(
                         [
-                            Window(width=Dimension(weight=1)),  # Left spacer
+                            Window(width=Dimension(weight=1)),  # LEFT SPACER
                             help_frame,
-                            Window(width=Dimension(weight=1)),  # Right spacer
+                            Window(width=Dimension(weight=1)),  # RIGHT SPACER
                         ]
                     ),
-                    Window(height=Dimension(weight=1)),  # Bottom spacer
+                    Window(height=Dimension(weight=1)),  # BOTTOM SPACER
                 ]
             ),
             filter=is_help_visible,
@@ -812,7 +812,7 @@ press [Enter], [F1] or [^G] to close help
                         top=0,
                         bottom=0,
                         left=0,
-                        right=0,  # Fills the screen, allowing the inner splits to center the frame safely
+                        right=0,  # FILLS THE SCREEN, ALLOWING THE INNER SPLITS TO CENTER THE FRAME SAFELY
                     ),
                 ],
             )
@@ -826,8 +826,8 @@ press [Enter], [F1] or [^G] to close help
                 "aicall": "fg:#00ffff bold",
                 "help-frame": "bg:#222222 fg:#ffffff",
                 "help-text": "bg:#222222 fg:#cccccc",
-                "help-header": "fg:#00ff00 bold",  # Green bold for headers
-                "shortcut": "fg:#ffff00 bold",  # Yellow bold for shortcuts
+                "help-header": "fg:#00ff00 bold",  # GREEN BOLD FOR HEADERS
+                "shortcut": "fg:#ffff00 bold",  # YELLOW BOLD FOR SHORTCUTS
             }
         )
 
@@ -839,7 +839,7 @@ press [Enter], [F1] or [^G] to close help
             mouse_support=True,
         )
 
-        # Ensure Help window is focused immediately if opened on first run
+        # ENSURE HELP WINDOW IS FOCUSED IMMEDIATELY IF OPENED ON FIRST RUN
         if self.help_visible:
             app.layout.focus(self.help_window)
 
