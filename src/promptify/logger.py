@@ -44,7 +44,12 @@ class Logger:
         COLOR = "\033[36m"  # Cyan
         timestamp = self._get_timestamp()
         formatted_message = f"{timestamp}{COLOR}[<]{RESET} {message}"
-        return input(formatted_message)
+        try:
+            return input(formatted_message)
+        except (EOFError, KeyboardInterrupt):
+            print()
+            self.warning("operation cancelled by user")
+            sys.exit(0)
 
     def error(self, message, **kwargs):
         self._print("[e]", "31", message, **kwargs)  # Red
