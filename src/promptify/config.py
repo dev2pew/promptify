@@ -61,7 +61,7 @@ class CaseConfig:
                 log.warning(f"could not read '.caseignore' - {e}")
 
         return pathspec.PathSpec.from_lines(
-            pathspec.patterns.GitWildMatchPattern, lines
+            'gitignore', lines
         )
 
     def is_file_allowed(
