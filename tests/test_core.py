@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 
-from promptify.i18n import strings
+from promptify.utils.i18n import strings
 
 pytestmark = pytest.mark.asyncio
 

@@ -4,7 +4,7 @@ from typing import Any
 from prompt_toolkit import print_formatted_text, HTML
 from prompt_toolkit.shortcuts import PromptSession
 
-from .i18n import strings
+from ..utils.i18n import strings
 
 
 class Logger:

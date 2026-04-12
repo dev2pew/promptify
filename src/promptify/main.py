@@ -13,7 +13,7 @@ from .core.context import ProjectContext
 from .core.indexer import ProjectIndexer
 from .core.resolver import PromptResolver
 from .ui.editor import InteractiveEditor
-from .i18n import strings
+from .utils.i18n import strings
 
 
 class App:

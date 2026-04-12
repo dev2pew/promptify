@@ -7,10 +7,10 @@ from pathlib import Path
 # ADD THE SRC FOLDER TO THE PATH SO TESTS CAN IMPORT OUR MODULES NATIVELY
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from promptify.config import CaseConfig
-from promptify.indexer import ProjectIndexer
-from promptify.context import ProjectContext
-from promptify.resolver import PromptResolver
+from promptify.core.config import CaseConfig
+from promptify.core.indexer import ProjectIndexer
+from promptify.core.context import ProjectContext
+from promptify.core.resolver import PromptResolver
 
 
 @pytest.fixture(scope="session")

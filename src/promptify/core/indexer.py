@@ -8,8 +8,8 @@ from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 from ..ui.logger import log
 from .models import FileMeta
-from .core.config import CaseConfig
-from .i18n import strings
+from .config import CaseConfig
+from ..utils.i18n import strings
 
 type FileIndex = dict[str, FileMeta]
 
