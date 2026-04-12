@@ -37,23 +37,22 @@ class ProjectIndexer(FileSystemEventHandler):
                 with os.scandir(directory) as it:
                     for entry in it:
                         path = Path(entry.path)
+
+                        # CENTRALIZED CHECK: HANDLES BOTH .GITIGNORE/.CASEIGNORE
+                        # AND THE FILENAME/EXTENSION WHITELIST (README.MD, .PY, ETC.)
+                        if not self.case.is_file_allowed(
+                            path, self.target_dir, self.spec
+                        ):
+                            continue
+
                         rel_path_str = str(path.relative_to(self.target_dir)).replace(
                             "\\", "/"
                         )
-
-                        # APPLY IGNORES
-                        match_path = rel_path_str + ("/" if entry.is_dir() else "")
-                        if self.spec.match_file(match_path):
-                            continue
 
                         if entry.is_dir():
                             self.dirs.add(rel_path_str)
                             _scan(path)
                         elif entry.is_file():
-                            if self.case.types and "*" not in self.case.types:
-                                if path.suffix not in self.case.types:
-                                    continue
-
                             stat = entry.stat()
                             self.files_by_rel[rel_path_str] = FileMeta(
                                 path=path,

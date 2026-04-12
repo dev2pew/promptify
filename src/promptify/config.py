@@ -72,7 +72,8 @@ class CaseConfig:
             return False
 
         if file_path.is_file() and self.types and "*" not in self.types:
-            if file_path.suffix not in self.types:
+            # ALLOW IF EITHER THE FULL NAME 'README.MD' OR THE EXTENSION '.PY' MATCHES
+            if file_path.name not in self.types and file_path.suffix not in self.types:
                 return False
 
         return True
