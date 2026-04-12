@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pathspec
 
-from logger import log
+from .logger import log
 
 class CaseConfig:
     def __init__(self, case_dir: Path):

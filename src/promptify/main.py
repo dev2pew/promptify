@@ -6,13 +6,13 @@ import json
 import asyncio
 from pathlib import Path
 
-from logger import log
-from ui import print_columnized, print_modes
-from config import CaseConfig
-from context import ProjectContext
-from indexer import ProjectIndexer
-from resolver import PromptResolver
-from editor import InteractiveEditor
+from .logger import log
+from .ui import print_columnized, print_modes
+from .config import CaseConfig
+from .context import ProjectContext
+from .indexer import ProjectIndexer
+from .resolver import PromptResolver
+from .editor import InteractiveEditor
 
 class App:
     def __init__(self):
