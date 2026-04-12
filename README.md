@@ -165,11 +165,15 @@ uv run python -m promptify
 
 ### MENU
 
-welcome screen...
+the app opens to a welcome screen that lists available use cases.
 
 ![a screenshot displaying welcome screen with list of use cases available to use](docs/img/0.png)
 
-choosing working mode...
+you can pick a working mode from the menu...
+
+- either `simple` or `interactive`
+
+...before entering the editor.
 
 ![a screenshot depicting list of available working modes - simple and interactive](docs/img/1.png)
 
@@ -177,46 +181,46 @@ choosing working mode...
 
 #### OVERVIEW
 
-overview of the editor screen...
+the editor is where you compose prompts and attach project files or symbols. it's an interactive, terminal-based editor with helpful UI elements and keyboard shortcuts.
 
 ![`promptify` interactive editor](docs/img/3.png)
 
-toolbar showing available shortcuts and mentions...
+a toolbar at the bottom shows available shortcuts and controls so you always know how to navigate and use mentions.
 
 ![toolbar showing controls information](docs/img/10.png)
 
-#### MENTION
+#### CALLS
 
-you can trigger mentions using `<@` keyword in the editor...
-
-mentions allow you to attach files into your prompt from the project in a convenient way.
+type `<@` to trigger mentions AKA calls in the editor. mentions let you quickly attach files from the project into your prompt, so you can include file contents without leaving the editor.
 
 ![a user selecting file mention in the prompt - by mentioning, user can insert contents of a file into the prompt in a convenient way](docs/img/4.png)
 
-#### SUGGESTION
+#### SUGGESTIONS
 
-the editor has fuzzy matching, auto completion and suggestions support powered by `prompt-toolkit` library.
+the editor offers fuzzy matching, autocompletion, and suggestions (powered by the `prompt-toolkit` library) to speed up selection.
+
+for example, typing `read` brings up `README.md` in the suggestions list.
 
 ![a user typing `README` to quickly select `README.md` from the suggestions list](docs/img/5.png)
 
----
+fuzzy matching also works for file paths - here we use `main.py` to attach `/src/promptify/main.py`.
 
 ![another demonstration of fuzzy matching using `main.py` to attach `/src/promptify/main.py`](docs/img/6.png)
 
-![the result of `main.py` fuzzy matching](docs/img/7.png)
+...and here's the result after selecting main.py from the suggestions...
 
----
+![the result of `main.py` fuzzy matching](docs/img/7.png)
 
 #### SYMBOLS
 
-the editor supports attaching symbols from source files by parsing them and storing it in cache...
+the editor can parse source files, cache symbols, and let you attach specific symbols (classes, functions, etc.) into your prompt. this is useful when you need only a fragment of a file.
 
 ![user mentioning a symbol from `main.py` file. in this example user attaches `App` class](docs/img/8.png)
 
-this is how a typical prompt looks like when using `promptify`...
+a typical prompt in promptify shows resolved mentions inline before you save or run it.
 
 ![a screenshot of a finished prompt in a terminal before saving and resolving mentions](docs/img/9.png)
 
-`promptify` also copies the resolved prompt to your clipboard...
+when you resolve and run the prompt, promptify copies the final prompt to your clipboard and prints the full output in the terminal.
 
 ![a screenshot of a terminal showing complete output of the script](docs/img/11.png)
