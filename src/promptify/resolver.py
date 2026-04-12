@@ -3,11 +3,12 @@ import asyncio
 
 from .context import ProjectContext
 
+
 class PromptResolver:
     """
     Asynchronous resolver leveraging structured concurrency.
-    Runs exactly ONE pass, preventing any internal code mentions
-    from creating infinite loops or being unintentionally evaluated.
+    System mode operates recursively with loop protection.
+    User mode operates in a strict single-pass sandbox.
     """
 
     PATTERN = re.compile(
@@ -17,37 +18,62 @@ class PromptResolver:
     def __init__(self, context: ProjectContext):
         self.context = context
 
-    async def resolve_system(self, text: str) -> str:
-        return await self._resolve_pass(text)
+    async def resolve_system(self, text: str, seen: set[str] | None = None) -> str:
+        """Recursive resolution for system templates, with loop protection."""
+        if seen is None:
+            seen = set()
 
-    async def resolve_user(self, text: str) -> str:
-        return await self._resolve_pass(text)
-
-    async def _resolve_pass(self, text: str) -> str:
-        """
-        Executes a single pass over the string. Found tokens are replaced,
-        and the content returned by context resolution is intentionally
-        NOT re-scanned. This prevents infinite loops.
-        """
         matches = list(self.PATTERN.finditer(text))
         if not matches:
             return text
 
-        # Concurrently resolve all matches from this pass
+        async def _resolve_and_recurse(m: re.Match) -> str:
+            full_match = m.group(0)
+            if full_match in seen:
+                # FIX: Must return the comment so the test can verify the loop was caught
+                return f"<!-- loop detected - '{full_match}' -->"
+
+            # Clone the seen set for this specific branch of the recursion
+            branch_seen = seen.copy()
+            branch_seen.add(full_match)
+
+            resolved_content = await self._process_match(m)
+            return await self.resolve_system(resolved_content, branch_seen)
+
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(_resolve_and_recurse(m)) for m in matches]
+
+        replacements = [t.result() for t in tasks]
+
+        parts: list[str] = []
+        last_idx = 0
+        for m, repl in zip(matches, replacements):
+            parts.append(text[last_idx : m.start()])
+            parts.append(repl)
+            last_idx = m.end()
+
+        parts.append(text[last_idx :])
+        return "".join(parts)
+
+    async def resolve_user(self, text: str) -> str:
+        """Single-pass resolution for user text (interactive editor)."""
+        matches = list(self.PATTERN.finditer(text))
+        if not matches:
+            return text
+
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(self._process_match(m)) for m in matches]
 
         replacements = [t.result() for t in tasks]
 
-        # Reconstruct the string linearly
-        parts = []
+        parts: list[str] = []
         last_idx = 0
         for m, repl in zip(matches, replacements):
-            parts.append(text[last_idx:m.start()])
+            parts.append(text[last_idx : m.start()])
             parts.append(repl)
             last_idx = m.end()
 
-        parts.append(text[last_idx:])
+        parts.append(text[last_idx :])
         return "".join(parts)
 
     async def _process_match(self, match: re.Match) -> str:
