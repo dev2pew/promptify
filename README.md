@@ -23,7 +23,7 @@
 
 Also known as legacy mode. Perfect for static, repeatable workflows. It reads a `legacy.md` template from your Case directory and resolves all mentions in a single pass.
 
-> Use Case
+>[!example] Use Case
 >
 > Generating a standard "Code Review" report for a specific file.
 
@@ -160,3 +160,63 @@ uv run python -m promptify
 - If using `resolve_system`, the engine detects infinite loops (e.g., `A.md` calls `A.md`) and neutralizes them with an HTML warning comment;
 - Limits concurrent file reads to 100 to prevent OS file descriptor exhaustion;
 - Gracefully handles missing `git` installations or missing `.git` repositories.
+
+## DEMO
+
+### MENU
+
+welcome screen...
+
+![a screenshot displaying welcome screen with list of use cases available to use](docs/img/0.png)
+
+choosing working mode...
+
+![a screenshot depicting list of available working modes - simple and interactive](docs/img/1.png)
+
+### EDITOR
+
+#### OVERVIEW
+
+overview of the editor screen...
+
+![`promptify` interactive editor](docs/img/3.png)
+
+toolbar showing available shortcuts and mentions...
+
+![toolbar showing controls information](docs/img/10.png)
+
+#### MENTION
+
+you can trigger mentions using `<@` keyword in the editor...
+
+mentions allow you to attach files into your prompt from the project in a convenient way.
+
+![a user selecting file mention in the prompt - by mentioning, user can insert contents of a file into the prompt in a convenient way](docs/img/4.png)
+
+#### SUGGESTION
+
+the editor has fuzzy matching, auto completion and suggestions support powered by `prompt-toolkit` library.
+
+![a user typing `README` to quickly select `README.md` from the suggestions list](docs/img/5.png)
+
+---
+
+![another demonstration of fuzzy matching using `main.py` to attach `/src/promptify/main.py`](docs/img/6.png)
+
+![the result of `main.py` fuzzy matching](docs/img/7.png)
+
+---
+
+#### SYMBOLS
+
+the editor supports attaching symbols from source files by parsing them and storing it in cache...
+
+![user mentioning a symbol from `main.py` file. in this example user attaches `App` class](docs/img/8.png)
+
+this is how a typical prompt looks like when using `promptify`...
+
+![a screenshot of a finished prompt in a terminal before saving and resolving mentions](docs/img/9.png)
+
+`promptify` also copies the resolved prompt to your clipboard...
+
+![a screenshot of a terminal showing complete output of the script](docs/img/11.png)
