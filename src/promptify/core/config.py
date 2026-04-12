@@ -4,7 +4,7 @@ from pathlib import Path
 import pathspec
 
 from ..ui.logger import log
-from .i18n import strings
+from ..utils.i18n import strings
 
 
 class CaseConfig:

@@ -8,7 +8,7 @@ from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 
-from .constants import COMMENT_SYNTAX
+from ..utils.i18n import strings
 
 
 def setup_keybindings(editor) -> KeyBindings:
@@ -430,9 +430,10 @@ def setup_keybindings(editor) -> KeyBindings:
                     lang = line.strip()[3:].strip().lower()
 
         if not in_block:
-            prefix, suffix = ("<!-- ", " -->")
+            prefix, suffix = "<!-- ", " -->"
         else:
-            prefix, suffix = COMMENT_SYNTAX.get(lang, ("# ", ""))
+            syntax = strings.get("comment_syntax", {}).get(lang, ["# ", ""])
+            prefix, suffix = syntax[0], syntax[1]
 
         if b.selection_state:
             start_row = doc.translate_index_to_position(
@@ -515,7 +516,7 @@ def setup_keybindings(editor) -> KeyBindings:
                         meta.path, "r", encoding="utf-8", errors="replace"
                     ) as f:
                         content = await f.read()
-                    from .extractor import SymbolExtractor
+                    from ..core.extractor import SymbolExtractor
 
                     extractor = SymbolExtractor(content, meta.path.name)
                     if not extractor.extract(symbol):
@@ -523,7 +524,9 @@ def setup_keybindings(editor) -> KeyBindings:
                 except Exception as e:
                     editor.error_message = str(e)
                     editor.error_visible = True
-                    editor.error_buffer.text = f"\n  Invalid syntax in {meta.rel_path}:\n  {e}\n\n  Press [Enter] to dismiss."
+                    editor.error_buffer.text = strings["invalid_syntax_window"].format(
+                        path=meta.rel_path, error=e
+                    )
                     event.app.layout.focus(editor.error_window)
                     event.app.invalidate()
                     return

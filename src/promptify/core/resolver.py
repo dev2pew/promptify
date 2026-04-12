@@ -1,8 +1,8 @@
 import re
 import asyncio
 
-from .core.context import ProjectContext
-from .i18n import strings
+from .context import ProjectContext
+from ..utils.i18n import strings
 
 
 class PromptResolver:

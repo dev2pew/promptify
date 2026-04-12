@@ -3,10 +3,10 @@ import sys
 from typing import Iterable
 
 from .logger import log
-from .core.indexer import ProjectIndexer
+from ..core.indexer import ProjectIndexer
 from .bindings import setup_keybindings
-from .i18n import strings
-from .core.models import FileMeta
+from ..utils.i18n import strings
+from ..core.models import FileMeta
 
 try:
     from prompt_toolkit import Application
@@ -38,7 +38,10 @@ try:
     )
 except ImportError:
     log.error(
-        "'prompt_toolkit' library is missing. install it using: 'uv pip install prompt_toolkit'"
+        strings.get(
+            "err_prompt_toolkit_missing",
+            "'prompt_toolkit' library is missing. install it using: 'uv pip install prompt_toolkit'",
+        )
     )
     sys.exit(1)
 
@@ -51,14 +54,20 @@ try:
 except ImportError:
     HAS_PYGMENTS = False
     log.warning(
-        "'pygments' library is missing. syntax highlighting will be disabled. install it using: 'uv pip install pygments'"
+        strings.get(
+            "err_pygments_missing",
+            "'pygments' library is missing. syntax highlighting will be disabled. install it using: 'uv pip install pygments'",
+        )
     )
 
 try:
     from rapidfuzz import process, fuzz  # NOQA: F401
 except ImportError:
     log.error(
-        "'rapidfuzz' library is missing. install it using: 'uv pip install rapidfuzz'"
+        strings.get(
+            "err_rapidfuzz_missing",
+            "'rapidfuzz' library is missing. install it using: 'uv pip install rapidfuzz'",
+        )
     )
     sys.exit(1)
 
@@ -194,7 +203,7 @@ class MentionCompleter(Completer):
         try:
             with open(meta.path, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read()
-            from .extractor import SymbolExtractor
+            from ..core.extractor import SymbolExtractor
 
             extractor = SymbolExtractor(content, meta.path.name)
             symbols = list(extractor.symbols.keys())
@@ -217,7 +226,11 @@ class MentionCompleter(Completer):
                     with open(meta.path, "rb") as f:
                         lines = sum(1 for _ in f)
                     yield Completion(
-                        "", start_position=0, display=f"[{lines} lines available]"
+                        "",
+                        start_position=0,
+                        display=strings.get(
+                            "lines_available", "[{lines} lines available]"
+                        ).format(lines=lines),
                     )
                 except Exception:
                     pass
@@ -288,10 +301,13 @@ class MentionCompleter(Completer):
             if call_type in ("type", "ext"):
                 parts = partial_val.split(",")
                 current_val = parts[-1]
+                added_exts = {p.strip().lower() for p in parts[:-1]}
                 candidates = self.indexer.get_all_extensions()
 
                 matched_items = [
-                    c for c in candidates if current_val.lower() in c.lower()
+                    c
+                    for c in candidates
+                    if current_val.lower() in c.lower() and c.lower() not in added_exts
                 ]
                 for c in matched_items[:15]:
                     yield Completion(
@@ -411,7 +427,7 @@ class InteractiveEditor:
 
         help_frame = Frame(
             body=self.help_window,
-            title="Help",
+            title=strings.get("help_title", "Help"),
             style="class:help-frame",
         )
 
@@ -434,7 +450,7 @@ class InteractiveEditor:
 
         error_frame = Frame(
             body=self.error_window,
-            title="Error",
+            title=strings.get("error_title", "Error"),
             style="class:error-frame",
         )
 

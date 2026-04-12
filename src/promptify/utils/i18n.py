@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from .settings import LOCALE
+from ..core.settings import LOCALE
 
-STRINGS_DIR = Path(__file__).parent.parent.parent / "strings"
+STRINGS_DIR = Path(__file__).parent.parent.parent.parent / "strings"
 
 
 def load_strings() -> dict[str, str]:

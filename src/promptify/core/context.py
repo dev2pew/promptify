@@ -2,12 +2,11 @@ import asyncio
 import aiofiles
 from pathlib import Path
 
-from .core.config import CaseConfig
+from .config import CaseConfig
 from .indexer import ProjectIndexer
 from .models import FileMeta, CachedContent
-from .constants import COMMENT_SYNTAX
 from .settings import MAX_FILE_SIZE, MAX_CONCURRENT_READS
-from .i18n import strings
+from ..utils.i18n import strings
 
 
 class ProjectContext:
@@ -48,7 +47,7 @@ class ProjectContext:
         return "\n".join(results)
 
     async def get_type_contents(self, exts_str: str) -> str:
-        exts = [e for e in exts_str.split(",")]
+        exts = list(dict.fromkeys(e.strip() for e in exts_str.split(",")))
         matches = self.indexer.get_by_extensions(exts)
 
         if not matches:
@@ -170,7 +169,8 @@ class ProjectContext:
         if range_str:
             lines, omitted = self._apply_range(lines, range_str)
             if omitted > 0:
-                prefix, suffix = COMMENT_SYNTAX.get(meta.ext, ("// ", ""))
+                syntax = strings.get("comment_syntax", {}).get(meta.ext, ["// ", ""])
+                prefix, suffix = syntax[0], syntax[1]
                 notice = strings["truncation_notice"].format(
                     prefix=prefix, omitted=omitted, suffix=suffix
                 )
