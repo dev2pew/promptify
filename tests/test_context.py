@@ -32,12 +32,12 @@ async def test_get_file_content_ranges(app_components):
         in res
     )
 
-    # first 2
+    # FIRST 2
     res = await context.get_file_content("app.py", "first 2")
     assert "This is line 1" in res
     assert "This is line 3" not in res
 
-    # last 2
+    # LAST 2
     res = await context.get_file_content("app.py", "last 2")
     assert "This is line 19" in res
     assert "This is line 18" not in res
@@ -47,7 +47,7 @@ async def test_get_file_content_ranges(app_components):
     assert "This is line 5" in res
     assert "This is line 4" not in res
 
-    # invalid
+    # INVALID
     res = await context.get_file_content("app.py", "invalid")
     assert strings["err_invalid_range"].format(range="invalid") in res
 
