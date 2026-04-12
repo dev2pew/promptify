@@ -28,6 +28,7 @@ try:
     from prompt_toolkit.styles import Style
     from prompt_toolkit.widgets import Frame
     from prompt_toolkit.lexers import Lexer
+    from prompt_toolkit.filters import Condition
 except ImportError:
     log.error(
         "'prompt_toolkit' library is missing. install it using: 'uv pip install prompt_toolkit'"
@@ -266,7 +267,7 @@ press [Enter], [F1] or ^[G] to close help
         bindings = merge_key_bindings([default_bindings, custom_bindings])
 
         toolbar_text = (
-            "^[G] help | ^[S] save | ^[Q] quit | <@file: / <@dir: / <@ext: / [@project]"
+            "[^G] help | [^S] save |[^Q] quit | <@file: / <@dir: / <@ext: / [@project]"
         )
         bottom_toolbar = Window(
             content=FormattedTextControl(toolbar_text), height=1, style="class:toolbar"
@@ -294,7 +295,7 @@ press [Enter], [F1] or ^[G] to close help
                     Window(height=Dimension(weight=1)),
                 ]
             ),
-            filter=lambda: self.help_visible,
+            filter=Condition(lambda: self.help_visible),
         )
 
         layout = Layout(
