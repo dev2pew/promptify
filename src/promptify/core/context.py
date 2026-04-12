@@ -228,7 +228,7 @@ class ProjectContext:
             except ValueError:
                 return lines + [error_msg], 0
 
-        return lines, 0
+        return lines + [error_msg], 0
 
     def generate_tree(self) -> str:
         tree_str = [

@@ -17,4 +17,7 @@ async def test_concurrent_resolution(app_components):
 
     # It should resolve very quickly due to TaskGroup and caching
     assert duration < 2.0
-    assert res.count("This is line 1") == 100
+
+    # "This is line 1'" (with quote) appears exactly once per file.
+    # We check for the quote to avoid matching "This is line 10", "11", etc.
+    assert res.count("This is line 1'") == 100
