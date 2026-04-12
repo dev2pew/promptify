@@ -520,7 +520,7 @@ def setup_keybindings(editor) -> KeyBindings:
                     extractor = SymbolExtractor(content, meta.path.name)
                     if not extractor.extract(symbol):
                         raise ValueError(f"symbol '{symbol}' not found")
-                except ValueError as e:
+                except Exception as e:
                     editor.error_message = str(e)
                     editor.error_visible = True
                     editor.error_buffer.text = f"\n  Invalid syntax in {meta.rel_path}:\n  {e}\n\n  Press [Enter] to dismiss."
