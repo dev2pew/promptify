@@ -165,7 +165,7 @@ uv run python -m promptify
 
 4 minute long animated walkthrough on the interactive editor and basic usage...
 
-![a demo video showcasing `promptify`](docs/vid/demo.mp4)
+![a demo video showcasing `promptify`](docs/vid/demo.gif)
 
 ### MENU
 
