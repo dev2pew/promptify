@@ -16,7 +16,7 @@ from editor import InteractiveEditor
 
 class App:
     def __init__(self):
-        self.root_dir = Path(__file__).parent.resolve()
+        self.root_dir = Path(__file__).parent.parent.parent.resolve()
         self.cases_dir = self.root_dir / "cases"
         self.data_dir = self.root_dir / "data"
         self.outs_dir = self.root_dir / "outs"
@@ -48,13 +48,14 @@ class App:
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
         if not cases:
             log.error("no cases found in 'cases/' directory")
+            log.info(f"self.root_dir shows '{self.root_dir}'")
             return
 
         print("\n[available cases]")
         print_columnized([c.name for c in cases])
 
         try:
-            case_idx = int(log.input("\nselect case >> ")) - 1
+            case_idx = int(log.input("select case >> ")) - 1
             selected_case_dir = cases[case_idx]
         except (ValueError, IndexError):
             log.error("invalid selection")
@@ -86,7 +87,7 @@ class App:
         ])
 
         try:
-            mode = int(log.input("\nselect mode >> "))
+            mode = int(log.input("select mode >> "))
             if mode == 1:
                 await self.run_legacy_mode(case, resolver)
             elif mode == 2:
