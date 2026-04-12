@@ -12,7 +12,7 @@ def format_index(i):
 def print_columnized(items):
     term_width, _ = shutil.get_terminal_size((80, 20))
 
-    formatted_items = [f"{format_index(i+1)} {item}" for i, item in enumerate(items)]
+    formatted_items = [f"{format_index(i + 1)} {item}" for i, item in enumerate(items)]
     max_width = max(len(item) for item in formatted_items) if formatted_items else 0
 
     col_width = max_width + 4
@@ -30,7 +30,7 @@ def print_columnized(items):
 
 def print_modes(modes):
     formatted_prefixes = [
-        f"{format_index(i+1)} {name}" for i, (name, _) in enumerate(modes)
+        f"{format_index(i + 1)} {name}" for i, (name, _) in enumerate(modes)
     ]
     max_prefix_len = (
         max(len(p) for p in formatted_prefixes) if formatted_prefixes else 0

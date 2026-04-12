@@ -1,4 +1,4 @@
 @ECHO OFF
 TITLE %~n0
 
-uv.exe run black --target-version py313 src/
+uv.exe run ruff format src/
