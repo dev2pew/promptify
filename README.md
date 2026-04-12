@@ -163,6 +163,10 @@ uv run python -m promptify
 
 ## DEMO
 
+4 minute long animated walkthrough on the interactive editor and basic usage...
+
+![a demo video showcasing `promptify`](docs/vid/demo.mp4)
+
 ### MENU
 
 the app opens to a welcome screen that lists available use cases.
