@@ -78,6 +78,24 @@ class ProjectContext:
         results = [t.result() for t in tasks]
         return "\n".join(results)
 
+    async def get_tree_contents(self, dir_query: str) -> str:
+        clean_dir = dir_query.lstrip("/\\")
+        target = (self.target_dir / clean_dir).resolve()
+
+        if not target.is_relative_to(self.target_dir.resolve()):
+            return strings.get("err_access_denied", "<!-- access denied -->").format(
+                path=clean_dir
+            )
+
+        rel_target = str(target.relative_to(self.target_dir)).replace("\\", "/")
+        if rel_target == ".":
+            rel_target = ""
+
+        if rel_target and rel_target not in self.indexer.dirs:
+            return strings["err_dir_empty"].format(query=dir_query)
+
+        return self.generate_tree(rel_target)
+
     async def get_symbol_content(self, query: str, symbol_name: str) -> str:
         if not symbol_name:
             return f"<!-- error: no symbol provided for {query} -->"
@@ -161,7 +179,9 @@ class ProjectContext:
             return strings["err_file_too_large"].format(path=meta.rel_path)
 
         if not self.is_sandboxed(meta.path):
-            return strings["err_access_denied"].format(path=meta.rel_path)
+            return strings.get("err_access_denied", "<!-- access denied -->").format(
+                path=meta.rel_path
+            )
 
         content = await self._read_cached(meta)
         lines = content.splitlines(keepends=True)
@@ -230,12 +250,21 @@ class ProjectContext:
 
         return lines + [error_msg], 0
 
-    def generate_tree(self) -> str:
+    def generate_tree(self, root_rel: str = "") -> str:
+        header_name = (
+            self.target_dir.name
+            if not root_rel
+            else root_rel.rstrip("/").split("/")[-1] or self.target_dir.name
+        )
         tree_str = [
             strings["tree_header_1"],
-            strings["tree_header_2"].format(name=self.target_dir.name),
+            strings["tree_header_2"].format(name=header_name),
             strings["tree_header_3"],
         ]
+
+        clean_root = root_rel.strip("/\\") + "/" if root_rel else ""
+        if clean_root == "/":
+            clean_root = ""
 
         def _build_tree(current_dir: str, prefix: str = ""):
             children = set()
@@ -252,8 +281,7 @@ class ProjectContext:
             items = sorted(
                 list(children),
                 key=lambda x: (
-                    (current_dir.lstrip("/") + "/" + x).rstrip("/")
-                    not in self.indexer.dirs,
+                    (current_dir + x) not in self.indexer.dirs,
                     x.lower(),
                 ),
             )
@@ -268,5 +296,5 @@ class ProjectContext:
                     extension = "    " if is_last else "│   "
                     _build_tree(full_path + "/", prefix + extension)
 
-        _build_tree("")
+        _build_tree(clean_root)
         return "\n".join(tree_str) + "\n"

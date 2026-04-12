@@ -22,8 +22,9 @@ async def test_resolve_user_single_pass(app_components):
 
 
 async def test_resolve_various_tags(app_components):
-    """Tests multiple tags resolving correctly in a single pass."""
+    """Tests multiple tags resolving correctly in a single pass via the new ModRegistry."""
     _, resolver = app_components
-    res = await resolver.resolve_user("<@dir:src> <@ext:md>")
+    res = await resolver.resolve_user("<@dir:src> <@ext:md> <@tree:src>")
     assert "main.py" in res
     assert "trap.md" in res
+    assert "utils.py" in res

@@ -2,29 +2,29 @@ import re
 import asyncio
 
 from .context import ProjectContext
+from .mods import ModRegistry
 from ..utils.i18n import strings
 
 
 class PromptResolver:
     """
-    Asynchronous resolver leveraging structured concurrency.
+    Asynchronous resolver leveraging structured concurrency and a decoupled Mod System.
     System mode operates recursively with loop protection.
     User mode operates in a strict single-pass sandbox.
     """
 
-    PATTERN = re.compile(
-        r"(<@(file|dir|type|ext|git|symbol):([^>:]+?)(?::([^>]+))?>|\[@project\])"
-    )
-
-    def __init__(self, context: ProjectContext):
+    def __init__(self, context: ProjectContext, registry: ModRegistry):
         self.context = context
+        self.registry = registry
+        if self.registry.pattern is None:
+            self.registry.build()
 
     async def resolve_system(self, text: str, seen: set[str] | None = None) -> str:
         """Recursive resolution for system templates, with loop protection."""
         if seen is None:
             seen = set()
 
-        matches = list(self.PATTERN.finditer(text))
+        matches = list(self.registry.pattern.finditer(text))
         if not matches:
             return text
 
@@ -56,7 +56,7 @@ class PromptResolver:
 
     async def resolve_user(self, text: str) -> str:
         """Single-pass resolution for user text (interactive editor)."""
-        matches = list(self.PATTERN.finditer(text))
+        matches = list(self.registry.pattern.finditer(text))
         if not matches:
             return text
 
@@ -76,27 +76,9 @@ class PromptResolver:
         return "".join(parts)
 
     async def _process_match(self, match: re.Match) -> str:
-        full_match = match.group(0)
-
-        if full_match == "[@project]":
-            return self.context.generate_tree()
-
-        call_type = match.group(2)
-        query = match.group(3)
-        range_str = match.group(4)
-
-        if call_type == "file":
-            return await self.context.get_file_content(query, range_str)
-        elif call_type == "dir":
-            return await self.context.get_dir_contents(query)
-        elif call_type in ("type", "ext"):
-            return await self.context.get_type_contents(query)
-        elif call_type == "git":
-            if query == "status":
-                return await self.context.get_git_status()
-            elif query == "diff":
-                return await self.context.get_git_diff(range_str)
-        elif call_type == "symbol":
-            return await self.context.get_symbol_content(query, range_str)
-
-        return full_match
+        """Delegates resolution strictly to the corresponding Mod."""
+        try:
+            mod, text = self.registry.get_mod_and_text(match)
+            return await mod.resolve(text, self.context)
+        except Exception:
+            return match.group(0)

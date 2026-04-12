@@ -36,8 +36,8 @@
     "tree_header_2": "Folder PATH listing for {name}",
     "tree_header_3": "C:.",
     "loop_detected": "<!-- loop detected - '{match}' -->",
-    "help_text": "[ general ]\n\n^[S]                : save and generate\n^[Q]                : quit without saving\n^[G] / [F1]         : show help\n\n[ autocomplete mentions ]\n\n<@file:path>        : file\n<@file:path:range>  : sliced file\n<@dir:path>         : folder\n<@ext:list>         : files by extension\n<@symbol:path:name> : file symbol\n<@git:diff>         : working tree diff\n<@git:diff:path>    : target work tree diff\n<@git:status>       : work tree status\n[@project]          : project structure\n\n[ editing ]\n\n^[A]                : select all\n[Shift]             : select\n^[Z/Y]              : undo / redo\n^[C/X/V]            : copy / cut / paste\n[Tab]               : indent / autocomplete\n[Shift] + [Tab]     : unindent\n[Alt] + [^/v]       : shift cursor\n^[/]                : comment out\n^[W/Del]            : delete previous / next\n[Enter]             : newline / accept\n\n[ navigation ]\n\n[^/v/</>]           : move\n^[^/v/</>]          : next / previous\n[Home/End]          : start / end\n^[Home/End]         : file start / end\n^[PgUp/PgDn]        : up / down (15x)\n\npress [Enter], [F1] or ^[G] to dismiss",
-    "toolbar_text": "^[G] help | <@file: / <@dir: / <@ext: / <@git: / <@symbol: / [@project]",
+    "help_text": "[ general ]\n\n^[S]                : save and generate\n^[Q]                : quit without saving\n^[G] / [F1]         : show help\n\n[ autocomplete mentions ]\n\n<@file:path>        : file\n<@file:path:range>  : sliced file\n<@dir:path>         : folder\n<@tree:path>        : tree structure\n<@ext:list>         : files by extension\n<@symbol:path:name> : file symbol\n<@git:diff>         : working tree diff\n<@git:diff:path>    : target work tree diff\n<@git:status>       : work tree status\n[@project]          : project structure\n\n[ editing ]\n\n^[A]                : select all\n[Shift]             : select\n^[Z/Y]              : undo / redo\n^[C/X/V]            : copy / cut / paste\n[Tab]               : indent / autocomplete\n[Shift] + [Tab]     : unindent\n[Alt] + [^/v]       : shift cursor\n^[/]                : comment out\n^[W/Del]            : delete previous / next\n[Enter]             : newline / accept\n\n[ navigation ]\n\n[^/v/</>]           : move\n^[^/v/</>]          : next / previous\n[Home/End]          : start / end\n^[Home/End]         : file start / end\n^[PgUp/PgDn]        : up / down (15x)\n\npress [Enter], [F1] or ^[G] to dismiss",
+    "toolbar_text": "^[G] help | <@file: / <@dir: / <@tree: / <@ext: / <@git: / <@symbol: / [@project]",
     "config_parse_failed": "failed to parse config for '{name}' - {error}",
     "gitignore_read_failed": "could not read '.gitignore' - {error}",
     "caseignore_read_failed": "could not read '.caseignore' - {error}",
@@ -54,8 +54,8 @@
     "err_pygments_missing": "'pygments' library is missing. syntax highlighting will be disabled. install it using: 'uv pip install pygments'",
     "err_rapidfuzz_missing": "'rapidfuzz' library is missing. install it using: 'uv pip install rapidfuzz'",
     "lines_available": "[{lines} lines available]",
-    "help_title": "Help",
-    "error_title": "Error",
+    "help_title": "help",
+    "error_title": "error",
     "comment_syntax": {
         "python": [
             "# ",

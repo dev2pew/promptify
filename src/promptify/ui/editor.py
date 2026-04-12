@@ -1,15 +1,18 @@
 import re
 import sys
+import asyncio
 from typing import Iterable
 
 from .logger import log
 from ..core.indexer import ProjectIndexer
+from ..core.resolver import PromptResolver
+from ..core.mods import ModRegistry
 from .bindings import setup_keybindings
 from ..utils.i18n import strings
-from ..core.models import FileMeta
 
 try:
     from prompt_toolkit import Application
+    from prompt_toolkit.application.current import get_app
     from prompt_toolkit.completion import Completer, Completion, CompleteEvent
     from prompt_toolkit.key_binding.defaults import load_key_bindings
     from prompt_toolkit.key_binding import merge_key_bindings
@@ -20,6 +23,7 @@ try:
         FloatContainer,
         Float,
         ConditionalContainer,
+        WindowAlign,
     )
     from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
     from prompt_toolkit.layout.layout import Layout
@@ -120,11 +124,9 @@ class EOFNewlineProcessor(Processor):
 if HAS_PYGMENTS:
 
     class CustomPromptLexer(Lexer):
-        def __init__(self):
+        def __init__(self, registry: ModRegistry):
             self.md_lexer = PygmentsLexer(MarkdownLexer)
-            self.pattern = re.compile(
-                r"(\[@project\]|<@(file|dir|type|ext|git|symbol):[^>]*>?)"
-            )
+            self.registry = registry
 
         def lex_document(self, document: Document):
             get_original_line = self.md_lexer.lex_document(document)
@@ -132,7 +134,7 @@ if HAS_PYGMENTS:
             def get_line(lineno: int):
                 original_tokens = get_original_line(lineno)
                 text = document.lines[lineno]
-                matches = list(self.pattern.finditer(text))
+                matches = list(self.registry.pattern.finditer(text))
 
                 if not matches:
                     return original_tokens
@@ -189,190 +191,40 @@ class HelpLexer(Lexer):
 
 
 class MentionCompleter(Completer):
-    """Provides ultra-fast autocomplete straight from the Watchdog-backed Index."""
+    """Routes autocomplete generation requests through the dynamically registered Mods."""
 
-    def __init__(self, indexer: ProjectIndexer):
+    def __init__(self, indexer: ProjectIndexer, registry: ModRegistry):
         self.indexer = indexer
-        self._symbol_cache: dict[str, tuple[float, list[str]]] = {}
-
-    def _get_symbols_for_file(self, meta: FileMeta) -> list[str]:
-        cached = self._symbol_cache.get(meta.rel_path)
-        if cached and cached[0] == meta.mtime:
-            return cached[1]
-
-        try:
-            with open(meta.path, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
-            from ..core.extractor import SymbolExtractor
-
-            extractor = SymbolExtractor(content, meta.path.name)
-            symbols = list(extractor.symbols.keys())
-            self._symbol_cache[meta.rel_path] = (meta.mtime, symbols)
-            return symbols
-        except Exception:
-            return []
+        self.registry = registry
 
     def get_completions(
         self, document: Document, complete_event: CompleteEvent
     ) -> Iterable[Completion]:
-        text_before_cursor = document.text_before_cursor
-
-        match_range = re.search(r"<@file:([^>:]+):([^><]*)$", text_before_cursor)
-        if match_range:
-            file_path = match_range.group(1)
-            meta = self.indexer.files_by_rel.get(file_path)
-            if meta:
-                try:
-                    with open(meta.path, "rb") as f:
-                        lines = sum(1 for _ in f)
-                    yield Completion(
-                        "",
-                        start_position=0,
-                        display=strings.get(
-                            "lines_available", "[{lines} lines available]"
-                        ).format(lines=lines),
-                    )
-                except Exception:
-                    pass
-            return
-
-        match_git_diff = re.search(r"<@git:diff:([^><]*)$", text_before_cursor)
-        if match_git_diff:
-            partial_val = match_git_diff.group(1)
-            candidates = list(self.indexer.files_by_rel.keys()) + list(
-                self.indexer.dirs
-            )
-            if not partial_val:
-                for c in sorted(candidates)[:15]:
-                    yield Completion(c + ">", start_position=0, display=c)
-                return
-            results = process.extract(partial_val, candidates, limit=15)
-            matched_items = [res[0] for res in results if res[1] > 40]
-            if not matched_items:
-                matched_items = [res[0] for res in results]
-            for c in matched_items:
-                yield Completion(c + ">", start_position=-len(partial_val), display=c)
-            return
-
-        match_path = re.search(
-            r"<@(file|dir|type|ext|symbol):([^><]*)$", text_before_cursor
+        # WRAP THE GENERATOR IN A LIST
+        # THIS FORCES THE SCROLLBAR TO SEE THE FINAL COUNT IMMEDIATELY
+        completions = list(
+            self.registry.get_all_completions(document.text_before_cursor, self.indexer)
         )
-        if match_path:
-            call_type = match_path.group(1)
-            partial_val = match_path.group(2)
 
-            if call_type == "symbol":
-                parts = partial_val.split(":", 1)
-                if len(parts) == 1:
-                    candidates = list(self.indexer.files_by_rel.keys())
-                    if not parts[0]:
-                        for c in sorted(candidates)[:15]:
-                            yield Completion(c + ":", start_position=0, display=c)
-                        return
-                    results = process.extract(parts[0], candidates, limit=15)
-                    matched_items = [res[0] for res in results if res[1] > 40] or [
-                        res[0] for res in results
-                    ]
-                    for c in matched_items:
-                        yield Completion(
-                            c + ":", start_position=-len(parts[0]), display=c
-                        )
-                    return
-                elif len(parts) == 2:
-                    file_path = parts[0]
-                    symbol_partial = parts[1]
-                    if file_path in self.indexer.files_by_rel:
-                        meta = self.indexer.files_by_rel[file_path]
-                        symbols = self._get_symbols_for_file(meta)
-                        if not symbol_partial:
-                            for s in sorted(symbols)[:15]:
-                                yield Completion(s + ">", start_position=0, display=s)
-                            return
-                        results = process.extract(symbol_partial, symbols, limit=15)
-                        matched_items = [res[0] for res in results if res[1] > 40] or [
-                            res[0] for res in results
-                        ]
-                        for s in matched_items:
-                            yield Completion(
-                                s + ">", start_position=-len(symbol_partial), display=s
-                            )
-                    return
-
-            if call_type in ("type", "ext"):
-                parts = partial_val.split(",")
-                current_val = parts[-1]
-                added_exts = {p.strip().lower() for p in parts[:-1]}
-                candidates = self.indexer.get_all_extensions()
-
-                matched_items = [
-                    c
-                    for c in candidates
-                    if current_val.lower() in c.lower() and c.lower() not in added_exts
-                ]
-                for c in matched_items[:15]:
-                    yield Completion(
-                        c + ",", start_position=-len(current_val), display=c
-                    )
-                return
-
-            candidates = []
-            if call_type == "file":
-                candidates = list(self.indexer.files_by_rel.keys())
-            elif call_type == "dir":
-                candidates = list(self.indexer.dirs)
-
-            if not partial_val:
-                for c in sorted(candidates)[:15]:
-                    yield Completion(c + ">", start_position=0, display=c)
-                return
-
-            results = process.extract(partial_val, candidates, limit=15)
-            matched_items = [res[0] for res in results if res[1] > 40]
-            if not matched_items:
-                matched_items = [res[0] for res in results]
-
-            for c in matched_items:
-                yield Completion(c + ">", start_position=-len(partial_val), display=c)
-            return
-
-        match_git = re.search(r"<@git:([^><:]*)$", text_before_cursor)
-        if match_git:
-            partial = match_git.group(1)
-            for c in ["diff>", "status>", "diff:"]:
-                if c.startswith(partial.lower()):
-                    yield Completion(c, start_position=-len(partial), display=c)
-            return
-
-        match_tag = re.search(r"<@([^><:]*)$", text_before_cursor)
-        if match_tag:
-            partial = match_tag.group(1)
-            for tag in ["file:", "dir:", "ext:", "git:", "symbol:"]:
-                if tag.startswith(partial.lower()):
-                    yield Completion(
-                        tag, start_position=-len(partial), display=f"<@{tag}"
-                    )
-            return
-
-        match_project = re.search(r"\[@([^\]\[]*)$", text_before_cursor)
-        if match_project:
-            partial = match_project.group(1)
-            target = "project]"
-            if target.startswith(partial.lower()):
-                yield Completion(
-                    target, start_position=-len(partial), display="[@project]"
-                )
-            return
+        yield from completions
 
 
 class InteractiveEditor:
     def __init__(
-        self, initial_text: str, indexer: ProjectIndexer, show_help: bool = False
+        self,
+        initial_text: str,
+        indexer: ProjectIndexer,
+        resolver: PromptResolver,
+        show_help: bool = False,
     ):
         self.help_visible = show_help
         self.indexer = indexer
+        self.resolver = resolver
+        self.token_count = 0
+
         self.buffer = Buffer(
             document=Document(initial_text, cursor_position=0),
-            completer=MentionCompleter(indexer),
+            completer=MentionCompleter(indexer, resolver.registry),
             complete_while_typing=True,
         )
         self.result: str | None = None
@@ -399,8 +251,7 @@ class InteractiveEditor:
             height=Dimension(preferred=10, max=20),
         )
 
-        lexer = CustomPromptLexer() if HAS_PYGMENTS else None
-
+        lexer = CustomPromptLexer(resolver.registry) if HAS_PYGMENTS else None
         processors = [
             HighlightTrailingWhitespaceProcessor(),
             HighlightMatchingBracketProcessor(),
@@ -413,17 +264,81 @@ class InteractiveEditor:
             )
         )
 
+    async def _update_tokens_loop(self):
+        """Asynchronous, debounced task to compute resolution sizes without lagging the UI."""
+        last_text = None
+        last_count = 0
+        while True:
+            await asyncio.sleep(0.5)
+            if self.result is not None:
+                break
+
+            current_text = self.buffer.text
+            if current_text != last_text:
+                last_text = current_text
+                try:
+                    resolved = await self.resolver.resolve_user(current_text)
+                    new_count = len(resolved) // 4
+
+                    # ONLY UPDATE STATE AND TRIGGER A REDRAW IF THE COUNT CHANGED
+                    if new_count != last_count:
+                        self.token_count = new_count
+                        last_count = new_count
+                        app = get_app()
+                        if app:
+                            app.invalidate()
+                except Exception:
+                    pass
+
     async def run_async(self) -> str | None:
         default_bindings = load_key_bindings()
         custom_bindings = setup_keybindings(self)
         bindings = merge_key_bindings([default_bindings, custom_bindings])
 
-        toolbar_text = strings.get("toolbar_text", "")
-        bottom_toolbar = Window(
-            content=FormattedTextControl(toolbar_text), height=1, style="class:toolbar"
+        top_bar = VSplit(
+            [
+                Window(width=Dimension(weight=1), style="class:topbar"),
+                Window(
+                    content=FormattedTextControl(" promptify editor "),
+                    style="class:topbar-title",
+                    align=WindowAlign.CENTER,
+                ),
+                Window(
+                    content=FormattedTextControl(
+                        lambda: f"~{self.token_count} tokens "
+                    ),
+                    style="class:topbar-tokens",
+                    align=WindowAlign.RIGHT,
+                    width=Dimension(preferred=15),
+                ),
+            ],
+            height=1,
+            style="class:topbar",
         )
 
-        body = HSplit([self.main_window, bottom_toolbar])
+        toolbar_text = strings.get("toolbar_text", "")
+        bottom_toolbar = VSplit(
+            [
+                Window(
+                    content=FormattedTextControl(" " + toolbar_text),
+                    style="class:toolbar",
+                ),
+                Window(
+                    content=FormattedTextControl(
+                        lambda: (
+                            f":{self.buffer.document.cursor_position_row + 1},{self.buffer.document.cursor_position_col} "
+                        )
+                    ),
+                    style="class:toolbar-right",
+                    width=Dimension(preferred=15),
+                    align=WindowAlign.RIGHT,
+                ),
+            ],
+            height=1,
+            style="class:toolbar",
+        )
+
+        body = HSplit([top_bar, self.main_window, bottom_toolbar])
 
         help_frame = Frame(
             body=self.help_window,
@@ -500,7 +415,11 @@ class InteractiveEditor:
 
         style = Style.from_dict(
             {
+                "topbar": "bg:#333333 #ffffff",
+                "topbar-title": "bg:#333333 #00ffff bold",
+                "topbar-tokens": "bg:#333333 #ffff00",
                 "toolbar": "bg:#333333 #ffffff",
+                "toolbar-right": "bg:#333333 #00ff00",
                 "completion-menu": "bg:#444444 #ffffff",
                 "completion-menu.completion.current": "bg:#00aa00 #ffffff bold",
                 "aicall": "fg:#00ffff bold",
@@ -528,5 +447,8 @@ class InteractiveEditor:
         if self.help_visible:
             app.layout.focus(self.help_window)
 
+        token_task = asyncio.create_task(self._update_tokens_loop())
         await app.run_async()
+        token_task.cancel()
+
         return self.result
