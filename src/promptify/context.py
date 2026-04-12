@@ -5,48 +5,14 @@ from pathlib import Path
 from .config import CaseConfig
 from .indexer import ProjectIndexer
 from .models import FileMeta, CachedContent
+from .constants import COMMENT_SYNTAX
 
 
 class ProjectContext:
     """Provides sandboxed, asynchronous, size-limited access to project resources."""
 
-    # RESTRICT CONCURRENT I/O TO AVOID EXHAUSTING FILE DESCRIPTORS
     IO_SEMAPHORE = asyncio.Semaphore(100)
-    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB LIMIT FOR SINGLE FILE READS
-
-    # LANGUAGE AWARE COMMENTING SYNTAX MAPPING
-    COMMENT_SYNTAX = {
-        "python": ("# ", ""),
-        "py": ("# ", ""),
-        "bash": ("# ", ""),
-        "sh": ("# ", ""),
-        "yaml": ("# ", ""),
-        "yml": ("# ", ""),
-        "ruby": ("# ", ""),
-        "rb": ("# ", ""),
-        "javascript": ("// ", ""),
-        "js": ("// ", ""),
-        "typescript": ("// ", ""),
-        "ts": ("// ", ""),
-        "java": ("// ", ""),
-        "c": ("// ", ""),
-        "cpp": ("// ", ""),
-        "csharp": ("// ", ""),
-        "cs": ("// ", ""),
-        "go": ("// ", ""),
-        "rust": ("// ", ""),
-        "rs": ("// ", ""),
-        "swift": ("// ", ""),
-        "php": ("// ", ""),
-        "html": ("<!-- ", " -->"),
-        "xml": ("<!-- ", " -->"),
-        "markdown": ("<!-- ", " -->"),
-        "md": ("<!-- ", " -->"),
-        "css": ("/* ", " */"),
-        "scss": ("/* ", " */"),
-        "sql": ("-- ", ""),
-        "lua": ("-- ", ""),
-    }
+    MAX_FILE_SIZE = 5 * 1024 * 1024
 
     def __init__(self, target_dir: Path, case: CaseConfig, indexer: ProjectIndexer):
         self.target_dir = target_dir
@@ -56,11 +22,7 @@ class ProjectContext:
 
     def is_sandboxed(self, path: Path) -> bool:
         """Enforces absolute sandboxing to the target_dir."""
-        try:
-            path.resolve().relative_to(self.target_dir.resolve())
-            return True
-        except ValueError:
-            return False
+        return path.resolve().is_relative_to(self.target_dir.resolve())
 
     async def get_file_content(self, query: str, range_str: str | None = None) -> str:
         matches = self.indexer.find_matches(query)
@@ -92,7 +54,6 @@ class ProjectContext:
         return "\n".join(results)
 
     async def get_dir_contents(self, dir_query: str) -> str:
-        # MATCH ALL FILES STARTING WITH THE DIRECTORY PATH
         clean_dir = dir_query.lstrip("/\\")
         matches = [
             m for p, m in self.indexer.files_by_rel.items() if p.startswith(clean_dir)
@@ -122,7 +83,7 @@ class ProjectContext:
         if range_str:
             lines, omitted = self._apply_range(lines, range_str)
             if omitted > 0:
-                prefix, suffix = self.COMMENT_SYNTAX.get(meta.ext, ("// ", ""))
+                prefix, suffix = COMMENT_SYNTAX.get(meta.ext, ("// ", ""))
                 lines.append(
                     f"\n{prefix}... (truncated, {omitted} lines omitted){suffix}\n"
                 )
@@ -148,20 +109,21 @@ class ProjectContext:
         """Evaluates limits like 'first 200', 'last 100', '10-20', or '#L45'."""
         range_str = range_str.strip().lower()
         total = len(lines)
+        error_msg = f"\n<!-- error... invalid range '{range_str}' -->\n"
 
         if range_str.startswith("first "):
             try:
                 n = int(range_str.split()[1])
                 return lines[:n], max(0, total - n)
             except ValueError:
-                pass
+                return lines + [error_msg], 0
 
         elif range_str.startswith("last "):
             try:
                 n = int(range_str.split()[1])
                 return lines[-n:], max(0, total - n)
             except ValueError:
-                pass
+                return lines + [error_msg], 0
 
         elif "-" in range_str:
             try:
@@ -169,14 +131,14 @@ class ProjectContext:
                 s, e = map(int, r.split("-"))
                 return lines[max(0, s - 1) : e], max(0, total - (e - max(0, s - 1)))
             except ValueError:
-                pass
+                return lines + [error_msg], 0
 
         elif range_str.startswith("#l"):
             try:
                 n = int(range_str.replace("#l", ""))
                 return lines[max(0, n - 1) : n], max(0, total - 1)
             except ValueError:
-                pass
+                return lines + [error_msg], 0
 
         return lines, 0
 

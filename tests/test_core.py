@@ -55,7 +55,7 @@ class TestPromptifyCore:
         result = await resolver.resolve_system("<@file:trap.md>")
 
         # VERIFIED FORMATTED LOOP COMMENT MATCHES YOUR RETURN IN RESOLVER.PY
-        assert "" in result
+        assert "<!-- loop detected" in result
 
         # RECURSIVE RESOLUTION CHECK (IT SHOULD STILL RESOLVE THE OTHER TAG [@PROJECT])
         assert "Folder PATH listing" in result

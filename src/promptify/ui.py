@@ -2,14 +2,14 @@ import shutil
 import math
 
 
-def format_index(i):
+def format_index(i: int) -> str:
     s = str(i)
     if len(s) == 1:
         return f"[-{s}]"
     return f"[{s}]"
 
 
-def print_columnized(items):
+def print_columnized(items: list[str]) -> None:
     term_width, _ = shutil.get_terminal_size((80, 20))
 
     formatted_items = [f"{format_index(i + 1)} {item}" for i, item in enumerate(items)]
@@ -28,7 +28,7 @@ def print_columnized(items):
         print(row_str)
 
 
-def print_modes(modes):
+def print_modes(modes: list[tuple[str, str]]) -> None:
     formatted_prefixes = [
         f"{format_index(i + 1)} {name}" for i, (name, _) in enumerate(modes)
     ]

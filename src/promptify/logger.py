@@ -1,77 +1,69 @@
 import sys
-import os
 import datetime
-
-# ENABLE ANSI ESCAPE SEQUENCE PROCESSING FOR WINDOWS CMD.EXE
-if os.name == "nt":
-    try:
-        import ctypes
-
-        kernel32 = ctypes.windll.kernel32
-        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
-        mode = ctypes.c_uint32()
-        kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-        # 0X0004 IS ENABLE_VIRTUAL_TERMINAL_PROCESSING
-        kernel32.SetConsoleMode(handle, mode.value | 0x0004)
-    except Exception:
-        # FALLBACK HACK THAT OFTEN FORCES ANSI RENDERING ON WINDOWS
-        os.system("")
+from typing import Any
+from prompt_toolkit import print_formatted_text, HTML
+from prompt_toolkit.shortcuts import PromptSession
 
 
 class Logger:
-    def __init__(self, verbosity=1, include_timestamp=False):
+    def __init__(self, verbosity: int = 1, include_timestamp: bool = False):
         self.verbosity = verbosity
         self.include_timestamp = include_timestamp
+        self._session: PromptSession[str] | None = None
 
-    def _get_timestamp(self):
+    def _get_timestamp(self) -> str:
         if self.include_timestamp:
             return f"[{datetime.datetime.now().strftime('%H:%M:%S')}] "
         return ""
 
-    def _print(self, prefix, color_code, message, suffix="", end="\n"):
-        RESET = "\033[0m"
-        COLOR = f"\033[{color_code}m"
+    def _print(self, prefix: str, color: str, message: str, **kwargs: Any) -> None:
         timestamp = self._get_timestamp()
-        formatted_message = f"{timestamp}{COLOR}{prefix}{RESET} {message}{suffix}"
-        print(formatted_message, end=end)
-        sys.stdout.flush()
+        safe_message = str(message).replace("<", "&lt;").replace(">", "&gt;")
+        formatted_text = HTML(f"{timestamp}<{color}>{prefix}</{color}> {safe_message}")
 
-    def normal(self, message, **kwargs):
-        self._print("[>]", "34", message, **kwargs)  # BLUE
-
-    def input(self, message):
-        RESET = "\033[0m"
-        COLOR = "\033[36m"  # CYAN
-        timestamp = self._get_timestamp()
-        formatted_message = f"{timestamp}{COLOR}[<]{RESET} {message}"
         try:
-            return input(formatted_message)
+            # Attempt to print with rich terminal colors
+            print_formatted_text(formatted_text, **kwargs)
+        except Exception:
+            # Fallback for pytest capturing, CI/CD pipelines, or piped outputs
+            print(f"{timestamp}{prefix} {message}", **kwargs)
+
+    def normal(self, message: str, **kwargs: Any) -> None:
+        self._print("[>]", "ansiblue", message, **kwargs)
+
+    async def input_async(self, message: str) -> str:
+        timestamp = self._get_timestamp()
+        safe_message = str(message).replace("<", "&lt;").replace(">", "&gt;")
+        formatted_text = HTML(f"{timestamp}<ansicyan>[&lt;]</ansicyan> {safe_message}")
+
+        if self._session is None:
+            self._session = PromptSession()
+
+        try:
+            return await self._session.prompt_async(formatted_text)
         except (EOFError, KeyboardInterrupt):
             print()
             self.warning("operation cancelled by user")
             sys.exit(0)
 
-    def error(self, message, **kwargs):
-        self._print("[e]", "31", message, **kwargs)  # RED
+    def error(self, message: str, **kwargs: Any) -> None:
+        self._print("[e]", "ansired", message, **kwargs)
 
-    def success(self, message, **kwargs):
-        self._print("[+]", "32", message, **kwargs)  # GREEN
+    def success(self, message: str, **kwargs: Any) -> None:
+        self._print("[+]", "ansigreen", message, **kwargs)
 
-    def warning(self, message, **kwargs):
-        self._print("[w]", "33", message, **kwargs)  # YELLOW
+    def warning(self, message: str, **kwargs: Any) -> None:
+        self._print("[w]", "ansiyellow", message, **kwargs)
 
-    def info(self, message, **kwargs):
-        self._print("[i]", "94", message, **kwargs)  # LIGHT BLUE
+    def info(self, message: str, **kwargs: Any) -> None:
+        self._print("[i]", "ansiblue", message, **kwargs)
 
-    def notice(self, message, **kwargs):
-        self._print("[*]", "35", message, **kwargs)  # MAGENTA
+    def notice(self, message: str, **kwargs: Any) -> None:
+        self._print("[*]", "ansimagenta", message, **kwargs)
 
-    def verbose(self, message, level=2, **kwargs):
+    def verbose(self, message: str, level: int = 2, **kwargs: Any) -> None:
         if self.verbosity >= level:
-            self._print("[v]", "90", message, **kwargs)  # GRAY
-
-    def custom(self, prefix, color_code, message, **kwargs):
-        self._print(prefix, color_code, message, **kwargs)
+            self._print("[v]", "ansigray", message, **kwargs)
 
 
 log = Logger()
