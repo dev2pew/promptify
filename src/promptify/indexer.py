@@ -6,9 +6,9 @@ from watchdog.observers import Observer
 from watchdog.observers.polling import PollingObserver
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
-from logger import log
-from models import FileMeta
-from config import CaseConfig
+from .logger import log
+from .models import FileMeta
+from .config import CaseConfig
 
 class ProjectIndexer(FileSystemEventHandler):
     """

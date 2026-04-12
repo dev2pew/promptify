@@ -2,9 +2,9 @@ import asyncio
 import aiofiles
 from pathlib import Path
 
-from config import CaseConfig
-from indexer import ProjectIndexer
-from models import FileMeta, CachedContent
+from .config import CaseConfig
+from .indexer import ProjectIndexer
+from .models import FileMeta, CachedContent
 
 class ProjectContext:
     """Provides sandboxed, asynchronous, size-limited access to project resources."""

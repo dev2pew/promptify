@@ -1,6 +1,7 @@
 import re
 import asyncio
-from context import ProjectContext
+
+from .context import ProjectContext
 
 class PromptResolver:
     """

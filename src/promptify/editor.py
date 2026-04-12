@@ -2,8 +2,8 @@ import re
 import sys
 import os
 
-from logger import log
-from indexer import ProjectIndexer
+from .logger import log
+from .indexer import ProjectIndexer
 
 try:
     from prompt_toolkit import Application
