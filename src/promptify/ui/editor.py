@@ -411,7 +411,7 @@ class InteractiveEditor:
             [
                 Window(width=Dimension(weight=1), style="class:topbar"),
                 Window(
-                    content=FormattedTextControl(" promptify editor "),
+                    content=FormattedTextControl(" < promptify editor > "),
                     style="class:topbar-title",
                     align=WindowAlign.CENTER,
                 ),
@@ -454,7 +454,7 @@ class InteractiveEditor:
 
         help_frame = Frame(
             body=self.help_window,
-            title=strings.get("help_title", "Help"),
+            title=" < " + strings.get("help_title", "help") + " > ",
             style="class:help-frame",
         )
 
@@ -477,7 +477,7 @@ class InteractiveEditor:
 
         error_frame = Frame(
             body=self.error_window,
-            title=strings.get("error_title", "Error"),
+            title=" < " + strings.get("error_title", "error") + " > ",
             style="class:error-frame",
         )
 

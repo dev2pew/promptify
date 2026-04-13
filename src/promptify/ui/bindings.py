@@ -55,6 +55,7 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.help_visible = not editor.help_visible
         if editor.help_visible:
             event.app.layout.focus(editor.help_window)
+            editor.help_window.content.buffer.cursor_position = 0
         else:
             event.app.layout.focus(editor.main_window)
 
