@@ -305,7 +305,7 @@ class InteractiveEditor:
                 ),
                 Window(
                     content=FormattedTextControl(
-                        lambda: f"~{self.token_count} tokens "
+                        lambda: f" ~{self.token_count} tokens "
                     ),
                     style="class:topbar-tokens",
                     align=WindowAlign.RIGHT,
@@ -320,13 +320,13 @@ class InteractiveEditor:
         bottom_toolbar = VSplit(
             [
                 Window(
-                    content=FormattedTextControl(" " + toolbar_text),
+                    content=FormattedTextControl(" " + toolbar_text + " "),
                     style="class:toolbar",
                 ),
                 Window(
                     content=FormattedTextControl(
                         lambda: (
-                            f":{self.buffer.document.cursor_position_row + 1}:{self.buffer.document.cursor_position_col + 1}"
+                            f" :{self.buffer.document.cursor_position_row + 1}:{self.buffer.document.cursor_position_col + 1} "
                         )
                     ),
                     style="class:toolbar-right",
