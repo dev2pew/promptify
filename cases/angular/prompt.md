@@ -16,9 +16,7 @@ complete the task while adhering to the guidelines.
 
 below is the project structure...
 
-```log
 [@project]
-```
 
 ## NOTE
 

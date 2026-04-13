@@ -18,9 +18,7 @@ TODO: [[YOUR_TASK_HERE]]
 
 below is the project structure...
 
-```log
 [@project]
-```
 
 ## NOTE
 

@@ -15,9 +15,7 @@ TODO: [[YOUR_TASK_HERE]]
 
 below is the documentation structure...
 
-```log
 [@project]
-```
 
 ## CONTEXT
 
