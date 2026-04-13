@@ -124,67 +124,73 @@ class EOFNewlineProcessor(Processor):
 if HAS_PYGMENTS:
 
     def tokenize_mention(text: str) -> list[tuple[str, str]]:
-        """Granular tokenization for mentions, supporting Python syntax heuristics."""
+        """Granular tokenization for mentions, supporting semantic argument parsing."""
         if text == "[@project]":
             return [("class:mention-tag", "[@project]")]
 
-        # FALLBACK IF IT'S NOT A PROPERLY ENCLOSED TAG YET
         if not (text.startswith("<@") and text.endswith(">")):
             return [("class:mention-tag", text)]
 
-        inner = text[2:-1]  # STRIP <@ AND >
+        inner = text[2:-1]
 
-        if ":" in inner:
-            tag_type, rest = inner.split(":", 1)
-        else:
+        if ":" not in inner:
             return [("class:mention-tag", text)]
 
-        # 1. BASE TAG (E.G., <@FILE)
+        tag_type, rest = inner.split(":", 1)
         tokens = [("class:mention-tag", f"<@{tag_type}")]
 
-        # 2. PARSE PATH AND ARGUMENTS
-        if tag_type in ("file", "symbol", "git"):
-            # SPLIT ON THE LAST COLON TO SEPARATE PATH FROM RANGE/SYMBOL
+        def add_sep():
+            tokens.append(("", ":"))
+
+        # SEMANTIC PARSING BASED ON TAG TYPE
+        if tag_type == "git":
+            # STRUCTURE: <@GIT:CMD:PATH>
+            if ":" in rest:
+                cmd, path = rest.split(":", 1)
+                add_sep()
+                tokens.append(("class:mention-git-cmd", cmd))
+                add_sep()
+                tokens.append(("class:mention-path", path))
+            else:
+                add_sep()
+                tokens.append(("class:mention-git-cmd", rest))
+
+        elif tag_type in ("file", "symbol"):
+            # STRUCTURE: <@TAG:PATH:ARG2>
+            # USE RSPLIT IN CASE THE PATH CONTAINS COLONS (E.G., C:/...)
             if ":" in rest:
                 path, arg2 = rest.rsplit(":", 1)
-                tokens.append(("", ":"))  # UNCOLORED COLON
-                tokens.append(("class:mention-path", path))  # COLORED PATH
-                tokens.append(("", ":"))  # UNCOLORED COLON
+                add_sep()
+                tokens.append(("class:mention-path", path))
+                add_sep()
 
                 if tag_type == "symbol":
-                    # PYGMENTS-STYLE PYTHON HEURISTICS
                     if "." in arg2:
                         cls, dot, method = arg2.partition(".")
                         tokens.append(("class:mention-class", cls))
-                        tokens.append(("", dot))  # UNCOLORED DOT
+                        tokens.append(("", dot))
                         tokens.append(("class:mention-method", method))
                     elif arg2 and arg2[0].isupper():
                         tokens.append(("class:mention-class", arg2))
                     else:
                         tokens.append(("class:mention-function", arg2))
-                elif tag_type == "git":
-                    tokens.append(("class:mention-git-arg", arg2))
-                else:
+                else:  # FILE
                     tokens.append(("class:mention-range", arg2))
             else:
-                # ONLY ONE ARGUMENT PROVIDED SO FAR
-                tokens.append(("", ":"))  # UNCOLORED COLON
-                if tag_type == "git":
-                    tokens.append(("class:mention-git-arg", rest))
-                else:
-                    tokens.append(("class:mention-path", rest))
+                add_sep()
+                tokens.append(("class:mention-path", rest))
 
         elif tag_type == "ext":
-            tokens.append(("", ":"))  # UNCOLORED COLON
-            tokens.append(("class:mention-ext", rest))  # COLORED LIST
+            # STRUCTURE: <@EXT:LIST>
+            add_sep()
+            tokens.append(("class:mention-ext", rest))
+
         else:
-            # DIR, TREE (NO 3RD ARGUMENT)
-            tokens.append(("", ":"))  # UNCOLORED COLON
-            tokens.append(("class:mention-path", rest))  # COLORED PATH
+            # STRUCTURE: <@DIR:PATH> OR <@TREE:PATH>
+            add_sep()
+            tokens.append(("class:mention-path", rest))
 
-        # 3. CLOSING BRACKET
         tokens.append(("class:mention-tag", ">"))
-
         return tokens
 
     class CustomPromptLexer(Lexer):
@@ -532,9 +538,9 @@ class InteractiveEditor:
                 # GRANULAR MENTION STYLES
                 "mention-tag": "fg:#00ffff bold",  # CYAN: <@FILE, >, [@PROJECT]
                 "mention-path": "fg:#ffaa00",  # ORANGE: SRC/MAIN.PY
-                "mention-range": "fg:#ff55ff",  # PINK: 12-20
+                "mention-range": "fg:#ff55ff",  # MAGENTA/PINK: 12-20
                 "mention-ext": "fg:#ffaa00",  # ORANGE: MD,PY
-                "mention-git-arg": "fg:#00aa00",  # GREEN: DIFF, STATUS
+                "mention-git-cmd": "fg:#00aa00",  # GREEN: DIFF, STATUS
                 "mention-class": "fg:#00ff00 bold",  # BRIGHT GREEN: MYCLASS
                 "mention-function": "fg:#5555ff",  # BLUE: MY_FUNC
                 "mention-method": "fg:#55ffff",  # LIGHT CYAN: METHOD
