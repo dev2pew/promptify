@@ -326,7 +326,7 @@ class InteractiveEditor:
                 Window(
                     content=FormattedTextControl(
                         lambda: (
-                            f":{self.buffer.document.cursor_position_row + 1},{self.buffer.document.cursor_position_col} "
+                            f":{self.buffer.document.cursor_position_row + 1}:{self.buffer.document.cursor_position_col + 1}"
                         )
                     ),
                     style="class:toolbar-right",
