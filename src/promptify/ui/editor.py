@@ -123,6 +123,70 @@ class EOFNewlineProcessor(Processor):
 
 if HAS_PYGMENTS:
 
+    def tokenize_mention(text: str) -> list[tuple[str, str]]:
+        """Granular tokenization for mentions, supporting Python syntax heuristics."""
+        if text == "[@project]":
+            return [("class:mention-tag", "[@project]")]
+
+        # FALLBACK IF IT'S NOT A PROPERLY ENCLOSED TAG YET
+        if not (text.startswith("<@") and text.endswith(">")):
+            return [("class:mention-tag", text)]
+
+        inner = text[2:-1]  # STRIP <@ AND >
+
+        if ":" in inner:
+            tag_type, rest = inner.split(":", 1)
+        else:
+            return [("class:mention-tag", text)]
+
+        # 1. BASE TAG (E.G., <@FILE)
+        tokens = [("class:mention-tag", f"<@{tag_type}")]
+
+        # 2. PARSE PATH AND ARGUMENTS
+        if tag_type in ("file", "symbol", "git"):
+            # SPLIT ON THE LAST COLON TO SEPARATE PATH FROM RANGE/SYMBOL
+            if ":" in rest:
+                path, arg2 = rest.rsplit(":", 1)
+                tokens.append(("", ":"))  # UNCOLORED COLON
+                tokens.append(("class:mention-path", path))  # COLORED PATH
+                tokens.append(("", ":"))  # UNCOLORED COLON
+
+                if tag_type == "symbol":
+                    # PYGMENTS-STYLE PYTHON HEURISTICS
+                    if "." in arg2:
+                        cls, dot, method = arg2.partition(".")
+                        tokens.append(("class:mention-class", cls))
+                        tokens.append(("", dot))  # UNCOLORED DOT
+                        tokens.append(("class:mention-method", method))
+                    elif arg2 and arg2[0].isupper():
+                        tokens.append(("class:mention-class", arg2))
+                    else:
+                        tokens.append(("class:mention-function", arg2))
+                elif tag_type == "git":
+                    tokens.append(("class:mention-git-arg", arg2))
+                else:
+                    tokens.append(("class:mention-range", arg2))
+            else:
+                # ONLY ONE ARGUMENT PROVIDED SO FAR
+                tokens.append(("", ":"))  # UNCOLORED COLON
+                if tag_type == "git":
+                    tokens.append(("class:mention-git-arg", rest))
+                else:
+                    tokens.append(("class:mention-path", rest))
+
+        elif tag_type == "ext":
+            tokens.append(("", ":"))  # UNCOLORED COLON
+            tokens.append(("class:mention-ext", rest))  # COLORED LIST
+        else:
+            # DIR, TREE (NO 3RD ARGUMENT)
+            tokens.append(("", ":"))  # UNCOLORED COLON
+            tokens.append(("class:mention-path", rest))  # COLORED PATH
+
+        # 3. CLOSING BRACKET
+        tokens.append(("class:mention-tag", ">"))
+
+        return tokens
+
     class CustomPromptLexer(Lexer):
         def __init__(self, registry: ModRegistry):
             self.md_lexer = PygmentsLexer(MarkdownLexer)
@@ -139,52 +203,94 @@ if HAS_PYGMENTS:
                 if not matches:
                     return original_tokens
 
+                # FLATTEN ORIGINAL PYGMENTS TOKENS TO A CHARACTER MAP
+                chars = []
+                for style, chars_str in original_tokens:
+                    for c in chars_str:
+                        chars.append((style, c))
+
                 new_tokens = []
                 last_idx = 0
-                for match in matches:
-                    start, end = match.span()
-                    if start > last_idx:
-                        new_tokens.append(("", text[last_idx:start]))
-                    new_tokens.append(("class:aicall", text[start:end]))
+
+                for m in matches:
+                    start, end = m.span()
+
+                    # 1. RECOVER ORIGINAL MARKDOWN TOKENS BEFORE THE MATCH
+                    curr_style = None
+                    curr_text = []
+                    for i in range(last_idx, start):
+                        st, c = chars[i]
+                        if st != curr_style:
+                            if curr_text:
+                                new_tokens.append((curr_style, "".join(curr_text)))
+                            curr_style = st
+                            curr_text = [c]
+                        else:
+                            curr_text.append(c)
+                    if curr_text:
+                        new_tokens.append((curr_style, "".join(curr_text)))
+
+                    # 2. INJECT GRANULAR MENTION TOKENS
+                    new_tokens.extend(tokenize_mention(m.group(0)))
                     last_idx = end
-                if last_idx < len(text):
-                    new_tokens.append(("", text[last_idx:]))
+
+                # 3. RECOVER ORIGINAL MARKDOWN TOKENS AFTER THE LAST MATCH
+                curr_style = None
+                curr_text = []
+                for i in range(last_idx, len(chars)):
+                    st, c = chars[i]
+                    if st != curr_style:
+                        if curr_text:
+                            new_tokens.append((curr_style, "".join(curr_text)))
+                        curr_style = st
+                        curr_text = [c]
+                    else:
+                        curr_text.append(c)
+                if curr_text:
+                    new_tokens.append((curr_style, "".join(curr_text)))
+
                 return new_tokens
 
             return get_line
 
 
 class HelpLexer(Lexer):
-    """Custom Lexer to highlight the Help Window text."""
+    """Robust regex-based lexer for the Help window text."""
 
     def __init__(self):
-        self.pattern = re.compile(
-            r"(<@[a-z]+:>|\[@project\]|\^\[.*?\]|\^[A-Za-z/_]+|\[.*?\]|< .*? >)"
-        )
+        # 1. HEADERS: [ GENERAL ]
+        self.header_re = re.compile(r"^\s*\[ .* \]\s*$")
+        # 2. MENTIONS OR KEYS: <@...> | [@PROJECT] | ^[X]
+        self.combined_re = re.compile(r"(<@[^>]+>|\[@project\])|(\^?\[[^\]]+\])")
 
     def lex_document(self, document: Document):
         def get_line(lineno: int):
-            line = document.lines[lineno]
+            text = document.lines[lineno]
+
+            if self.header_re.match(text):
+                return [("class:help-header", text)]
+
             tokens = []
             last_idx = 0
-            for match in self.pattern.finditer(line):
-                start, end = match.span()
+
+            for match in self.combined_re.finditer(text):
+                start = match.start()
                 if start > last_idx:
-                    tokens.append(("class:help-text", line[last_idx:start]))
+                    tokens.append(("", text[last_idx:start]))
 
-                text = match.group(0)
-                if text.startswith("<@") or text.startswith("[@"):
-                    tokens.append(("class:aicall", text))
-                elif (text.startswith("[ ") and text.endswith(" ]")) or (
-                    text.startswith("< ") and text.endswith(" >")
-                ):
-                    tokens.append(("class:help-header", text))
+                mention, key = match.groups()
+                if mention:
+                    # INJECT OUR GRANULAR TOKENS!
+                    tokens.extend(tokenize_mention(mention))
                 else:
-                    tokens.append(("class:shortcut", text))
-                last_idx = end
+                    # KEYS LIKE ^[S]
+                    tokens.append(("class:help-key", key))
 
-            if last_idx < len(line):
-                tokens.append(("class:help-text", line[last_idx:]))
+                last_idx = match.end()
+
+            if last_idx < len(text):
+                tokens.append(("", text[last_idx:]))
+
             return tokens
 
         return get_line
@@ -415,6 +521,7 @@ class InteractiveEditor:
 
         style = Style.from_dict(
             {
+                # UI LAYOUT
                 "topbar": "bg:#333333 #ffffff",
                 "topbar-title": "bg:#333333 #00ffff bold",
                 "topbar-tokens": "bg:#333333 #ffff00",
@@ -422,17 +529,18 @@ class InteractiveEditor:
                 "toolbar-right": "bg:#333333 #00ff00",
                 "completion-menu": "bg:#444444 #ffffff",
                 "completion-menu.completion.current": "bg:#00aa00 #ffffff bold",
-                "aicall": "fg:#00ffff bold",
-                "help-frame": "bg:#222222 fg:#ffffff",
-                "help-text": "bg:#222222 fg:#cccccc",
-                "help-header": "fg:#00ff00 bold",
-                "shortcut": "fg:#ffff00 bold",
-                "error-frame": "bg:#440000 fg:#ffffff",
-                "error-text": "bg:#440000 fg:#ffaaaa",
-                "trailing-whitespace": "bg:#ff0000",
-                "eof-newline": "fg:#888888",
-                "matching-bracket.cursor": "bg:#aaaaaa fg:#000000",
-                "matching-bracket.other": "bg:#aaaaaa fg:#000000",
+                # GRANULAR MENTION STYLES
+                "mention-tag": "fg:#00ffff bold",  # CYAN: <@FILE, >, [@PROJECT]
+                "mention-path": "fg:#ffaa00",  # ORANGE: SRC/MAIN.PY
+                "mention-range": "fg:#ff55ff",  # PINK: 12-20
+                "mention-ext": "fg:#ffaa00",  # ORANGE: MD,PY
+                "mention-git-arg": "fg:#00aa00",  # GREEN: DIFF, STATUS
+                "mention-class": "fg:#00ff00 bold",  # BRIGHT GREEN: MYCLASS
+                "mention-function": "fg:#5555ff",  # BLUE: MY_FUNC
+                "mention-method": "fg:#55ffff",  # LIGHT CYAN: METHOD
+                # HELP MENU OVERRIDES
+                "help-header": "fg:#00ff00 bold",  # GREEN SECTION HEADERS
+                "help-key": "fg:#ffff00",  # YELLOW NAVIGATION KEYS
             }
         )
 
