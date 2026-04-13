@@ -390,7 +390,7 @@ class InteractiveEditor:
                 last_text = current_text
                 try:
                     resolved = await self.resolver.resolve_user(current_text)
-                    new_count = len(resolved) // 4
+                    new_count = len(resolved) // 3.2
 
                     # ONLY UPDATE STATE AND TRIGGER A REDRAW IF THE COUNT CHANGED
                     if new_count != last_count:
