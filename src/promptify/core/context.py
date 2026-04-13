@@ -172,7 +172,7 @@ class ProjectContext:
         status_text = stdout.decode(errors="replace")
         if not status_text.strip():
             return strings.get("working_tree_clean", "<!-- working tree clean -->")
-        return f"```\n{status_text}\n```\n"
+        return f"```log\n{status_text}\n```\n"
 
     async def _read_and_format(self, meta: FileMeta, range_str: str | None) -> str:
         if meta.size > self.MAX_FILE_SIZE:
@@ -251,37 +251,41 @@ class ProjectContext:
         return lines + [error_msg], 0
 
     def generate_tree(self, root_rel: str = "") -> str:
-        header_name = (
-            self.target_dir.name
-            if not root_rel
-            else root_rel.rstrip("/").split("/")[-1] or self.target_dir.name
-        )
+        # 1. NORMALIZE THE STARTING PATH
+        root_rel = root_rel.replace("\\", "/").strip("/")
+
+        # DETERMINE THE FOLDER NAME FOR THE HEADER
+        if not root_rel:
+            header_name = self.target_dir.name
+        else:
+            # GET THE LAST PART OF THE PATH (THE FOLDER NAME)
+            header_name = root_rel.split("/")[-1]
+
         tree_str = [
             strings["tree_header_1"],
             strings["tree_header_2"].format(name=header_name),
             strings["tree_header_3"],
         ]
 
-        clean_root = root_rel.strip("/\\") + "/" if root_rel else ""
-        if clean_root == "/":
-            clean_root = ""
+        # 2. ENSURE SEARCH_PREFIX IS EITHER EMPTY OR ENDS WITH A SINGLE SLASH
+        search_prefix = root_rel + "/" if root_rel else ""
 
         def _build_tree(current_dir: str, prefix: str = ""):
             children = set()
             for p in self.indexer.files_by_rel:
-                if p.startswith(current_dir) and p != current_dir:
-                    rel = p[len(current_dir) :].lstrip("/")
-                    children.add(rel.split("/")[0])
+                if p.startswith(current_dir):
+                    # EXTRACT THE IMMEDIATE NEXT SEGMENT OF THE PATH
+                    rel = p[len(current_dir) :]
+                    parts = rel.split("/", 1)
+                    if parts[0]:
+                        children.add(parts[0])
 
-            for d in self.indexer.dirs:
-                if d.startswith(current_dir) and d != current_dir:
-                    rel = d[len(current_dir) :].lstrip("/")
-                    children.add(rel.split("/")[0])
-
+            # 3. SORT: DIRECTORIES FIRST, THEN ALPHABETICALLY
             items = sorted(
                 list(children),
                 key=lambda x: (
-                    (current_dir + x) not in self.indexer.dirs,
+                    # RECONSTRUCT RELATIVE PATH FOR INDEX CHECK (NO TRAILING SLASH)
+                    (current_dir + x).rstrip("/") not in self.indexer.dirs,
                     x.lower(),
                 ),
             )
@@ -291,10 +295,13 @@ class ProjectContext:
                 connector = "└───" if is_last else "├───"
                 tree_str.append(f"{prefix}{connector}{item}")
 
-                full_path = (current_dir.lstrip("/") + "/" + item).strip("/")
+                # 4. RECURSE IF THE ITEM IS A DIRECTORY
+                full_path = current_dir + item
                 if full_path in self.indexer.dirs:
                     extension = "    " if is_last else "│   "
+                    # ENSURE NEXT LEVEL STARTS WITH A CLEAN TRAILING SLASH
                     _build_tree(full_path + "/", prefix + extension)
 
-        _build_tree(clean_root)
-        return "\n".join(tree_str) + "\n"
+        _build_tree(search_prefix)
+        content = "\n".join(tree_str)
+        return f"```log\n{content}\n\n```\n"

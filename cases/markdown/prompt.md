@@ -15,9 +15,7 @@ analyze the provided documents and complete the task.
 
 below is the project structure...
 
-```log
 [@project]
-```
 
 ## NOTE
 

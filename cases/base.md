@@ -197,9 +197,7 @@ complete the task while adhering to the guidelines after analyzing the project s
 
 below is the project structure...
 
-```log
 [@project]
-```
 
 ## NOTE
 
