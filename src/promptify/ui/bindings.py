@@ -1,6 +1,7 @@
 import asyncio
 import aiofiles
 import re
+import time
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.filters import Condition, has_selection, has_focus
 from prompt_toolkit.selection import SelectionState
@@ -9,6 +10,18 @@ from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 
 from ..utils.i18n import strings
+
+
+def detect_indent_style(document: Document) -> str:
+    """Adaptively detects indentation format based on the user's workspace."""
+    for line in document.lines:
+        if line.startswith("\t"):
+            return "\t"
+        if line.startswith("  ") and not line.startswith("   "):
+            return "  "
+        if line.startswith("    "):
+            return "    "
+    return "    "
 
 
 def setup_keybindings(editor) -> KeyBindings:
@@ -128,7 +141,9 @@ def setup_keybindings(editor) -> KeyBindings:
         if b.selection_state:
             b.cut_selection()
             b.selection_state = None
-        b.paste_clipboard_data(event.app.clipboard.get_data())
+        data = event.app.clipboard.get_data()
+        if data and data.text:
+            b.insert_text(data.text)
 
     @custom_bindings.add("c-z", filter=editor_focus)
     def _undo(event) -> None:
@@ -293,19 +308,45 @@ def setup_keybindings(editor) -> KeyBindings:
         else:
             b.selection_state = None
 
-    @custom_bindings.add(
-        "enter", filter=editor_focus & has_selection & ~has_completions_menu
-    )
-    def _enter_over_selection(event) -> None:
+    # Track entry time to distinguish simulated terminal paste logic from genuine typing
+    _last_enter_time = [0.0]
+
+    @custom_bindings.add("enter", filter=editor_focus & ~has_completions_menu)
+    def _smart_enter(event) -> None:
+        now = time.time()
+        is_paste = (now - _last_enter_time[0]) < 0.05
+        _last_enter_time[0] = now
+
         b = event.current_buffer
-        b.cut_selection()
-        b.selection_state = None
-        b.insert_text("\n")
+        if b.selection_state:
+            b.cut_selection()
+            b.selection_state = None
+
+        if is_paste:
+            # Simulated paste triggers (e.g. Right Click) happen too quickly;
+            # bypass formatting logic to avoid exponential staircase indenting
+            b.insert_text("\n")
+        else:
+            doc = b.document
+            indent_str = detect_indent_style(doc)
+            current_line = doc.current_line
+            indent_match = re.match(r"^(\s*)", current_line)
+            indent = indent_match.group(1) if indent_match else ""
+
+            # Predict indentation depth
+            if current_line.rstrip().endswith((":")):
+                indent += indent_str
+            elif current_line.rstrip().endswith(("{", "[", "(")):
+                indent += indent_str
+
+            b.insert_text("\n" + indent)
 
     @custom_bindings.add("tab", filter=editor_focus & ~has_completions_menu)
     def _tab(event) -> None:
         b = event.current_buffer
         doc = b.document
+        indent_str = detect_indent_style(doc)
+
         if b.selection_state:
             start_row = doc.translate_index_to_position(
                 b.selection_state.original_cursor_position
@@ -316,18 +357,27 @@ def setup_keybindings(editor) -> KeyBindings:
 
             lines = doc.lines[:]
             for i in range(start_row, end_row + 1):
-                lines[i] = "    " + lines[i]
+                lines[i] = indent_str + lines[i]
 
-            cursor_pos = b.cursor_position
+            cursor_row = doc.cursor_position_row
+            cursor_col = doc.cursor_position_col
             b.text = "\n".join(lines)
-            b.cursor_position = cursor_pos + 4 * (end_row - start_row + 1)
+
+            # Reposition the cursor safely relative to its old column
+            new_col = cursor_col + len(indent_str)
+            b.cursor_position = b.document.translate_row_col_to_index(
+                cursor_row, new_col
+            )
         else:
-            b.insert_text("    ")
+            b.insert_text(indent_str)
 
     @custom_bindings.add("s-tab", filter=editor_focus & ~has_completions_menu)
     def _s_tab(event) -> None:
         b = event.current_buffer
         doc = b.document
+        indent_str = detect_indent_style(doc)
+        indent_len = len(indent_str)
+
         if b.selection_state:
             start_row = doc.translate_index_to_position(
                 b.selection_state.original_cursor_position
@@ -339,23 +389,32 @@ def setup_keybindings(editor) -> KeyBindings:
             start_row = end_row = doc.cursor_position_row
 
         lines = doc.lines[:]
-        removed_total = 0
-        for i in range(start_row, end_row + 1):
-            if lines[i].startswith("    "):
-                lines[i] = lines[i][4:]
-                removed_total += 4
-            elif lines[i].startswith("\t"):
-                lines[i] = lines[i][1:]
-                removed_total += 1
-            elif lines[i].startswith(" "):
-                spaces = len(lines[i]) - len(lines[i].lstrip(" "))
-                to_remove = min(spaces, 4)
-                lines[i] = lines[i][to_remove:]
-                removed_total += to_remove
+        cursor_col_offset = 0
 
-        cursor_pos = b.cursor_position
+        for i in range(start_row, end_row + 1):
+            line = lines[i]
+            if line.startswith(indent_str):
+                lines[i] = line[indent_len:]
+                if i == end_row:
+                    cursor_col_offset = -indent_len
+            elif line.startswith("\t"):
+                lines[i] = line[1:]
+                if i == end_row:
+                    cursor_col_offset = -1
+            elif line.startswith(" "):
+                spaces = len(line) - len(line.lstrip(" "))
+                to_remove = min(spaces, indent_len)
+                lines[i] = line[to_remove:]
+                if i == end_row:
+                    cursor_col_offset = -to_remove
+
+        cursor_row = doc.cursor_position_row
+        cursor_col = doc.cursor_position_col
         b.text = "\n".join(lines)
-        b.cursor_position = max(0, cursor_pos - removed_total)
+
+        # Reposition the cursor safely relative to its old column
+        new_col = max(0, cursor_col + cursor_col_offset)
+        b.cursor_position = b.document.translate_row_col_to_index(cursor_row, new_col)
 
     @custom_bindings.add("left", filter=editor_focus & ~has_completions_menu)
     def _left(event) -> None:
