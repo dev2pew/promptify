@@ -1,3 +1,9 @@
+"""
+AST-like symbol extraction engine powered by Pygments.
+Finds and extracts specific classes, methods, and functions from source files.
+"""
+
+
 class SymbolExtractor:
     """
     A robust, language-agnostic symbol extractor that leverages Pygments tokenization
@@ -6,6 +12,13 @@ class SymbolExtractor:
     """
 
     def __init__(self, code: str, filename: str):
+        """
+        Initializes the extractor with code content and triggers parsing.
+
+        Args:
+            code (str): The raw string contents of the source file.
+            filename (str): Defines syntax behavior via lexer guessing.
+        """
         self.code = code
         self.filename = filename
         self.lines = code.splitlines(keepends=True)
@@ -13,6 +26,10 @@ class SymbolExtractor:
         self._parse()
 
     def _parse(self) -> None:
+        """
+        Core logic identifying and mapping all scopes via token streams.
+        Supports both Python-style (indentation) and C-style (brace block) syntax.
+        """
         try:
             from pygments.lexers import get_lexer_for_filename
             from pygments.token import Token
@@ -171,4 +188,13 @@ class SymbolExtractor:
                 self.symbols[full_name] = snippet
 
     def extract(self, symbol_name: str) -> str | None:
+        """
+        Retrieves the exact block for a requested symbol.
+
+        Args:
+            symbol_name (str): The desired symbol ID (e.g. `MyClass.method_a`).
+
+        Returns:
+            str | None: Code snippet if mapped, None otherwise.
+        """
         return self.symbols.get(symbol_name)

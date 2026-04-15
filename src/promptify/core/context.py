@@ -1,3 +1,8 @@
+"""
+Project context management providing asynchronous, sandboxed I/O access
+to source files, directories, and AST symbols.
+"""
+
 import asyncio
 import aiofiles
 from pathlib import Path
@@ -22,6 +27,15 @@ class ProjectContext:
         indexer: ProjectIndexer,
         has_git: bool = False,
     ):
+        """
+        Initializes the context linking the project path to the indexer.
+
+        Args:
+            target_dir (Path): The absolute root path of the project.
+            case (CaseConfig): Configuration rules.
+            indexer (ProjectIndexer): Live index of the project files.
+            has_git (bool): Indicates if the directory contains a Git repository.
+        """
         self.target_dir = target_dir
         self.case = case
         self.indexer = indexer
@@ -29,10 +43,28 @@ class ProjectContext:
         self.has_git = has_git
 
     def is_sandboxed(self, path: Path) -> bool:
-        """Enforces absolute sandboxing to the target_dir."""
+        """
+        Enforces absolute sandboxing to the target directory.
+
+        Args:
+            path (Path): Path to verify.
+
+        Returns:
+            bool: True if the file resides within the target_dir.
+        """
         return path.resolve().is_relative_to(self.target_dir.resolve())
 
     async def get_file_content(self, query: str, range_str: str | None = None) -> str:
+        """
+        Retrieves formatted file content with optional line slicing.
+
+        Args:
+            query (str): File path or fuzzy search string.
+            range_str (str | None): Slicing rules (e.g., "10-20", "last 50").
+
+        Returns:
+            str: Markdown-formatted file content.
+        """
         matches = self.indexer.find_matches(query)
         if not matches:
             return strings["err_file_not_found"].format(query=query)
@@ -47,6 +79,15 @@ class ProjectContext:
         return "\n".join(results)
 
     async def get_type_contents(self, exts_str: str) -> str:
+        """
+        Retrieves all project files matching specific extensions.
+
+        Args:
+            exts_str (str): Comma-separated list of extensions (e.g., "py,md").
+
+        Returns:
+            str: Markdown-formatted list of file contents.
+        """
         exts = list(dict.fromkeys(e.strip() for e in exts_str.split(",")))
         matches = self.indexer.get_by_extensions(exts)
 
@@ -62,6 +103,15 @@ class ProjectContext:
         return "\n".join(results)
 
     async def get_dir_contents(self, dir_query: str) -> str:
+        """
+        Retrieves all files contained within a specific directory.
+
+        Args:
+            dir_query (str): The relative directory path.
+
+        Returns:
+            str: Markdown-formatted list of file contents.
+        """
         clean_dir = dir_query.lstrip("/\\")
         matches = [
             m for p, m in self.indexer.files_by_rel.items() if p.startswith(clean_dir)
@@ -79,6 +129,15 @@ class ProjectContext:
         return "\n".join(results)
 
     async def get_tree_contents(self, dir_query: str) -> str:
+        """
+        Retrieves a formatted tree directory structure mapping.
+
+        Args:
+            dir_query (str): The relative directory path.
+
+        Returns:
+            str: Visual tree representation.
+        """
         clean_dir = dir_query.lstrip("/\\")
         target = (self.target_dir / clean_dir).resolve()
 
@@ -97,6 +156,16 @@ class ProjectContext:
         return self.generate_tree(rel_target)
 
     async def get_symbol_content(self, query: str, symbol_name: str) -> str:
+        """
+        Retrieves a specifically requested AST symbol from a file.
+
+        Args:
+            query (str): The file containing the symbol.
+            symbol_name (str): The name of the class/method/function.
+
+        Returns:
+            str: Formatted symbol block.
+        """
         if not symbol_name:
             return f"<!-- error: no symbol provided for {query} -->"
 
@@ -127,6 +196,15 @@ class ProjectContext:
             )
 
     async def get_git_diff(self, path: str | None = None) -> str:
+        """
+        Retrieves the working tree differences for the project or specific file.
+
+        Args:
+            path (str | None): Target path to isolate the diff.
+
+        Returns:
+            str: Git diff output.
+        """
         if not self.has_git:
             return "<!-- error: git not available -->"
 
@@ -152,6 +230,12 @@ class ProjectContext:
         return f"```diff\n{diff_text}\n```\n"
 
     async def get_git_status(self) -> str:
+        """
+        Retrieves the working tree status.
+
+        Returns:
+            str: Git status output.
+        """
         if not self.has_git:
             return "<!-- error: git not available -->"
 
@@ -175,6 +259,16 @@ class ProjectContext:
         return f"```log\n{status_text}\n```\n"
 
     async def _read_and_format(self, meta: FileMeta, range_str: str | None) -> str:
+        """
+        Core I/O process applying rules, limits, caching, and text formatting.
+
+        Args:
+            meta (FileMeta): Target file metadata.
+            range_str (str | None): Slicing arguments.
+
+        Returns:
+            str: The evaluated final markdown block.
+        """
         if meta.size > self.MAX_FILE_SIZE:
             return strings["err_file_too_large"].format(path=meta.rel_path)
 
@@ -200,6 +294,15 @@ class ProjectContext:
         return f"- `{meta.rel_path}`\n\n```{meta.ext}\n{final_content}\n```\n"
 
     async def _read_cached(self, meta: FileMeta) -> str:
+        """
+        Reads file content securely from disk, leveraging an mtime cache.
+
+        Args:
+            meta (FileMeta): Data object for the file to read.
+
+        Returns:
+            str: Unmodified text content.
+        """
         cached = self.cache.get(meta.rel_path)
         if cached and cached.mtime == meta.mtime:
             return cached.text
@@ -214,7 +317,16 @@ class ProjectContext:
         return content
 
     def _apply_range(self, lines: list[str], range_str: str) -> tuple[list[str], int]:
-        """Evaluates limits like 'first 200', 'last 100', '10-20', or '#L45'."""
+        """
+        Evaluates limits like 'first 200', 'last 100', '10-20', or '#L45'.
+
+        Args:
+            lines (list[str]): The original array of text lines.
+            range_str (str): The rule determining the slice limit.
+
+        Returns:
+            tuple[list[str], int]: Processed lines and count of omitted lines.
+        """
         range_str = range_str.strip().lower()
         total = len(lines)
         error_msg = strings["err_invalid_range"].format(range=range_str)
@@ -251,7 +363,7 @@ class ProjectContext:
         return lines + [error_msg], 0
 
     def generate_tree(self, root_rel: str = "") -> str:
-        # 1. NORMALIZE THE STARTING PATH
+        # NORMALIZE THE STARTING PATH
         root_rel = root_rel.replace("\\", "/").strip("/")
 
         # DETERMINE THE FOLDER NAME FOR THE HEADER
@@ -267,7 +379,7 @@ class ProjectContext:
             strings["tree_header_3"],
         ]
 
-        # 2. ENSURE SEARCH_PREFIX IS EITHER EMPTY OR ENDS WITH A SINGLE SLASH
+        # ENSURE SEARCH_PREFIX IS EITHER EMPTY OR ENDS WITH A SINGLE SLASH
         search_prefix = root_rel + "/" if root_rel else ""
 
         def _build_tree(current_dir: str, prefix: str = ""):
@@ -280,7 +392,7 @@ class ProjectContext:
                     if parts[0]:
                         children.add(parts[0])
 
-            # 3. SORT: DIRECTORIES FIRST, THEN ALPHABETICALLY
+            # SORT DIRECTORIES FIRST, THEN ALPHABETICALLY
             items = sorted(
                 list(children),
                 key=lambda x: (
@@ -295,7 +407,7 @@ class ProjectContext:
                 connector = "└───" if is_last else "├───"
                 tree_str.append(f"{prefix}{connector}{item}")
 
-                # 4. RECURSE IF THE ITEM IS A DIRECTORY
+                # RECURSE IF THE ITEM IS A DIRECTORY
                 full_path = current_dir + item
                 if full_path in self.indexer.dirs:
                     extension = "    " if is_last else "│   "

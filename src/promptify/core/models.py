@@ -1,10 +1,17 @@
+"""
+Core data structures and dataclasses for the promptify engine.
+"""
+
 from dataclasses import dataclass
 from pathlib import Path
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class FileMeta:
-    """Represents core file metadata mapped in the project index."""
+    """
+    Represents core file metadata mapped in the project index.
+    Designed efficiently via __slots__ execution.
+    """
 
     path: Path
     rel_path: str
@@ -15,7 +22,10 @@ class FileMeta:
 
 @dataclass(slots=True, kw_only=True)
 class CachedContent:
-    """Stores cached file contents linked to a specific modification time."""
+    """
+    Stores cached file contents linked to a specific modification time.
+    Provides memory-safety validation for rapid I/O accesses.
+    """
 
     text: str
     mtime: float

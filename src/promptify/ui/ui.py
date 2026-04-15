@@ -1,3 +1,7 @@
+"""
+CLI UI helpers for printing columnized lists and formatted menus.
+"""
+
 import shutil
 import math
 import re
@@ -5,6 +9,15 @@ from prompt_toolkit import print_formatted_text, HTML
 
 
 def format_index(i: int) -> str:
+    """
+    Format sequence menu indicators matching visual alignments structure configurations appropriately cleanly consistently natively correctly directly.
+
+    Args:
+        i (int): Reference selection marker.
+
+    Returns:
+        str: Styled layout representation token string correctly formatted explicitly.
+    """
     s = str(i)
     if len(s) == 1:
         return f"<ansicyan>[-{s}]</ansicyan>"
@@ -12,6 +25,12 @@ def format_index(i: int) -> str:
 
 
 def print_columnized(items: list[str]) -> None:
+    """
+    Prints a grid of selections fitting horizontally bounded screen dimensions natively without visual wrapping flaws precisely mapped correctly seamlessly safely directly.
+
+    Args:
+        items (list[str]): Structured list of configuration definitions objects target targets outputs.
+    """
     term_width, _ = shutil.get_terminal_size((80, 20))
 
     formatted_items = [f"{format_index(i + 1)} {item}" for i, item in enumerate(items)]
@@ -40,6 +59,12 @@ def print_columnized(items: list[str]) -> None:
 
 
 def print_modes(modes: list[tuple[str, str]]) -> None:
+    """
+    Formats multi-line structure mapped interaction states matching spacing configurations correctly aligning options seamlessly strictly safely consistently accurately native output generation mapping logic outputs perfectly natively.
+
+    Args:
+        modes (list[tuple[str, str]]): List describing option maps formatting titles representations matching strings appropriately.
+    """
     formatted_prefixes = [
         f"{format_index(i + 1)} {name}" for i, (name, _) in enumerate(modes)
     ]

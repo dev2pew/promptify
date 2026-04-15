@@ -1,3 +1,8 @@
+"""
+Asynchronous file system watcher and indexer.
+Maintains an in-memory representation of the project to enable ultra-fast fuzzy matching.
+"""
+
 import asyncio
 import os
 import fnmatch
@@ -21,6 +26,13 @@ class ProjectIndexer(FileSystemEventHandler):
     """
 
     def __init__(self, target_dir: Path, case: CaseConfig):
+        """
+        Binds the indexer tracking to a specific project.
+
+        Args:
+            target_dir (Path): The working root directory to scan.
+            case (CaseConfig): Ignore rules defining standard boundaries.
+        """
         self.target_dir = target_dir
         self.case = case
         self.spec = case.get_ignore_spec(target_dir)
@@ -32,7 +44,7 @@ class ProjectIndexer(FileSystemEventHandler):
         self._lock = asyncio.Lock()
 
     async def build_index(self) -> None:
-        """Initial fast scan using os.scandir."""
+        """Initial fast scan using native OS scandir mappings."""
         log.info(strings["indexing_project"].format(name=self.target_dir.name))
 
         def _scan(directory: Path):
@@ -85,12 +97,18 @@ class ProjectIndexer(FileSystemEventHandler):
             self._observer.start()
 
     def stop_watching(self) -> None:
+        """Gracefully joins and stops the Watchdog background worker thread."""
         if self._observer:
             self._observer.stop()
             self._observer.join()
 
     def on_any_event(self, event: FileSystemEvent) -> None:
-        """Thread-safe state update triggered by filesystem changes."""
+        """
+        Thread-safe state update triggered automatically by filesystem changes.
+
+        Args:
+            event (FileSystemEvent): Generated OS file operation token.
+        """
         src_path_str = getattr(event, "src_path", None)
         if not src_path_str:
             return
@@ -139,7 +157,15 @@ class ProjectIndexer(FileSystemEventHandler):
                     self.dirs.add(dest_rel)
 
     def find_matches(self, query: str) -> list[FileMeta]:
-        """Supports exact, globbing, and fuzzy partial path matching."""
+        """
+        Supports exact, globbing, and fuzzy partial path matching.
+
+        Args:
+            query (str): Searching criterion path parameter.
+
+        Returns:
+            list[FileMeta]: Re-ordered array with the closest elements prioritised.
+        """
         query = query.replace("\\", "/")
 
         if query in self.files_by_rel:
@@ -163,8 +189,23 @@ class ProjectIndexer(FileSystemEventHandler):
         return matches
 
     def get_by_extensions(self, exts: list[str]) -> list[FileMeta]:
+        """
+        Fetches all files terminating in specific formats.
+
+        Args:
+            exts (list[str]): File formats mapped strictly by their extension structure.
+
+        Returns:
+            list[FileMeta]: Aggregation of valid paths.
+        """
         exts_clean = {e.strip().lstrip(".").lower() for e in exts}
         return [m for m in self.files_by_rel.values() if m.ext in exts_clean]
 
     def get_all_extensions(self) -> list[str]:
+        """
+        Returns all unique extensions currently loaded in the index.
+
+        Returns:
+            list[str]: Sorted extensions.
+        """
         return sorted(list({m.ext for m in self.files_by_rel.values() if m.ext}))
