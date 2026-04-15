@@ -174,6 +174,8 @@ if HAS_PYGMENTS:
                         tokens.append(("class:mention-class", arg2))
                     else:
                         tokens.append(("class:mention-function", arg2))
+                elif tag_type == "tree":
+                    tokens.append(("class:mention-depth", arg2))
                 else:  # FILE
                     tokens.append(("class:mention-range", arg2))
             else:
@@ -537,6 +539,7 @@ class InteractiveEditor:
                 "mention-tag": "fg:#00ffff bold",  # CYAN: <@FILE, >, [@PROJECT]
                 "mention-path": "fg:#ffaa00",  # ORANGE: SRC/MAIN.PY
                 "mention-range": "fg:#ff55ff",  # MAGENTA/PINK: 12-20
+                "mention-depth": "fg:#ff55ff",
                 "mention-ext": "fg:#ffaa00",  # ORANGE: MD,PY
                 "mention-git-cmd": "fg:#00aa00",  # GREEN: DIFF, STATUS
                 "mention-class": "fg:#00ff00 bold",  # BRIGHT GREEN: MYCLASS

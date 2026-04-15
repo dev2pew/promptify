@@ -255,18 +255,29 @@ class DirMod(MentionMod):
 
 
 class TreeMod(MentionMod):
-    """Locates explicit specific path map mapping tree logic inside <@tree:path>."""
+    """Locates explicit specific path map mapping tree logic inside <@tree:path:level>."""
 
     name = "mod_tree"
-    pattern = r"<@tree:([^>]+)>"
+    pattern = r"<@tree:([^>:]+?)(?::([^>]+))?>"
 
     async def resolve(self, text: str, context: "ProjectContext") -> str:
         m = re.match(self.pattern, text)
-        return await context.get_tree_contents(m.group(1))
+        return await context.get_tree_contents(m.group(1), m.group(2))
 
     def get_completions(
         self, text_before_cursor: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
+        match_depth = re.search(r"<@tree:([^>:]+):([^><]*)$", text_before_cursor)
+        if match_depth:
+            for depth in ["1", "2", "3", "4", "5"]:
+                if depth.startswith(match_depth.group(2)):
+                    yield Completion(
+                        depth,
+                        start_position=-len(match_depth.group(2)),
+                        display=f"depth {depth}",
+                    )
+            return
+
         match_path = re.search(r"<@tree:([^><]*)$", text_before_cursor)
         if match_path:
             yield from fuzzy_complete(match_path.group(1), list(indexer.dirs))

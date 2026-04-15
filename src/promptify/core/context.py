@@ -128,12 +128,15 @@ class ProjectContext:
         results = [t.result() for t in tasks]
         return "\n".join(results)
 
-    async def get_tree_contents(self, dir_query: str) -> str:
+    async def get_tree_contents(
+        self, dir_query: str, depth_str: str | None = None
+    ) -> str:
         """
         Retrieves a formatted tree directory structure mapping.
 
         Args:
             dir_query (str): The relative directory path.
+            depth_str (str | None): Optional integer string limiting the recursive depth.
 
         Returns:
             str: Visual tree representation.
@@ -142,9 +145,7 @@ class ProjectContext:
         target = (self.target_dir / clean_dir).resolve()
 
         if not target.is_relative_to(self.target_dir.resolve()):
-            return strings.get("err_access_denied", "<!-- access denied -->").format(
-                path=clean_dir
-            )
+            return strings.get("err_access_denied", "").format(path=clean_dir)
 
         rel_target = str(target.relative_to(self.target_dir)).replace("\\", "/")
         if rel_target == ".":
@@ -153,7 +154,14 @@ class ProjectContext:
         if rel_target and rel_target not in self.indexer.dirs:
             return strings["err_dir_empty"].format(query=dir_query)
 
-        return self.generate_tree(rel_target)
+        max_depth = None
+        if depth_str:
+            try:
+                max_depth = int(depth_str.strip())
+            except ValueError:
+                return strings.get("err_invalid_depth", "\n\n").format(depth=depth_str)
+
+        return self.generate_tree(rel_target, max_depth)
 
     async def get_symbol_content(self, query: str, symbol_name: str) -> str:
         """
@@ -167,7 +175,7 @@ class ProjectContext:
             str: Formatted symbol block.
         """
         if not symbol_name:
-            return f"<!-- error: no symbol provided for {query} -->"
+            return ""
 
         matches = self.indexer.find_matches(query)
         if not matches:
@@ -187,13 +195,11 @@ class ProjectContext:
             if not extracted:
                 return strings.get(
                     "symbol_not_found",
-                    "<!-- error: symbol '{symbol}' not found in {path} -->",
+                    "",
                 ).format(symbol=symbol_name, path=meta.rel_path)
             return f"- `{meta.rel_path}:{symbol_name}`\n\n```{meta.ext}\n{extracted}\n```\n"
         except ValueError as e:
-            return strings.get("symbol_error", "<!-- error: {error} -->").format(
-                error=e
-            )
+            return strings.get("symbol_error", "").format(error=e)
 
     async def get_git_diff(self, path: str | None = None) -> str:
         """
@@ -206,7 +212,7 @@ class ProjectContext:
             str: Git diff output.
         """
         if not self.has_git:
-            return "<!-- error: git not available -->"
+            return ""
 
         cmd = ["git", "diff"]
         if path:
@@ -220,13 +226,13 @@ class ProjectContext:
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            return strings.get(
-                "git_diff_error", "<!-- git diff error: {error} -->"
-            ).format(error=stderr.decode(errors="replace").strip())
+            return strings.get("git_diff_error", "").format(
+                error=stderr.decode(errors="replace").strip()
+            )
 
         diff_text = stdout.decode(errors="replace")
         if not diff_text.strip():
-            return strings.get("no_changes", "<!-- no changes -->")
+            return strings.get("no_changes", "")
         return f"```diff\n{diff_text}\n```\n"
 
     async def get_git_status(self) -> str:
@@ -237,7 +243,7 @@ class ProjectContext:
             str: Git status output.
         """
         if not self.has_git:
-            return "<!-- error: git not available -->"
+            return ""
 
         proc = await asyncio.create_subprocess_exec(
             "git",
@@ -249,13 +255,13 @@ class ProjectContext:
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            return strings.get(
-                "git_status_error", "<!-- git status error: {error} -->"
-            ).format(error=stderr.decode(errors="replace").strip())
+            return strings.get("git_status_error", "").format(
+                error=stderr.decode(errors="replace").strip()
+            )
 
         status_text = stdout.decode(errors="replace")
         if not status_text.strip():
-            return strings.get("working_tree_clean", "<!-- working tree clean -->")
+            return strings.get("working_tree_clean", "")
         return f"```log\n{status_text}\n```\n"
 
     async def _read_and_format(self, meta: FileMeta, range_str: str | None) -> str:
@@ -273,9 +279,7 @@ class ProjectContext:
             return strings["err_file_too_large"].format(path=meta.rel_path)
 
         if not self.is_sandboxed(meta.path):
-            return strings.get("err_access_denied", "<!-- access denied -->").format(
-                path=meta.rel_path
-            )
+            return strings.get("err_access_denied", "").format(path=meta.rel_path)
 
         content = await self._read_cached(meta)
         lines = content.splitlines(keepends=True)
@@ -362,15 +366,22 @@ class ProjectContext:
 
         return lines + [error_msg], 0
 
-    def generate_tree(self, root_rel: str = "") -> str:
-        # NORMALIZE THE STARTING PATH
+    def generate_tree(self, root_rel: str = "", max_depth: int | None = None) -> str:
+        """
+        Recreates the classic Windows 'TREE /F' command style map of the index.
+
+        Args:
+            root_rel (str): Starting point inside the project for tree evaluation.
+            max_depth (int | None): Maximum recursive folder depth to crawl.
+
+        Returns:
+            str: ASCII format tree.
+        """
         root_rel = root_rel.replace("\\", "/").strip("/")
 
-        # DETERMINE THE FOLDER NAME FOR THE HEADER
         if not root_rel:
             header_name = self.target_dir.name
         else:
-            # GET THE LAST PART OF THE PATH (THE FOLDER NAME)
             header_name = root_rel.split("/")[-1]
 
         tree_str = [
@@ -379,24 +390,23 @@ class ProjectContext:
             strings["tree_header_3"],
         ]
 
-        # ENSURE SEARCH_PREFIX IS EITHER EMPTY OR ENDS WITH A SINGLE SLASH
         search_prefix = root_rel + "/" if root_rel else ""
 
-        def _build_tree(current_dir: str, prefix: str = ""):
+        def _build_tree(current_dir: str, prefix: str = "", current_depth: int = 1):
+            if max_depth is not None and current_depth > max_depth:
+                return
+
             children = set()
             for p in self.indexer.files_by_rel:
                 if p.startswith(current_dir):
-                    # EXTRACT THE IMMEDIATE NEXT SEGMENT OF THE PATH
                     rel = p[len(current_dir) :]
                     parts = rel.split("/", 1)
                     if parts[0]:
                         children.add(parts[0])
 
-            # SORT DIRECTORIES FIRST, THEN ALPHABETICALLY
             items = sorted(
                 list(children),
                 key=lambda x: (
-                    # RECONSTRUCT RELATIVE PATH FOR INDEX CHECK (NO TRAILING SLASH)
                     (current_dir + x).rstrip("/") not in self.indexer.dirs,
                     x.lower(),
                 ),
@@ -407,12 +417,10 @@ class ProjectContext:
                 connector = "└───" if is_last else "├───"
                 tree_str.append(f"{prefix}{connector}{item}")
 
-                # RECURSE IF THE ITEM IS A DIRECTORY
                 full_path = current_dir + item
                 if full_path in self.indexer.dirs:
                     extension = "    " if is_last else "│   "
-                    # ENSURE NEXT LEVEL STARTS WITH A CLEAN TRAILING SLASH
-                    _build_tree(full_path + "/", prefix + extension)
+                    _build_tree(full_path + "/", prefix + extension, current_depth + 1)
 
         _build_tree(search_prefix)
         content = "\n".join(tree_str)
