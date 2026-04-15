@@ -1,3 +1,7 @@
+"""
+Constants and static mappings for the promptify application.
+"""
+
 COMMENT_SYNTAX: dict[str, tuple[str, str]] = {
     "python": ("# ", ""),
     "py": ("# ", ""),

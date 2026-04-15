@@ -1,3 +1,8 @@
+"""
+Mention modifiers and resolution engine plugins.
+Defines how specific tags (like <@file:...> or <@git:...>) are parsed and resolved.
+"""
+
 import re
 from abc import ABC, abstractmethod
 from typing import Iterable, TYPE_CHECKING
@@ -17,7 +22,19 @@ def fuzzy_complete(
     suffix: str = ">",
     limit: int = 15,
 ) -> Iterable[Completion]:
-    """Helper to provide fast, case-insensitive fuzzy completions."""
+    """
+    Helper to provide fast, case-insensitive fuzzy completions.
+
+    Args:
+        partial (str): Currently typed text to match.
+        candidates (list[str]): All available lookup targets.
+        prefix (str): Prefix formatting attached on output.
+        suffix (str): Suffix attached formatting to close out selection payload.
+        limit (int): Size limiter for rendered completion lines.
+
+    Yields:
+        Completion: Processed payload prompt-toolkit completion object.
+    """
     if not partial:
         for c in sorted(candidates)[:limit]:
             yield Completion(prefix + c + suffix, start_position=0, display=prefix + c)
@@ -43,14 +60,32 @@ class MentionMod(ABC):
 
     @abstractmethod
     async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
-        """Resolves the raw mention string into its target content."""
+        """
+        Resolves the raw mention string into its target content.
+
+        Args:
+            full_match_text (str): Exact regex matched token.
+            context (ProjectContext): Safe I/O reader.
+
+        Returns:
+            str: Materialized code snippet implementation formatting blocks.
+        """
         pass
 
     @abstractmethod
     def get_completions(
         self, text_before_cursor: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
-        """Analyzes text state to yield context-aware completions."""
+        """
+        Analyzes text state to yield context-aware completions.
+
+        Args:
+            text_before_cursor (str): Full line buffer snippet.
+            indexer (ProjectIndexer): Direct fuzzy path querying.
+
+        Yields:
+            Completion: Active drop-down item for standard menus.
+        """
         pass
 
 
@@ -58,10 +93,17 @@ class ModRegistry:
     """Central registry mapping dynamically loaded Mention Mods to the engine."""
 
     def __init__(self):
+        """Initializes empty maps."""
         self.mods: list[MentionMod] = []
         self.pattern: re.Pattern | None = None
 
     def register(self, mod: MentionMod) -> None:
+        """
+        Pushes a new custom Mod implementation into standard queues.
+
+        Args:
+            mod (MentionMod): Object referencing the mod.
+        """
         self.mods.append(mod)
 
     def register_defaults(self) -> None:
@@ -82,6 +124,15 @@ class ModRegistry:
         self.pattern = re.compile("|".join(parts))
 
     def get_mod_and_text(self, match: re.Match) -> tuple[MentionMod, str]:
+        """
+        Translates match outputs into isolated modular operations.
+
+        Args:
+            match (re.Match): Regex executed context window reference.
+
+        Returns:
+            tuple[MentionMod, str]: Bound reference for isolated mod mapping.
+        """
         for mod in self.mods:
             text = match.group(mod.name)
             if text is not None:
@@ -91,7 +142,16 @@ class ModRegistry:
     def get_all_completions(
         self, text_before_cursor: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
-        """Delegates completion requests to mods, and handles base tags."""
+        """
+        Delegates completion requests to mods, and handles base tags.
+
+        Args:
+            text_before_cursor (str): Leftward buffer token window search target.
+            indexer (ProjectIndexer): Path provider for logic mapping.
+
+        Yields:
+            Completion: Processed payload prompt-toolkit completion object.
+        """
         for mod in self.mods:
             yield from mod.get_completions(text_before_cursor, indexer)
 
@@ -126,6 +186,8 @@ class ModRegistry:
 
 
 class ProjectMod(MentionMod):
+    """Parses and handles [@project] global directory tree output instructions."""
+
     name = "mod_project"
     pattern = r"\[@project\]"
 
@@ -139,6 +201,8 @@ class ProjectMod(MentionMod):
 
 
 class FileMod(MentionMod):
+    """Processes <@file:path:range> structures resolving standard file requests."""
+
     name = "mod_file"
     pattern = r"<@file:([^>:]+?)(?::([^>]+))?>"
 
@@ -173,6 +237,8 @@ class FileMod(MentionMod):
 
 
 class DirMod(MentionMod):
+    """Attaches all internal recursive file resources contained in <@dir:path>."""
+
     name = "mod_dir"
     pattern = r"<@dir:([^>]+)>"
 
@@ -189,6 +255,8 @@ class DirMod(MentionMod):
 
 
 class TreeMod(MentionMod):
+    """Locates explicit specific path map mapping tree logic inside <@tree:path>."""
+
     name = "mod_tree"
     pattern = r"<@tree:([^>]+)>"
 
@@ -205,6 +273,8 @@ class TreeMod(MentionMod):
 
 
 class ExtMod(MentionMod):
+    """Processes bulk format targeting operations via the <@ext:csv_list> instruction."""
+
     name = "mod_ext"
     pattern = r"<@(type|ext):([^>]+)>"
 
@@ -227,6 +297,8 @@ class ExtMod(MentionMod):
 
 
 class GitMod(MentionMod):
+    """Fetches real-time status and working tree modifications natively using Git."""
+
     name = "mod_git"
     pattern = r"<@git:([^>:]+?)(?::([^>]+))?>"
 
@@ -258,6 +330,8 @@ class GitMod(MentionMod):
 
 
 class SymbolMod(MentionMod):
+    """Invokes AST extraction processes parsing nested references."""
+
     name = "mod_symbol"
     pattern = r"<@symbol:([^>:]+?)(?::([^>]+))?>"
 

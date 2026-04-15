@@ -1,3 +1,7 @@
+"""
+Global settings and environment variable configurations defining limits and locale settings.
+"""
+
 import os
 from dotenv import load_dotenv
 
