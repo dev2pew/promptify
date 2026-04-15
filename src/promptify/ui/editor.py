@@ -317,7 +317,6 @@ class MentionCompleter(Completer):
         completions = list(
             self.registry.get_all_completions(document.text_before_cursor, self.indexer)
         )
-
         yield from completions
 
 
@@ -377,7 +376,7 @@ class InteractiveEditor:
         )
 
     async def _update_tokens_loop(self):
-        """Asynchronous, debounced task to compute resolution sizes without lagging the UI."""
+        """Asynchronous, debounced task utilizing fast proxy metrics for token size."""
         last_text = None
         last_count = 0
         while True:
@@ -389,8 +388,7 @@ class InteractiveEditor:
             if current_text != last_text:
                 last_text = current_text
                 try:
-                    resolved = await self.resolver.resolve_user(current_text)
-                    new_count = int(len(resolved) // 3.2)
+                    new_count = await self.resolver.estimate_tokens(current_text)
 
                     # ONLY UPDATE STATE AND TRIGGER A REDRAW IF THE COUNT CHANGED
                     if new_count != last_count:
@@ -547,6 +545,9 @@ class InteractiveEditor:
                 # HELP MENU OVERRIDES
                 "help-header": "fg:#00ff00 bold",  # GREEN SECTION HEADERS
                 "help-key": "fg:#ffff00",  # YELLOW NAVIGATION KEYS
+                # ENHANCED VISIBILITY
+                "trailing-whitespace": "bg:#ff0000",
+                "eof-newline": "fg:#ff0000",
             }
         )
 

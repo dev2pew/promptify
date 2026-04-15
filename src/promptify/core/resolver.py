@@ -19,6 +19,62 @@ class PromptResolver:
         if self.registry.pattern is None:
             self.registry.build()
 
+    async def estimate_tokens(self, text: str) -> int:
+        """
+        Calculates an ultra-fast estimation of tokens based strictly on
+        sizes provided by the in-memory indexer without executing full file reads.
+        """
+        matches = list(self.registry.pattern.finditer(text))
+        if not matches:
+            return int(len(text) // 3.2)
+
+        base_len = len(text)
+        added_len = 0
+
+        for m in matches:
+            try:
+                mod, _ = self.registry.get_mod_and_text(m)
+
+                if mod.name == "mod_file":
+                    match_path = re.match(r"<@file:([^>:]+)", m.group(0))
+                    if match_path:
+                        files = self.context.indexer.find_matches(match_path.group(1))
+                        if files:
+                            added_len += files[0].size
+                elif mod.name == "mod_dir":
+                    match_path = re.match(r"<@dir:([^>]+)>", m.group(0))
+                    if match_path:
+                        clean_dir = match_path.group(1).lstrip("/\\")
+                        files = [
+                            f
+                            for p, f in self.context.indexer.files_by_rel.items()
+                            if p.startswith(clean_dir)
+                        ]
+                        added_len += sum(f.size for f in files)
+                elif mod.name == "mod_ext":
+                    match_path = re.match(r"<@(type|ext):([^>]+)>", m.group(0))
+                    if match_path:
+                        exts = list(
+                            dict.fromkeys(
+                                e.strip().lstrip(".").lower()
+                                for e in match_path.group(2).split(",")
+                            )
+                        )
+                        files = self.context.indexer.get_by_extensions(exts)
+                        added_len += sum(f.size for f in files)
+                elif mod.name in ("mod_tree", "mod_project"):
+                    added_len += len(self.context.indexer.files_by_rel) * 45
+                elif mod.name == "mod_symbol":
+                    match_path = re.match(r"<@symbol:([^>:]+)", m.group(0))
+                    if match_path:
+                        files = self.context.indexer.find_matches(match_path.group(1))
+                        if files:
+                            added_len += files[0].size // 4
+            except Exception:
+                pass
+
+        return int((base_len + added_len) // 3.2)
+
     async def resolve_system(self, text: str, seen: set[str] | None = None) -> str:
         """Recursive resolution for system templates, with loop protection."""
         if seen is None:
