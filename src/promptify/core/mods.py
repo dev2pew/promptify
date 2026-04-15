@@ -269,18 +269,51 @@ class TreeMod(MentionMod):
     ) -> Iterable[Completion]:
         match_depth = re.search(r"<@tree:([^>:]+):([^><]*)$", text_before_cursor)
         if match_depth:
-            for depth in ["1", "2", "3", "4", "5"]:
-                if depth.startswith(match_depth.group(2)):
-                    yield Completion(
-                        depth,
-                        start_position=-len(match_depth.group(2)),
-                        display=f"depth {depth}",
-                    )
+            partial = match_depth.group(2)
+            if partial.isdigit():
+                # ALLOW THEM TO CLOSE THE TAG FREELY ONCE THEY TYPE A NUMBER
+                yield Completion(
+                    f"{partial}>", start_position=-len(partial), display=f"{partial}>"
+                )
+            elif not partial:
+                # DELIVER AN INTUITIVE HINT MESSAGE EXPLAINING THE INPUT WITHOUT INJECTING TEXT
+                yield Completion(
+                    "", start_position=0, display="[type depth number, e.g. 1, 2...]"
+                )
             return
 
         match_path = re.search(r"<@tree:([^><]*)$", text_before_cursor)
         if match_path:
-            yield from fuzzy_complete(match_path.group(1), list(indexer.dirs))
+            partial = match_path.group(1)
+
+            if not partial:
+                for c in sorted(list(indexer.dirs))[:15]:
+                    yield Completion(c + ">", start_position=0, display=c)
+                return
+
+            results = process.extract(
+                partial,
+                list(indexer.dirs),
+                limit=15,
+                processor=fuzz_utils.default_process,
+            )
+            matched_items = [res[0] for res in results if res[1] > 40] or [
+                res[0] for res in results
+            ]
+
+            for c in matched_items:
+                if c == partial:
+                    # PROVIDE AN EXACT MATCH BRANCHING CHOICE!
+                    yield Completion(
+                        c + ">", start_position=-len(partial), display=f"{c}> (close)"
+                    )
+                    yield Completion(
+                        c + ":",
+                        start_position=-len(partial),
+                        display=f"{c}: (set depth)",
+                    )
+                else:
+                    yield Completion(c + ">", start_position=-len(partial), display=c)
 
 
 class ExtMod(MentionMod):
