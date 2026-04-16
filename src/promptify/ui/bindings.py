@@ -12,6 +12,7 @@ from prompt_toolkit.selection import SelectionState
 from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
+from prompt_toolkit.search import start_search
 
 from ..utils.i18n import strings
 
@@ -53,6 +54,7 @@ def setup_keybindings(editor) -> KeyBindings:
         )
 
     editor_focus = has_focus(editor.buffer)
+    search_focus = has_focus(editor.search_toolbar.control)
 
     def get_home_position(document: Document) -> int:
         first_non_ws = document.get_start_of_line_position(after_whitespace=True)
@@ -79,7 +81,7 @@ def setup_keybindings(editor) -> KeyBindings:
     @custom_bindings.add("c-f", filter=editor_focus)
     def _search(event) -> None:
         """ENABLES IN-EDITOR SEARCH VIA THE NATIVE PROMPT-TOOLKIT COMPONENT."""
-        event.app.layout.focus(editor.search_toolbar.control)
+        start_search(editor.main_window.content)
 
     @custom_bindings.add("escape", filter=is_help_visible)
     @custom_bindings.add("enter", filter=is_help_visible)
@@ -578,7 +580,7 @@ def setup_keybindings(editor) -> KeyBindings:
             cursor_row, cursor_col
         )
 
-    @custom_bindings.add("c-s")
+    @custom_bindings.add("c-s", filter=~search_focus)
     def _save(event) -> None:
         async def _do_save():
             text = editor.buffer.text

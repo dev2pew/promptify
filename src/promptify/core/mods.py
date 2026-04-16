@@ -204,7 +204,7 @@ class FileMod(MentionMod):
     """PROCESSES <@FILE:PATH:RANGE> STRUCTURES RESOLVING STANDARD FILE REQUESTS."""
 
     name = "mod_file"
-    pattern = r"<@file:([^>:]+?)(?::([^>]+))?>"
+    pattern = r"<@file:([^>]+?)(?::([^>]+))?>"
 
     async def resolve(self, text: str, context: "ProjectContext") -> str:
         m = re.match(self.pattern, text)
@@ -299,7 +299,7 @@ class TreeMod(MentionMod):
 
             if not partial:
                 for c in sorted(list(indexer.dirs))[:15]:
-                    yield Completion(c + ">", start_position=0, display=c)
+                    yield Completion(c, start_position=0, display=c)
                 return
 
             results = process.extract(
@@ -316,15 +316,15 @@ class TreeMod(MentionMod):
                 if c == partial:
                     # PROVIDE AN EXACT MATCH BRANCHING CHOICE!
                     yield Completion(
-                        c + ">", start_position=-len(partial), display=f"{c}> (close)"
+                        c + ">", start_position=-len(partial), display=f"{c}>"
                     )
                     yield Completion(
                         c + ":",
                         start_position=-len(partial),
-                        display=f"{c}: (set depth)",
+                        display=f"{c}:",
                     )
                 else:
-                    yield Completion(c + ">", start_position=-len(partial), display=c)
+                    yield Completion(c, start_position=-len(partial), display=c)
 
 
 class ExtMod(MentionMod):
