@@ -1,11 +1,10 @@
 """
-Internationalization (i18n) and localization utilities.
-Loads language strings from JSON to support multiple region deployments natively and consistently correctly.
+INTERNATIONALIZATION (I18N) AND LOCALIZATION UTILITIES.
+LOADS LANGUAGE STRINGS FROM JSON TO SUPPORT MULTIPLE REGION DEPLOYMENTS NATIVELY.
 """
 
 import json
 from pathlib import Path
-
 from ..core.settings import LOCALE
 
 STRINGS_DIR = Path(__file__).parent.parent.parent.parent / "strings"
@@ -13,10 +12,7 @@ STRINGS_DIR = Path(__file__).parent.parent.parent.parent / "strings"
 
 def load_strings() -> dict[str, str]:
     """
-    Loads JSON localization structures parsing system environments configurations maps natively cleanly gracefully.
-
-    Returns:
-        dict[str, str]: Mapped string dictionaries objects variables parsing implementations appropriately consistently correctly natively seamlessly.
+    LOADS JSON LOCALIZATION STRUCTURES PARSING SYSTEM ENVIRONMENTS CONFIGURATIONS.
     """
     file_path = STRINGS_DIR / f"{LOCALE}.json"
 
@@ -33,4 +29,5 @@ def load_strings() -> dict[str, str]:
         return {}
 
 
+# GLOBALLY EXPOSED STRING MAP DICTIONARY
 strings = load_strings()

@@ -1,3 +1,7 @@
+"""
+UNIT TESTS EVALUATING FILE SYSTEM ISOLATION, DATA RETRIEVAL AND CACHING MECHANISMS.
+"""
+
 import pytest
 from promptify.utils.i18n import strings
 
@@ -5,7 +9,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_get_file_content(app_components):
-    """Tests standard file reading."""
+    """TESTS STANDARD FILE READING."""
     context, _ = app_components
     res = await context.get_file_content("app.py")
     assert "This is line 1" in res
@@ -13,14 +17,16 @@ async def test_get_file_content(app_components):
 
 
 async def test_get_file_content_not_found(app_components):
-    """Tests missing file handling."""
+    """TESTS MISSING FILE HANDLING."""
     context, _ = app_components
     res = await context.get_file_content("missing.py")
-    assert res == strings["err_file_not_found"].format(query="missing.py")
+    assert res == strings.get("err_file_not_found", "file not found").format(
+        query="missing.py"
+    )
 
 
 async def test_get_file_content_ranges(app_components):
-    """Tests all supported line range syntaxes."""
+    """TESTS ALL SUPPORTED LINE RANGE SYNTAXES."""
     context, _ = app_components
     # 2-4
     res = await context.get_file_content("app.py", "2-4")
@@ -28,7 +34,9 @@ async def test_get_file_content_ranges(app_components):
     assert "This is line 4" in res
     assert "This is line 5" not in res
     assert (
-        strings["truncation_notice"].format(prefix="# ", omitted=17, suffix="").strip()
+        strings.get("truncation_notice", "truncated")
+        .format(prefix="# ", omitted=17, suffix="")
+        .strip()
         in res
     )
 
@@ -49,19 +57,26 @@ async def test_get_file_content_ranges(app_components):
 
     # INVALID
     res = await context.get_file_content("app.py", "invalid")
-    assert strings["err_invalid_range"].format(range="invalid") in res
+    assert (
+        strings.get("err_invalid_range", "invalid range").format(range="invalid") in res
+    )
 
 
 async def test_size_limits(app_components):
-    """Tests the safeguard against reading excessively large files."""
+    """TESTS THE SAFEGUARD AGAINST READING EXCESSIVELY LARGE FILES."""
     context, _ = app_components
     context.MAX_FILE_SIZE = 10
     res = await context.get_file_content("app.py")
-    assert strings["err_file_too_large"].format(path="app.py").strip() in res
+    assert (
+        strings.get("err_file_too_large", "file too large")
+        .format(path="app.py")
+        .strip()
+        in res
+    )
 
 
 async def test_get_type_contents(app_components):
-    """Tests fetching multiple files by extension."""
+    """TESTS FETCHING MULTIPLE FILES BY EXTENSION."""
     context, _ = app_components
     res = await context.get_type_contents("py, md")
     assert "app.py" in res
@@ -69,7 +84,7 @@ async def test_get_type_contents(app_components):
 
 
 async def test_get_dir_contents(app_components):
-    """Tests fetching all files in a directory."""
+    """TESTS FETCHING ALL FILES IN A DIRECTORY."""
     context, _ = app_components
     res = await context.get_dir_contents("src")
     assert "main.py" in res
@@ -78,7 +93,7 @@ async def test_get_dir_contents(app_components):
 
 
 async def test_get_tree_contents(app_components):
-    """Tests fetching a scoped project tree via <@tree:path> implementation"""
+    """TESTS FETCHING A SCOPED PROJECT TREE VIA <@TREE:PATH> IMPLEMENTATION"""
     context, _ = app_components
     res = await context.get_tree_contents("src")
     assert "tree_header_1" not in res  # TREE HEADER STRINGS RESOLVE TO EXACT OUTPUT
@@ -88,21 +103,21 @@ async def test_get_tree_contents(app_components):
 
 
 async def test_generate_tree(app_components):
-    """Tests project tree generation."""
+    """TESTS PROJECT TREE GENERATION."""
     context, _ = app_components
     res = context.generate_tree()
-    assert strings["tree_header_1"] in res
+    assert strings.get("tree_header_1", "TREE /F") in res
     assert "app.py" in res
     assert "src" in res
 
 
 async def test_git_mentions(app_components):
-    """Tests `<@git:status>` graceful handling across different repo states."""
+    """TESTS `<@GIT:STATUS>` GRACEFUL HANDLING ACROSS DIFFERENT REPO STATES."""
     context, _ = app_components
     result = await context.get_git_status()
 
-    # Retrieve the configured localization strings dynamically
-    # so the test doesn't break if the user edits en.json.
+    # RETRIEVE THE CONFIGURED LOCALIZATION STRINGS DYNAMICALLY
+    # SO THE TEST DOESN'T BREAK IF THE USER EDITS EN.JSON.
     clean_state = strings.get("working_tree_clean", "working tree clean")
     error_state = strings.get("git_status_error", "git status error").split("{")[0]
 
@@ -121,7 +136,7 @@ async def test_git_mentions(app_components):
 
 
 async def test_tree_depth_mentions(app_components):
-    """Tests `<@tree:path:level>` properly limits the recursive depth."""
+    """TESTS `<@TREE:PATH:LEVEL>` PROPERLY LIMITS THE RECURSIVE DEPTH."""
     context, _ = app_components
 
     # 1. EVALUATE DEPTH RESTRICTION MECHANISM

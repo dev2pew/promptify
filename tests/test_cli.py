@@ -1,9 +1,13 @@
+"""
+UNIT TESTS VERIFYING COMMAND LINE INTERFACE ARGUMENT MAPPINGS.
+"""
+
 import pytest
 from promptify.core.cli import parse_cli_args, CLIConfig, extract_help_from_docstring
 
 
 def test_docstring_extraction():
-    """Verifies the dynamic help parser correctly identifies args and descriptions."""
+    """VERIFIES THE DYNAMIC HELP PARSER CORRECTLY IDENTIFIES ARGS AND DESCRIPTIONS."""
     helps = extract_help_from_docstring(CLIConfig)
 
     assert "case" in helps
@@ -15,7 +19,7 @@ def test_docstring_extraction():
 
 
 def test_cli_parsing_basic():
-    """Verifies mapping of short and long flags to the dataclass."""
+    """VERIFIES MAPPING OF SHORT AND LONG FLAGS TO THE DATACLASS."""
     # TEST SHORT FLAGS
     args = ["-c", "my_case", "-p", "./src", "-m", "s"]
     config = parse_cli_args(args)
@@ -32,7 +36,7 @@ def test_cli_parsing_basic():
 
 
 def test_cli_argument_order_independence():
-    """Ensures the order of arguments does not affect the resulting config."""
+    """ENSURES THE ORDER OF ARGUMENTS DOES NOT AFFECT THE RESULTING CONFIG."""
     order_a = parse_cli_args(["-m", "s", "-c", "case_a", "-p", "."])
     order_b = parse_cli_args(["-p", ".", "-m", "s", "-c", "case_a"])
 
@@ -41,8 +45,8 @@ def test_cli_argument_order_independence():
 
 def test_mode_normalization_logic():
     """
-    Verifies that the parser accepts various mode strings.
-    (Note: The actual normalization happens in App.run, but the parser must capture them).
+    VERIFIES THAT THE PARSER ACCEPTS VARIOUS MODE STRINGS.
+    (NOTE: THE ACTUAL NORMALIZATION HAPPENS IN APP.RUN, BUT THE PARSER MUST CAPTURE THEM).
     """
     valid_modes = [
         "s",
@@ -64,7 +68,7 @@ def test_mode_normalization_logic():
 
 
 def test_cli_default_behavior():
-    """Verifies that empty arguments result in None values, allowing the App to trigger wizards."""
+    """VERIFIES THAT EMPTY ARGUMENTS RESULT IN NONE VALUES, ALLOWING THE APP TO TRIGGER WIZARDS."""
     config = parse_cli_args([])
     assert config.case is None
     assert config.path is None
@@ -72,7 +76,7 @@ def test_cli_default_behavior():
 
 
 def test_programmatic_config_creation():
-    """Verifies the dataclass can be instantiated directly without the parser."""
+    """VERIFIES THE DATACLASS CAN BE INSTANTIATED DIRECTLY WITHOUT THE PARSER."""
     config = CLIConfig(case="manual", path="/manual/path", mode="editor")
     assert config.case == "manual"
     assert config.path == "/manual/path"

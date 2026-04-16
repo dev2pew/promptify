@@ -1,3 +1,7 @@
+"""
+UNIT TESTS EVALUATING I/O AND TASKGROUP PERFORMANCE AND BOUNDARIES.
+"""
+
 import pytest
 import time
 
@@ -5,7 +9,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_concurrent_resolution(app_components):
-    """Tests resolving a large number of tags concurrently to ensure TaskGroup handles it fast."""
+    """TESTS RESOLVING A LARGE NUMBER OF TAGS CONCURRENTLY TO ENSURE TASKGROUP HANDLES IT FAST."""
     _, resolver = app_components
 
     # CREATE A PROMPT WITH 100 MENTIONS OF APP.PY

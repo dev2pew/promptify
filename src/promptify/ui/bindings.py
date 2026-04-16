@@ -1,3 +1,7 @@
+"""
+KEYBINDING REGISTRY IMPLEMENTING STANDARD AND CUSTOM SHORTCUTS.
+"""
+
 import asyncio
 import aiofiles
 import re
@@ -13,7 +17,7 @@ from ..utils.i18n import strings
 
 
 def detect_indent_style(document: Document) -> str:
-    """Adaptively detects indentation format based on the user's workspace."""
+    """ADAPTIVELY DETECTS INDENTATION FORMAT BASED ON THE USER'S WORKSPACE."""
     for line in document.lines:
         if line.startswith("\t"):
             return "\t"
@@ -71,6 +75,11 @@ def setup_keybindings(editor) -> KeyBindings:
             editor.help_window.content.buffer.cursor_position = 0
         else:
             event.app.layout.focus(editor.main_window)
+
+    @custom_bindings.add("c-f", filter=editor_focus)
+    def _search(event) -> None:
+        """ENABLES IN-EDITOR SEARCH VIA THE NATIVE PROMPT-TOOLKIT COMPONENT."""
+        event.app.layout.focus(editor.search_toolbar.control)
 
     @custom_bindings.add("escape", filter=is_help_visible)
     @custom_bindings.add("enter", filter=is_help_visible)
@@ -308,7 +317,7 @@ def setup_keybindings(editor) -> KeyBindings:
         else:
             b.selection_state = None
 
-    # Track entry time to distinguish simulated terminal paste logic from genuine typing
+    # TRACK ENTRY TIME TO DISTINGUISH SIMULATED TERMINAL PASTE LOGIC FROM GENUINE TYPING
     _last_enter_time = [0.0]
 
     @custom_bindings.add("enter", filter=editor_focus & ~has_completions_menu)
@@ -323,8 +332,8 @@ def setup_keybindings(editor) -> KeyBindings:
             b.selection_state = None
 
         if is_paste:
-            # Simulated paste triggers (e.g. Right Click) happen too quickly;
-            # bypass formatting logic to avoid exponential staircase indenting
+            # SIMULATED PASTE TRIGGERS (E.G. RIGHT CLICK) HAPPEN TOO QUICKLY;
+            # BYPASS FORMATTING LOGIC TO AVOID EXPONENTIAL STAIRCASE INDENTING
             b.insert_text("\n")
         else:
             doc = b.document
@@ -333,7 +342,7 @@ def setup_keybindings(editor) -> KeyBindings:
             indent_match = re.match(r"^(\s*)", current_line)
             indent = indent_match.group(1) if indent_match else ""
 
-            # Predict indentation depth
+            # PREDICT INDENTATION DEPTH
             if current_line.rstrip().endswith((":")):
                 indent += indent_str
             elif current_line.rstrip().endswith(("{", "[", "(")):
@@ -363,7 +372,7 @@ def setup_keybindings(editor) -> KeyBindings:
             cursor_col = doc.cursor_position_col
             b.text = "\n".join(lines)
 
-            # Reposition the cursor safely relative to its old column
+            # REPOSITION THE CURSOR SAFELY RELATIVE TO ITS OLD COLUMN
             new_col = cursor_col + len(indent_str)
             b.cursor_position = b.document.translate_row_col_to_index(
                 cursor_row, new_col
@@ -412,7 +421,7 @@ def setup_keybindings(editor) -> KeyBindings:
         cursor_col = doc.cursor_position_col
         b.text = "\n".join(lines)
 
-        # Reposition the cursor safely relative to its old column
+        # REPOSITION THE CURSOR SAFELY RELATIVE TO ITS OLD COLUMN
         new_col = max(0, cursor_col + cursor_col_offset)
         b.cursor_position = b.document.translate_row_col_to_index(cursor_row, new_col)
 
@@ -592,9 +601,9 @@ def setup_keybindings(editor) -> KeyBindings:
                 except Exception as e:
                     editor.error_message = str(e)
                     editor.error_visible = True
-                    editor.error_buffer.text = strings["invalid_syntax_window"].format(
-                        path=meta.rel_path, error=e
-                    )
+                    editor.error_buffer.text = strings.get(
+                        "invalid_syntax_window", "invalid syntax"
+                    ).format(path=meta.rel_path, error=e)
                     event.app.layout.focus(editor.error_window)
                     event.app.invalidate()
                     return

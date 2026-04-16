@@ -1,3 +1,8 @@
+"""
+CLI TERMINAL TEXT EDITOR DRIVEN BY PROMPT-TOOLKIT AND PYGMENTS.
+IMPLEMENTS HIGHLIGHTING, AUTOCOMPLETION, INVALID MENTION MARKING, AND SEARCH.
+"""
+
 import re
 import sys
 import asyncio
@@ -32,7 +37,7 @@ try:
     from prompt_toolkit.buffer import Buffer
     from prompt_toolkit.document import Document
     from prompt_toolkit.styles import Style
-    from prompt_toolkit.widgets import Frame
+    from prompt_toolkit.widgets import Frame, SearchToolbar
     from prompt_toolkit.lexers import Lexer
     from prompt_toolkit.filters import Condition
     from prompt_toolkit.layout.processors import (
@@ -77,7 +82,7 @@ except ImportError:
 
 
 class HighlightTrailingWhitespaceProcessor(Processor):
-    """Highlights trailing spaces and tabs at the end of each line."""
+    """HIGHLIGHTS TRAILING SPACES AND TABS AT THE END OF EACH LINE."""
 
     def apply_transformation(self, transformation_input):
         fragments = transformation_input.fragments
@@ -107,6 +112,8 @@ class HighlightTrailingWhitespaceProcessor(Processor):
 
 
 class EOFNewlineProcessor(Processor):
+    """INDICATES MISSING EOF NEWLINE VISUALLY."""
+
     def apply_transformation(self, transformation_input):
         document = transformation_input.document
         lineno = transformation_input.lineno
@@ -124,7 +131,7 @@ class EOFNewlineProcessor(Processor):
 if HAS_PYGMENTS:
 
     def tokenize_mention(text: str) -> list[tuple[str, str]]:
-        """Granular tokenization for mentions, supporting semantic argument parsing."""
+        """GRANULAR TOKENIZATION FOR MENTIONS, SUPPORTING SEMANTIC ARGUMENT PARSING."""
         if text == "[@project]":
             return [("class:mention-tag", "[@project]")]
 
@@ -196,9 +203,56 @@ if HAS_PYGMENTS:
         return tokens
 
     class CustomPromptLexer(Lexer):
-        def __init__(self, registry: ModRegistry):
+        """CUSTOM LEXER TO EMBED TAG HIGHLIGHTING AND INVALID MENTION DETECTION NATIVELY."""
+
+        def __init__(self, registry: ModRegistry, indexer: ProjectIndexer):
             self.md_lexer = PygmentsLexer(MarkdownLexer)
             self.registry = registry
+            self.indexer = indexer
+            self.mention_pattern = re.compile(r"<@[^>\s]+(?:>|$)|\[@project\]")
+
+        def is_valid_mention(self, text: str) -> bool:
+            """VALIDATES THE INTEGRITY OF A MENTION AND ITS EXISTENCE IN THE INDEXER."""
+            if text == "[@project]":
+                return True
+            if not text.endswith(">"):
+                return False
+
+            match = self.registry.pattern.fullmatch(text)
+            if not match:
+                return False
+
+            try:
+                mod, _ = self.registry.get_mod_and_text(match)
+
+                if mod.name == "mod_file":
+                    p = re.match(r"<@file:([^>:]+)", text)
+                    if not p or not self.indexer.find_matches(p.group(1)):
+                        return False
+                elif mod.name in ("mod_dir", "mod_tree"):
+                    p = re.match(r"<@(dir|tree):([^>:]+)", text)
+                    if p:
+                        clean = p.group(2).replace("\\", "/").strip("/")
+                        if (
+                            clean
+                            and clean not in self.indexer.dirs
+                            and not any(d.startswith(clean) for d in self.indexer.dirs)
+                        ):
+                            return False
+                elif mod.name == "mod_symbol":
+                    p = re.match(r"<@symbol:([^>:]+):([^>]+)>", text)
+                    if not p or not self.indexer.find_matches(p.group(1)):
+                        return False
+                elif mod.name == "mod_ext":
+                    p = re.match(r"<@(type|ext):([^>]+)>", text)
+                    if not p:
+                        return False
+                    exts = [e.strip().lower() for e in p.group(2).split(",")]
+                    if not self.indexer.get_by_extensions(exts):
+                        return False
+                return True
+            except Exception:
+                return False
 
         def lex_document(self, document: Document):
             get_original_line = self.md_lexer.lex_document(document)
@@ -206,7 +260,7 @@ if HAS_PYGMENTS:
             def get_line(lineno: int):
                 original_tokens = get_original_line(lineno)
                 text = document.lines[lineno]
-                matches = list(self.registry.pattern.finditer(text))
+                matches = list(self.mention_pattern.finditer(text))
 
                 if not matches:
                     return original_tokens
@@ -222,6 +276,7 @@ if HAS_PYGMENTS:
 
                 for m in matches:
                     start, end = m.span()
+                    m_text = m.group(0)
 
                     # 1. RECOVER ORIGINAL MARKDOWN TOKENS BEFORE THE MATCH
                     curr_style = None
@@ -238,8 +293,12 @@ if HAS_PYGMENTS:
                     if curr_text:
                         new_tokens.append((curr_style, "".join(curr_text)))
 
-                    # 2. INJECT GRANULAR MENTION TOKENS
-                    new_tokens.extend(tokenize_mention(m.group(0)))
+                    # 2. INJECT GRANULAR MENTION TOKENS OR INVALID STYLING
+                    if not self.is_valid_mention(m_text):
+                        new_tokens.append(("class:invalid-syntax", m_text))
+                    else:
+                        new_tokens.extend(tokenize_mention(m_text))
+
                     last_idx = end
 
                 # 3. RECOVER ORIGINAL MARKDOWN TOKENS AFTER THE LAST MATCH
@@ -263,7 +322,7 @@ if HAS_PYGMENTS:
 
 
 class HelpLexer(Lexer):
-    """Robust regex-based lexer for the Help window text."""
+    """ROBUST REGEX-BASED LEXER FOR THE HELP WINDOW TEXT."""
 
     def __init__(self):
         # 1. HEADERS: [ GENERAL ]
@@ -305,7 +364,7 @@ class HelpLexer(Lexer):
 
 
 class MentionCompleter(Completer):
-    """Routes autocomplete generation requests through the dynamically registered Mods."""
+    """ROUTES AUTOCOMPLETE GENERATION REQUESTS THROUGH THE DYNAMICALLY REGISTERED MODS."""
 
     def __init__(self, indexer: ProjectIndexer, registry: ModRegistry):
         self.indexer = indexer
@@ -323,6 +382,8 @@ class MentionCompleter(Completer):
 
 
 class InteractiveEditor:
+    """MANAGES THE CORE PROMPT-TOOLKIT TERMINAL EDITOR."""
+
     def __init__(
         self,
         initial_text: str,
@@ -364,7 +425,9 @@ class InteractiveEditor:
             height=Dimension(preferred=10, max=20),
         )
 
-        lexer = CustomPromptLexer(resolver.registry) if HAS_PYGMENTS else None
+        self.search_toolbar = SearchToolbar()
+
+        lexer = CustomPromptLexer(resolver.registry, indexer) if HAS_PYGMENTS else None
         processors = [
             HighlightTrailingWhitespaceProcessor(),
             HighlightMatchingBracketProcessor(),
@@ -373,12 +436,15 @@ class InteractiveEditor:
 
         self.main_window = Window(
             content=BufferControl(
-                buffer=self.buffer, lexer=lexer, input_processors=processors
+                buffer=self.buffer,
+                lexer=lexer,
+                input_processors=processors,
+                search_buffer_control=self.search_toolbar.control,
             )
         )
 
     async def _update_tokens_loop(self):
-        """Asynchronous, debounced task utilizing fast proxy metrics for token size."""
+        """ASYNCHRONOUS, DEBOUNCED TASK UTILIZING FAST PROXY METRICS FOR TOKEN SIZE."""
         last_text = None
         last_count = 0
         while True:
@@ -403,6 +469,7 @@ class InteractiveEditor:
                     pass
 
     async def run_async(self) -> str | None:
+        """EXECUTES THE FULL SCREEN EDITOR."""
         default_bindings = load_key_bindings()
         custom_bindings = setup_keybindings(self)
         bindings = merge_key_bindings([default_bindings, custom_bindings])
@@ -450,7 +517,7 @@ class InteractiveEditor:
             style="class:toolbar",
         )
 
-        body = HSplit([top_bar, self.main_window, bottom_toolbar])
+        body = HSplit([top_bar, self.main_window, self.search_toolbar, bottom_toolbar])
 
         help_frame = Frame(
             body=self.help_window,
@@ -545,6 +612,8 @@ class InteractiveEditor:
                 "mention-class": "fg:#00ff00 bold",  # BRIGHT GREEN: MYCLASS
                 "mention-function": "fg:#5555ff",  # BLUE: MY_FUNC
                 "mention-method": "fg:#55ffff",  # LIGHT CYAN: METHOD
+                # INVALID SYNTAX OVERRIDE (RED BG, BLACK FG)
+                "invalid-syntax": "bg:#ff0000 fg:#000000",
                 # HELP MENU OVERRIDES
                 "help-header": "fg:#00ff00 bold",  # GREEN SECTION HEADERS
                 "help-key": "fg:#ffff00",  # YELLOW NAVIGATION KEYS

@@ -1,3 +1,9 @@
+"""
+ASYNCHRONOUS RESOLVER LEVERAGING STRUCTURED CONCURRENCY AND A DECOUPLED MOD SYSTEM.
+SYSTEM MODE OPERATES RECURSIVELY WITH LOOP PROTECTION.
+USER MODE OPERATES IN A STRICT SINGLE-PASS SANDBOX.
+"""
+
 import re
 import asyncio
 
@@ -8,9 +14,9 @@ from ..utils.i18n import strings
 
 class PromptResolver:
     """
-    Asynchronous resolver leveraging structured concurrency and a decoupled Mod System.
-    System mode operates recursively with loop protection.
-    User mode operates in a strict single-pass sandbox.
+    ASYNCHRONOUS RESOLVER LEVERAGING STRUCTURED CONCURRENCY AND A DECOUPLED MOD SYSTEM.
+    SYSTEM MODE OPERATES RECURSIVELY WITH LOOP PROTECTION.
+    USER MODE OPERATES IN A STRICT SINGLE-PASS SANDBOX.
     """
 
     def __init__(self, context: ProjectContext, registry: ModRegistry):
@@ -21,8 +27,8 @@ class PromptResolver:
 
     async def estimate_tokens(self, text: str) -> int:
         """
-        Calculates an ultra-fast estimation of tokens based strictly on
-        sizes provided by the in-memory indexer without executing full file reads.
+        CALCULATES AN ULTRA-FAST ESTIMATION OF TOKENS BASED STRICTLY ON
+        SIZES PROVIDED BY THE IN-MEMORY INDEXER WITHOUT EXECUTING FULL FILE READS.
         """
         matches = list(self.registry.pattern.finditer(text))
         if not matches:
@@ -76,7 +82,7 @@ class PromptResolver:
         return int((base_len + added_len) // 3.2)
 
     async def resolve_system(self, text: str, seen: set[str] | None = None) -> str:
-        """Recursive resolution for system templates, with loop protection."""
+        """RECURSIVE RESOLUTION FOR SYSTEM TEMPLATES, WITH LOOP PROTECTION."""
         if seen is None:
             seen = set()
 
@@ -87,7 +93,9 @@ class PromptResolver:
         async def _resolve_and_recurse(m: re.Match) -> str:
             full_match = m.group(0)
             if full_match in seen:
-                return strings["loop_detected"].format(match=full_match)
+                return strings.get("loop_detected", "loop detected").format(
+                    match=full_match
+                )
 
             branch_seen = seen.copy()
             branch_seen.add(full_match)
@@ -111,7 +119,7 @@ class PromptResolver:
         return "".join(parts)
 
     async def resolve_user(self, text: str) -> str:
-        """Single-pass resolution for user text (interactive editor)."""
+        """SINGLE-PASS RESOLUTION FOR USER TEXT (INTERACTIVE EDITOR)."""
         matches = list(self.registry.pattern.finditer(text))
         if not matches:
             return text
@@ -132,7 +140,7 @@ class PromptResolver:
         return "".join(parts)
 
     async def _process_match(self, match: re.Match) -> str:
-        """Delegates resolution strictly to the corresponding Mod."""
+        """DELEGATES RESOLUTION STRICTLY TO THE CORRESPONDING MOD."""
         try:
             mod, text = self.registry.get_mod_and_text(match)
             return await mod.resolve(text, self.context)
