@@ -43,7 +43,7 @@ class SymbolExtractor:
         declarations = []
         char_pos = 0
 
-        # 1. IDENTIFY ALL DECLARATIONS
+        # IDENTIFY ALL DECLARATIONS
         for i, (ttype, tval) in enumerate(tokens):
             if ttype in (Token.Name.Function, Token.Name.Class, Token.Name.Namespace):
                 line_idx = self.code.count("\n", 0, char_pos)
@@ -88,7 +88,7 @@ class SymbolExtractor:
 
         is_python = self.filename.endswith((".py", ".pyx", ".gd", ".yaml", ".yml"))
 
-        # 2. FIND THE END LINE FOR EACH DECLARATION
+        # FIND THE END LINE FOR EACH DECLARATION
         for d in declarations:
             start_line = d["start_line"]
             if is_python:
@@ -129,7 +129,7 @@ class SymbolExtractor:
                 else:
                     d["end_line"] = start_line
 
-        # 3. BUILD PARENT MAP TO RESOLVE SCOPED NAMES (CLASS.METHOD)
+        # BUILD PARENT MAP TO RESOLVE SCOPED NAMES (CLASS.METHOD)
         parent_map = {}
         for d in declarations:
             parents = [
@@ -176,7 +176,7 @@ class SymbolExtractor:
                 parts.append(curr["name"])
             return ".".join(reversed(parts))
 
-        # 4. POPULATE THE SYMBOLS DICTIONARY (HANDLES OVERLOADS BY APPENDING)
+        # POPULATE THE SYMBOLS DICTIONARY (HANDLES OVERLOADS BY APPENDING)
         for d in declarations:
             full_name = get_full_name(d)
             end_idx = min(d["end_line"] + 1, len(self.lines))

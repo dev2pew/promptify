@@ -115,7 +115,7 @@ class App:
         for d in cases:
             configs.append((CaseConfig(d), d))
 
-        # --- 1. CASE SELECTION ---
+        # CASE SELECTION
         selected_case_dir = None
         last_path = ""
 
@@ -183,7 +183,7 @@ class App:
             case = CaseConfig(selected_case_dir)
             last_path = await self.get_last_path(case.name, state)
 
-        # --- 2. PATH SELECTION ---
+        # PATH SELECTION
         if self.cli_config.path:
             target_path_str = self.cli_config.path
         else:
@@ -231,7 +231,7 @@ class App:
         registry.register_defaults()
         resolver = PromptResolver(context, registry)
 
-        # --- 3. MODE SELECTION ---
+        # MODE SELECTION
         mode = None
         if self.cli_config.mode:
             m = self.cli_config.mode.lower()
