@@ -1,6 +1,6 @@
 """
-Asynchronous file system watcher and indexer.
-Maintains an in-memory representation of the project to enable ultra-fast fuzzy matching.
+ASYNCHRONOUS FILE SYSTEM WATCHER AND INDEXER.
+MAINTAINS AN IN-MEMORY REPRESENTATION OF THE PROJECT TO ENABLE ULTRA-FAST FUZZY MATCHING.
 """
 
 import asyncio
@@ -21,13 +21,13 @@ type FileIndex = dict[str, FileMeta]
 
 class ProjectIndexer(FileSystemEventHandler):
     """
-    Maintains an in-memory, rapidly searchable index of project files.
-    Utilizes watchdog to keep metadata strictly synchronized.
+    MAINTAINS AN IN-MEMORY, RAPIDLY SEARCHABLE INDEX OF PROJECT FILES.
+    UTILIZES WATCHDOG TO KEEP METADATA STRICTLY SYNCHRONIZED.
     """
 
     def __init__(self, target_dir: Path, case: CaseConfig):
         """
-        Binds the indexer tracking to a specific project.
+        BINDS THE INDEXER TRACKING TO A SPECIFIC PROJECT.
 
         Args:
             target_dir (Path): The working root directory to scan.
@@ -44,8 +44,12 @@ class ProjectIndexer(FileSystemEventHandler):
         self._lock = asyncio.Lock()
 
     async def build_index(self) -> None:
-        """Initial fast scan using native OS scandir mappings."""
-        log.info(strings["indexing_project"].format(name=self.target_dir.name))
+        """INITIAL FAST SCAN USING NATIVE OS SCANDIR MAPPINGS."""
+        log.info(
+            strings.get("indexing_project", "indexing project").format(
+                name=self.target_dir.name
+            )
+        )
 
         def _scan(directory: Path):
             try:
@@ -79,32 +83,34 @@ class ProjectIndexer(FileSystemEventHandler):
 
         await asyncio.to_thread(_scan, self.target_dir)
         log.success(
-            strings["indexed_success"].format(
+            strings.get("indexed_success", "indexed success").format(
                 files=len(self.files_by_rel), dirs=len(self.dirs)
             )
         )
 
     def start_watching(self) -> None:
-        """Bootstraps Watchdog, falling back to Polling for network/container mounts."""
+        """BOOTSTRAPS WATCHDOG, FALLING BACK TO POLLING FOR NETWORK/CONTAINER MOUNTS."""
         try:
             self._observer = Observer()
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
         except Exception as e:
-            log.warning(strings["observer_fallback"].format(error=e))
+            log.warning(
+                strings.get("observer_fallback", "observer failed").format(error=e)
+            )
             self._observer = PollingObserver()
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
 
     def stop_watching(self) -> None:
-        """Gracefully joins and stops the Watchdog background worker thread."""
+        """GRACEFULLY JOINS AND STOPS THE WATCHDOG BACKGROUND WORKER THREAD."""
         if self._observer:
             self._observer.stop()
             self._observer.join()
 
     def on_any_event(self, event: FileSystemEvent) -> None:
         """
-        Thread-safe state update triggered automatically by filesystem changes.
+        THREAD-SAFE STATE UPDATE TRIGGERED AUTOMATICALLY BY FILESYSTEM CHANGES.
 
         Args:
             event (FileSystemEvent): Generated OS file operation token.
@@ -158,7 +164,7 @@ class ProjectIndexer(FileSystemEventHandler):
 
     def find_matches(self, query: str) -> list[FileMeta]:
         """
-        Supports exact, globbing, and fuzzy partial path matching.
+        SUPPORTS EXACT, GLOBBING, AND FUZZY PARTIAL PATH MATCHING.
 
         Args:
             query (str): Searching criterion path parameter.
@@ -190,7 +196,7 @@ class ProjectIndexer(FileSystemEventHandler):
 
     def get_by_extensions(self, exts: list[str]) -> list[FileMeta]:
         """
-        Fetches all files terminating in specific formats.
+        FETCHES ALL FILES TERMINATING IN SPECIFIC FORMATS.
 
         Args:
             exts (list[str]): File formats mapped strictly by their extension structure.
@@ -203,7 +209,7 @@ class ProjectIndexer(FileSystemEventHandler):
 
     def get_all_extensions(self) -> list[str]:
         """
-        Returns all unique extensions currently loaded in the index.
+        RETURNS ALL UNIQUE EXTENSIONS CURRENTLY LOADED IN THE INDEX.
 
         Returns:
             list[str]: Sorted extensions.

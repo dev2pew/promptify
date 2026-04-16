@@ -1,5 +1,5 @@
 """
-Custom formatted logger for CLI output using prompt-toolkit's HTML styling.
+CUSTOM FORMATTED LOGGER FOR CLI OUTPUT USING PROMPT-TOOLKIT'S HTML STYLING.
 """
 
 import sys
@@ -12,11 +12,11 @@ from ..utils.i18n import strings
 
 
 class Logger:
-    """Provides categorized console output wrapped in HTML tags for consistent colors."""
+    """PROVIDES CATEGORIZED CONSOLE OUTPUT WRAPPED IN HTML TAGS FOR CONSISTENT COLORS."""
 
     def __init__(self, verbosity: int = 1, include_timestamp: bool = False):
         """
-        Initializes custom printing output constraints.
+        INITIALIZES CUSTOM PRINTING OUTPUT CONSTRAINTS.
 
         Args:
             verbosity (int): Sets reporting noise limits based on configurations.
@@ -27,14 +27,14 @@ class Logger:
         self._session: PromptSession[str] | None = None
 
     def _get_timestamp(self) -> str:
-        """Returns the formatted current time structure string if requested natively."""
+        """RETURNS THE FORMATTED CURRENT TIME STRUCTURE STRING IF REQUESTED NATIVELY."""
         if self.include_timestamp:
             return f"[{datetime.datetime.now().strftime('%H:%M:%S')}] "
         return ""
 
     def _print(self, prefix: str, color: str, message: str, **kwargs: Any) -> None:
         """
-        Generic rendering routine for translating raw components to HTML structures.
+        GENERIC RENDERING ROUTINE FOR TRANSLATING RAW COMPONENTS TO HTML STRUCTURES.
 
         Args:
             prefix (str): Indicator tag shown pre-message sequence structure.
@@ -52,12 +52,12 @@ class Logger:
             print(f"{timestamp}{prefix} {message}", **kwargs)
 
     def normal(self, message: str, **kwargs: Any) -> None:
-        """Prints a standard output statement logic message."""
+        """PRINTS A STANDARD OUTPUT STATEMENT LOGIC MESSAGE."""
         self._print("[>]", "ansiblue", message, **kwargs)
 
     async def input_async(self, message: str) -> str:
         """
-        Handles interactive data consumption operations asynchronously without blocking event loops.
+        HANDLES INTERACTIVE DATA CONSUMPTION OPERATIONS ASYNCHRONOUSLY WITHOUT BLOCKING EVENT LOOPS.
 
         Args:
             message (str): Instruction context outputting for prompting operation inputs.
@@ -84,27 +84,27 @@ class Logger:
             sys.exit(0)
 
     def error(self, message: str, **kwargs: Any) -> None:
-        """Prints error state representations directly utilizing fatal indicators."""
+        """PRINTS ERROR STATE REPRESENTATIONS DIRECTLY UTILIZING FATAL INDICATORS."""
         self._print("[e]", "ansired", message, **kwargs)
 
     def success(self, message: str, **kwargs: Any) -> None:
-        """Prints successful logic conclusion outputs clearly marking progression markers mapping targets safely natively."""
+        """PRINTS SUCCESSFUL LOGIC CONCLUSION OUTPUTS CLEARLY MARKING PROGRESSION MARKERS MAPPING TARGETS SAFELY NATIVELY."""
         self._print("[+]", "ansigreen", message, **kwargs)
 
     def warning(self, message: str, **kwargs: Any) -> None:
-        """Prints warning condition evaluations preventing execution faults."""
+        """PRINTS WARNING CONDITION EVALUATIONS PREVENTING EXECUTION FAULTS."""
         self._print("[w]", "ansiyellow", message, **kwargs)
 
     def info(self, message: str, **kwargs: Any) -> None:
-        """Prints informational trace logic mapping debug state evaluation strings."""
+        """PRINTS INFORMATIONAL TRACE LOGIC MAPPING DEBUG STATE EVALUATION STRINGS."""
         self._print("[i]", "ansiblue", message, **kwargs)
 
     def notice(self, message: str, **kwargs: Any) -> None:
-        """Prints priority highlight representations directing workflow actions strictly correctly safely."""
+        """PRINTS PRIORITY HIGHLIGHT REPRESENTATIONS DIRECTING WORKFLOW ACTIONS STRICTLY CORRECTLY SAFELY."""
         self._print("[*]", "ansimagenta", message, **kwargs)
 
     def verbose(self, message: str, level: int = 2, **kwargs: Any) -> None:
-        """Prints highly granular logic reports strictly only targeting detailed debug trace instances natively."""
+        """PRINTS HIGHLY GRANULAR LOGIC REPORTS STRICTLY ONLY TARGETING DETAILED DEBUG TRACE INSTANCES NATIVELY."""
         if self.verbosity >= level:
             self._print("[v]", "ansigray", message, **kwargs)
 

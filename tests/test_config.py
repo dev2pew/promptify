@@ -1,8 +1,12 @@
+"""
+UNIT TESTS FOR CASE CONFIGURATION AND GITIGNORE PARSING LOGIC.
+"""
+
 from promptify.core.config import CaseConfig
 
 
 def test_case_config_loading(test_sandbox):
-    """Tests if CaseConfig correctly loads from config.json."""
+    """TESTS IF CASECONFIG CORRECTLY LOADS FROM CONFIG.JSON."""
     case_dir = test_sandbox["case"]
     config = CaseConfig(case_dir)
     assert config.name == "test_case"
@@ -10,7 +14,7 @@ def test_case_config_loading(test_sandbox):
 
 
 def test_ignore_spec(test_sandbox):
-    """Tests if CaseConfig correctly compiles pathspec from .gitignore and .caseignore."""
+    """TESTS IF CASECONFIG CORRECTLY COMPILES PATHSPEC FROM .GITIGNORE AND .CASEIGNORE."""
     case_dir = test_sandbox["case"]
     demo_dir = test_sandbox["demo"]
     config = CaseConfig(case_dir)

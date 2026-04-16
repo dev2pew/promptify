@@ -1,3 +1,7 @@
+"""
+UNIT TESTS EVALUATING THE RELIABILITY OF THE ABSTRACT SYNTAX TREE SYMBOL EXTRACTOR.
+"""
+
 import pytest
 
 pytest.importorskip("pygments")
@@ -6,7 +10,7 @@ from promptify.core.extractor import SymbolExtractor
 
 
 def test_python_extraction():
-    """Tests AST extraction for Python classes and functions."""
+    """TESTS AST EXTRACTION FOR PYTHON CLASSES AND FUNCTIONS."""
     code = """
 class MyClass:
     def method_a(self):
@@ -22,7 +26,7 @@ def standalone_func():
 
 
 def test_js_extraction():
-    """Tests AST extraction for JS functions and classes."""
+    """TESTS AST EXTRACTION FOR JS FUNCTIONS AND CLASSES."""
     code = """
 function doSomething() {
     console.log("hello");

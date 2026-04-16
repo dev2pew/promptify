@@ -1,6 +1,6 @@
 """
-Mention modifiers and resolution engine plugins.
-Defines how specific tags (like <@file:...> or <@git:...>) are parsed and resolved.
+MENTION MODIFIERS AND RESOLUTION ENGINE PLUGINS.
+DEFINES HOW SPECIFIC TAGS (LIKE <@FILE:...> OR <@GIT:...>) ARE PARSED AND RESOLVED.
 """
 
 import re
@@ -23,7 +23,7 @@ def fuzzy_complete(
     limit: int = 15,
 ) -> Iterable[Completion]:
     """
-    Helper to provide fast, case-insensitive fuzzy completions.
+    HELPER TO PROVIDE FAST, CASE-INSENSITIVE FUZZY COMPLETIONS.
 
     Args:
         partial (str): Currently typed text to match.
@@ -53,7 +53,7 @@ def fuzzy_complete(
 
 
 class MentionMod(ABC):
-    """Base class for building customizable Mention Extensions (Mods)."""
+    """BASE CLASS FOR BUILDING CUSTOMIZABLE MENTION EXTENSIONS (MODS)."""
 
     name: str
     pattern: str
@@ -61,7 +61,7 @@ class MentionMod(ABC):
     @abstractmethod
     async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
         """
-        Resolves the raw mention string into its target content.
+        RESOLVES THE RAW MENTION STRING INTO ITS TARGET CONTENT.
 
         Args:
             full_match_text (str): Exact regex matched token.
@@ -77,7 +77,7 @@ class MentionMod(ABC):
         self, text_before_cursor: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
         """
-        Analyzes text state to yield context-aware completions.
+        ANALYZES TEXT STATE TO YIELD CONTEXT-AWARE COMPLETIONS.
 
         Args:
             text_before_cursor (str): Full line buffer snippet.
@@ -90,16 +90,16 @@ class MentionMod(ABC):
 
 
 class ModRegistry:
-    """Central registry mapping dynamically loaded Mention Mods to the engine."""
+    """CENTRAL REGISTRY MAPPING DYNAMICALLY LOADED MENTION MODS TO THE ENGINE."""
 
     def __init__(self):
-        """Initializes empty maps."""
+        """INITIALIZES EMPTY MAPS."""
         self.mods: list[MentionMod] = []
         self.pattern: re.Pattern | None = None
 
     def register(self, mod: MentionMod) -> None:
         """
-        Pushes a new custom Mod implementation into standard queues.
+        PUSHES A NEW CUSTOM MOD IMPLEMENTATION INTO STANDARD QUEUES.
 
         Args:
             mod (MentionMod): Object referencing the mod.
@@ -107,7 +107,7 @@ class ModRegistry:
         self.mods.append(mod)
 
     def register_defaults(self) -> None:
-        """Loads the standard suite of built-in mentions."""
+        """LOADS THE STANDARD SUITE OF BUILT-IN MENTIONS."""
         self.register(ProjectMod())
         self.register(FileMod())
         self.register(DirMod())
@@ -117,7 +117,7 @@ class ModRegistry:
         self.register(SymbolMod())
 
     def build(self) -> None:
-        """Compiles an O(N) multi-group Regex for ultra-fast single pass resolution."""
+        """COMPILES AN O(N) MULTI-GROUP REGEX FOR ULTRA-FAST SINGLE PASS RESOLUTION."""
         parts = []
         for mod in self.mods:
             parts.append(f"(?P<{mod.name}>{mod.pattern})")
@@ -125,7 +125,7 @@ class ModRegistry:
 
     def get_mod_and_text(self, match: re.Match) -> tuple[MentionMod, str]:
         """
-        Translates match outputs into isolated modular operations.
+        TRANSLATES MATCH OUTPUTS INTO ISOLATED MODULAR OPERATIONS.
 
         Args:
             match (re.Match): Regex executed context window reference.
@@ -143,7 +143,7 @@ class ModRegistry:
         self, text_before_cursor: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
         """
-        Delegates completion requests to mods, and handles base tags.
+        DELEGATES COMPLETION REQUESTS TO MODS, AND HANDLES BASE TAGS.
 
         Args:
             text_before_cursor (str): Leftward buffer token window search target.
@@ -186,7 +186,7 @@ class ModRegistry:
 
 
 class ProjectMod(MentionMod):
-    """Parses and handles [@project] global directory tree output instructions."""
+    """PARSES AND HANDLES [@PROJECT] GLOBAL DIRECTORY TREE OUTPUT INSTRUCTIONS."""
 
     name = "mod_project"
     pattern = r"\[@project\]"
@@ -201,7 +201,7 @@ class ProjectMod(MentionMod):
 
 
 class FileMod(MentionMod):
-    """Processes <@file:path:range> structures resolving standard file requests."""
+    """PROCESSES <@FILE:PATH:RANGE> STRUCTURES RESOLVING STANDARD FILE REQUESTS."""
 
     name = "mod_file"
     pattern = r"<@file:([^>:]+?)(?::([^>]+))?>"
@@ -237,7 +237,7 @@ class FileMod(MentionMod):
 
 
 class DirMod(MentionMod):
-    """Attaches all internal recursive file resources contained in <@dir:path>."""
+    """ATTACHES ALL INTERNAL RECURSIVE FILE RESOURCES CONTAINED IN <@DIR:PATH>."""
 
     name = "mod_dir"
     pattern = r"<@dir:([^>]+)>"
@@ -255,7 +255,7 @@ class DirMod(MentionMod):
 
 
 class TreeMod(MentionMod):
-    """Locates explicit specific path map mapping tree logic inside <@tree:path:level>."""
+    """LOCATES EXPLICIT SPECIFIC PATH MAP MAPPING TREE LOGIC INSIDE <@TREE:PATH:LEVEL>."""
 
     name = "mod_tree"
     pattern = r"<@tree:([^>:]+?)(?::([^>]+))?>"
@@ -269,17 +269,28 @@ class TreeMod(MentionMod):
     ) -> Iterable[Completion]:
         match_depth = re.search(r"<@tree:([^>:]+):([^><]*)$", text_before_cursor)
         if match_depth:
+            path = match_depth.group(1)
             partial = match_depth.group(2)
-            if partial.isdigit():
-                # ALLOW THEM TO CLOSE THE TAG FREELY ONCE THEY TYPE A NUMBER
-                yield Completion(
-                    f"{partial}>", start_position=-len(partial), display=f"{partial}>"
-                )
-            elif not partial:
-                # DELIVER AN INTUITIVE HINT MESSAGE EXPLAINING THE INPUT WITHOUT INJECTING TEXT
-                yield Completion(
-                    "", start_position=0, display="[type depth number, e.g. 1, 2...]"
-                )
+
+            # 1. IDENTIFY MAX AVAILABLE DEPTH FOR THE PATH IN REAL-TIME
+            clean_dir = path.replace("\\", "/").strip("/")
+            max_depth = 1
+            for d in indexer.dirs:
+                if d.startswith(clean_dir):
+                    rel = d[len(clean_dir) :].strip("/")
+                    if rel:
+                        depth = rel.count("/") + 2
+                        if depth > max_depth:
+                            max_depth = depth
+
+            candidates = [str(i) for i in range(1, max_depth + 1)]
+
+            if not partial:
+                for c in candidates:
+                    yield Completion(c + ">", start_position=0, display=c)
+                return
+
+            yield from fuzzy_complete(partial, candidates, suffix=">")
             return
 
         match_path = re.search(r"<@tree:([^><]*)$", text_before_cursor)
@@ -317,7 +328,7 @@ class TreeMod(MentionMod):
 
 
 class ExtMod(MentionMod):
-    """Processes bulk format targeting operations via the <@ext:csv_list> instruction."""
+    """PROCESSES BULK FORMAT TARGETING OPERATIONS VIA THE <@EXT:CSV_LIST> INSTRUCTION."""
 
     name = "mod_ext"
     pattern = r"<@(type|ext):([^>]+)>"
@@ -341,7 +352,7 @@ class ExtMod(MentionMod):
 
 
 class GitMod(MentionMod):
-    """Fetches real-time status and working tree modifications natively using Git."""
+    """FETCHES REAL-TIME STATUS AND WORKING TREE MODIFICATIONS NATIVELY USING GIT."""
 
     name = "mod_git"
     pattern = r"<@git:([^>:]+?)(?::([^>]+))?>"
@@ -374,7 +385,7 @@ class GitMod(MentionMod):
 
 
 class SymbolMod(MentionMod):
-    """Invokes AST extraction processes parsing nested references."""
+    """INVOKES AST EXTRACTION PROCESSES PARSING NESTED REFERENCES."""
 
     name = "mod_symbol"
     pattern = r"<@symbol:([^>:]+?)(?::([^>]+))?>"

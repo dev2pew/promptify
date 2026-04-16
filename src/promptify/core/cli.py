@@ -1,3 +1,7 @@
+"""
+COMMAND LINE INTERFACE PARSING AND DEFINITION ARCHITECTURE.
+"""
+
 import argparse
 import re
 from dataclasses import dataclass
@@ -7,8 +11,8 @@ from typing import Optional
 @dataclass
 class CLIConfig:
     """
-    Configuration parameters for running promptify programmatically or via CLI.
-    This docstring dynamically populates the CLI help command.
+    CONFIGURATION PARAMETERS FOR RUNNING PROMPTIFY PROGRAMMATICALLY OR VIA CLI.
+    THIS DOCSTRING DYNAMICALLY POPULATES THE CLI HELP COMMAND.
 
     Args:
         case (str): Choose case by their name defined in the config.json. On duplicate, errors out and notifies that only normal mode supports duplicates, and if they want to use CLI, then the user needs to adjust their cases to not contain duplicate names. Accepts case name as a string. No default.
@@ -22,7 +26,7 @@ class CLIConfig:
 
 
 def extract_help_from_docstring(cls: type) -> dict[str, str]:
-    """Dynamically pulls docstrings from the source code to ensure synchronization."""
+    """DYNAMICALLY PULLS DOCSTRINGS FROM THE SOURCE CODE TO ENSURE SYNCHRONIZATION."""
     doc = cls.__doc__ or ""
     helps = {}
     for line in doc.splitlines():
@@ -34,7 +38,7 @@ def extract_help_from_docstring(cls: type) -> dict[str, str]:
 
 
 def parse_cli_args(args: list[str] | None = None) -> CLIConfig:
-    """Parses sys.argv using dynamically injected docstrings."""
+    """PARSES SYS.ARGV USING DYNAMICALLY INJECTED DOCSTRINGS."""
     helps = extract_help_from_docstring(CLIConfig)
 
     parser = argparse.ArgumentParser(

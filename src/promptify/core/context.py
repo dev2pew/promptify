@@ -1,6 +1,6 @@
 """
-Project context management providing asynchronous, sandboxed I/O access
-to source files, directories, and AST symbols.
+PROJECT CONTEXT MANAGEMENT PROVIDING ASYNCHRONOUS, SANDBOXED I/O ACCESS
+TO SOURCE FILES, DIRECTORIES, AND AST SYMBOLS.
 """
 
 import asyncio
@@ -15,7 +15,7 @@ from ..utils.i18n import strings
 
 
 class ProjectContext:
-    """Provides sandboxed, asynchronous, size-limited access to project resources."""
+    """PROVIDES SANDBOXED, ASYNCHRONOUS, SIZE-LIMITED ACCESS TO PROJECT RESOURCES."""
 
     IO_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_READS)
     MAX_FILE_SIZE = MAX_FILE_SIZE
@@ -28,7 +28,7 @@ class ProjectContext:
         has_git: bool = False,
     ):
         """
-        Initializes the context linking the project path to the indexer.
+        INITIALIZES THE CONTEXT LINKING THE PROJECT PATH TO THE INDEXER.
 
         Args:
             target_dir (Path): The absolute root path of the project.
@@ -44,7 +44,7 @@ class ProjectContext:
 
     def is_sandboxed(self, path: Path) -> bool:
         """
-        Enforces absolute sandboxing to the target directory.
+        ENFORCES ABSOLUTE SANDBOXING TO THE TARGET DIRECTORY.
 
         Args:
             path (Path): Path to verify.
@@ -56,7 +56,7 @@ class ProjectContext:
 
     async def get_file_content(self, query: str, range_str: str | None = None) -> str:
         """
-        Retrieves formatted file content with optional line slicing.
+        RETRIEVES FORMATTED FILE CONTENT WITH OPTIONAL LINE SLICING.
 
         Args:
             query (str): File path or fuzzy search string.
@@ -67,7 +67,9 @@ class ProjectContext:
         """
         matches = self.indexer.find_matches(query)
         if not matches:
-            return strings["err_file_not_found"].format(query=query)
+            return strings.get("err_file_not_found", "file not found").format(
+                query=query
+            )
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -80,7 +82,7 @@ class ProjectContext:
 
     async def get_type_contents(self, exts_str: str) -> str:
         """
-        Retrieves all project files matching specific extensions.
+        RETRIEVES ALL PROJECT FILES MATCHING SPECIFIC EXTENSIONS.
 
         Args:
             exts_str (str): Comma-separated list of extensions (e.g., "py,md").
@@ -92,7 +94,9 @@ class ProjectContext:
         matches = self.indexer.get_by_extensions(exts)
 
         if not matches:
-            return strings["err_type_not_found"].format(exts=exts_str)
+            return strings.get("err_type_not_found", "type not found").format(
+                exts=exts_str
+            )
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -104,7 +108,7 @@ class ProjectContext:
 
     async def get_dir_contents(self, dir_query: str) -> str:
         """
-        Retrieves all files contained within a specific directory.
+        RETRIEVES ALL FILES CONTAINED WITHIN A SPECIFIC DIRECTORY.
 
         Args:
             dir_query (str): The relative directory path.
@@ -118,7 +122,7 @@ class ProjectContext:
         ]
 
         if not matches:
-            return strings["err_dir_empty"].format(query=dir_query)
+            return strings.get("err_dir_empty", "dir empty").format(query=dir_query)
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -132,7 +136,7 @@ class ProjectContext:
         self, dir_query: str, depth_str: str | None = None
     ) -> str:
         """
-        Retrieves a formatted tree directory structure mapping.
+        RETRIEVES A FORMATTED TREE DIRECTORY STRUCTURE MAPPING.
 
         Args:
             dir_query (str): The relative directory path.
@@ -145,14 +149,16 @@ class ProjectContext:
         target = (self.target_dir / clean_dir).resolve()
 
         if not target.is_relative_to(self.target_dir.resolve()):
-            return strings.get("err_access_denied", "").format(path=clean_dir)
+            return strings.get("err_access_denied", "access denied").format(
+                path=clean_dir
+            )
 
         rel_target = str(target.relative_to(self.target_dir)).replace("\\", "/")
         if rel_target == ".":
             rel_target = ""
 
         if rel_target and rel_target not in self.indexer.dirs:
-            return strings["err_dir_empty"].format(query=dir_query)
+            return strings.get("err_dir_empty", "dir empty").format(query=dir_query)
 
         max_depth = None
         if depth_str:
@@ -165,7 +171,7 @@ class ProjectContext:
 
     async def get_symbol_content(self, query: str, symbol_name: str) -> str:
         """
-        Retrieves a specifically requested AST symbol from a file.
+        RETRIEVES A SPECIFICALLY REQUESTED AST SYMBOL FROM A FILE.
 
         Args:
             query (str): The file containing the symbol.
@@ -179,11 +185,15 @@ class ProjectContext:
 
         matches = self.indexer.find_matches(query)
         if not matches:
-            return strings["err_file_not_found"].format(query=query)
+            return strings.get("err_file_not_found", "file not found").format(
+                query=query
+            )
 
         meta = matches[0]
         if meta.size > self.MAX_FILE_SIZE:
-            return strings["err_file_too_large"].format(path=meta.rel_path)
+            return strings.get("err_file_too_large", "file too large").format(
+                path=meta.rel_path
+            )
 
         content = await self._read_cached(meta)
 
@@ -193,17 +203,16 @@ class ProjectContext:
             extractor = SymbolExtractor(content, meta.path.name)
             extracted = extractor.extract(symbol_name)
             if not extracted:
-                return strings.get(
-                    "symbol_not_found",
-                    "",
-                ).format(symbol=symbol_name, path=meta.rel_path)
+                return strings.get("symbol_not_found", "symbol not found").format(
+                    symbol=symbol_name, path=meta.rel_path
+                )
             return f"- `{meta.rel_path}:{symbol_name}`\n\n```{meta.ext}\n{extracted}\n```\n"
         except ValueError as e:
-            return strings.get("symbol_error", "").format(error=e)
+            return strings.get("symbol_error", "symbol error").format(error=e)
 
     async def get_git_diff(self, path: str | None = None) -> str:
         """
-        Retrieves the working tree differences for the project or specific file.
+        RETRIEVES THE WORKING TREE DIFFERENCES FOR THE PROJECT OR SPECIFIC FILE.
 
         Args:
             path (str | None): Target path to isolate the diff.
@@ -226,18 +235,18 @@ class ProjectContext:
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            return strings.get("git_diff_error", "").format(
+            return strings.get("git_diff_error", "git diff error").format(
                 error=stderr.decode(errors="replace").strip()
             )
 
         diff_text = stdout.decode(errors="replace")
         if not diff_text.strip():
-            return strings.get("no_changes", "")
+            return strings.get("no_changes", "no changes")
         return f"```diff\n{diff_text}\n```\n"
 
     async def get_git_status(self) -> str:
         """
-        Retrieves the working tree status.
+        RETRIEVES THE WORKING TREE STATUS.
 
         Returns:
             str: Git status output.
@@ -255,18 +264,18 @@ class ProjectContext:
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            return strings.get("git_status_error", "").format(
+            return strings.get("git_status_error", "git status error").format(
                 error=stderr.decode(errors="replace").strip()
             )
 
         status_text = stdout.decode(errors="replace")
         if not status_text.strip():
-            return strings.get("working_tree_clean", "")
+            return strings.get("working_tree_clean", "clean tree")
         return f"```log\n{status_text}\n```\n"
 
     async def _read_and_format(self, meta: FileMeta, range_str: str | None) -> str:
         """
-        Core I/O process applying rules, limits, caching, and text formatting.
+        CORE I/O PROCESS APPLYING RULES, LIMITS, CACHING, AND TEXT FORMATTING.
 
         Args:
             meta (FileMeta): Target file metadata.
@@ -276,10 +285,14 @@ class ProjectContext:
             str: The evaluated final markdown block.
         """
         if meta.size > self.MAX_FILE_SIZE:
-            return strings["err_file_too_large"].format(path=meta.rel_path)
+            return strings.get("err_file_too_large", "file too large").format(
+                path=meta.rel_path
+            )
 
         if not self.is_sandboxed(meta.path):
-            return strings.get("err_access_denied", "").format(path=meta.rel_path)
+            return strings.get("err_access_denied", "access denied").format(
+                path=meta.rel_path
+            )
 
         content = await self._read_cached(meta)
         lines = content.splitlines(keepends=True)
@@ -289,7 +302,7 @@ class ProjectContext:
             if omitted > 0:
                 syntax = strings.get("comment_syntax", {}).get(meta.ext, ["// ", ""])
                 prefix, suffix = syntax[0], syntax[1]
-                notice = strings["truncation_notice"].format(
+                notice = strings.get("truncation_notice", "truncated").format(
                     prefix=prefix, omitted=omitted, suffix=suffix
                 )
                 lines.append(notice)
@@ -299,7 +312,7 @@ class ProjectContext:
 
     async def _read_cached(self, meta: FileMeta) -> str:
         """
-        Reads file content securely from disk, leveraging an mtime cache.
+        READS FILE CONTENT SECURELY FROM DISK, LEVERAGING AN MTIME CACHE.
 
         Args:
             meta (FileMeta): Data object for the file to read.
@@ -322,7 +335,7 @@ class ProjectContext:
 
     def _apply_range(self, lines: list[str], range_str: str) -> tuple[list[str], int]:
         """
-        Evaluates limits like 'first 200', 'last 100', '10-20', or '#L45'.
+        EVALUATES LIMITS LIKE 'FIRST 200', 'LAST 100', '10-20', OR '#L45'.
 
         Args:
             lines (list[str]): The original array of text lines.
@@ -333,7 +346,9 @@ class ProjectContext:
         """
         range_str = range_str.strip().lower()
         total = len(lines)
-        error_msg = strings["err_invalid_range"].format(range=range_str)
+        error_msg = strings.get("err_invalid_range", "invalid range").format(
+            range=range_str
+        )
 
         if range_str.startswith("first "):
             try:
@@ -368,7 +383,7 @@ class ProjectContext:
 
     def generate_tree(self, root_rel: str = "", max_depth: int | None = None) -> str:
         """
-        Recreates the classic Windows 'TREE /F' command style map of the index.
+        RECREATES THE CLASSIC WINDOWS 'TREE /F' COMMAND STYLE MAP OF THE INDEX.
 
         Args:
             root_rel (str): Starting point inside the project for tree evaluation.
@@ -385,9 +400,11 @@ class ProjectContext:
             header_name = root_rel.split("/")[-1]
 
         tree_str = [
-            strings["tree_header_1"],
-            strings["tree_header_2"].format(name=header_name),
-            strings["tree_header_3"],
+            strings.get("tree_header_1", "TREE /F"),
+            strings.get("tree_header_2", "Folder PATH for {name}").format(
+                name=header_name
+            ),
+            strings.get("tree_header_3", "C:."),
         ]
 
         search_prefix = root_rel + "/" if root_rel else ""

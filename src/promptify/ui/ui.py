@@ -1,5 +1,5 @@
 """
-CLI UI helpers for printing columnized lists and formatted menus.
+CLI UI HELPERS FOR PRINTING COLUMNIZED LISTS AND FORMATTED MENUS.
 """
 
 import shutil
@@ -10,7 +10,7 @@ from prompt_toolkit import print_formatted_text, HTML
 
 def format_index(i: int) -> str:
     """
-    Format sequence menu indicators matching visual alignments structure configurations appropriately cleanly consistently natively correctly directly.
+    FORMAT SEQUENCE MENU INDICATORS MATCHING VISUAL ALIGNMENTS STRUCTURE CONFIGURATIONS APPROPRIATELY CLEANLY CONSISTENTLY NATIVELY CORRECTLY DIRECTLY.
 
     Args:
         i (int): Reference selection marker.
@@ -26,7 +26,7 @@ def format_index(i: int) -> str:
 
 def print_columnized(items: list[str]) -> None:
     """
-    Prints a grid of selections fitting horizontally bounded screen dimensions natively without visual wrapping flaws precisely mapped correctly seamlessly safely directly.
+    PRINTS A GRID OF SELECTIONS FITTING HORIZONTALLY BOUNDED SCREEN DIMENSIONS NATIVELY WITHOUT VISUAL WRAPPING FLAWS PRECISELY MAPPED CORRECTLY SEAMLESSLY SAFELY DIRECTLY.
 
     Args:
         items (list[str]): Structured list of configuration definitions objects target targets outputs.
@@ -60,7 +60,7 @@ def print_columnized(items: list[str]) -> None:
 
 def print_modes(modes: list[tuple[str, str]]) -> None:
     """
-    Formats multi-line structure mapped interaction states matching spacing configurations correctly aligning options seamlessly strictly safely consistently accurately native output generation mapping logic outputs perfectly natively.
+    FORMATS MULTI-LINE STRUCTURE MAPPED INTERACTION STATES MATCHING SPACING CONFIGURATIONS CORRECTLY ALIGNING OPTIONS SEAMLESSLY STRICTLY SAFELY CONSISTENTLY ACCURATELY NATIVE OUTPUT GENERATION MAPPING LOGIC OUTPUTS PERFECTLY NATIVELY.
 
     Args:
         modes (list[tuple[str, str]]): List describing option maps formatting titles representations matching strings appropriately.

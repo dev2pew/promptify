@@ -1,3 +1,7 @@
+"""
+UNIT TESTS FOR REAL-TIME DIRECTORY WATCHING AND STATE UPDATING.
+"""
+
 import pytest
 from watchdog.events import FileCreatedEvent, FileDeletedEvent
 
@@ -5,7 +9,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_indexer_build(app_components):
-    """Tests if the indexer builds the correct file tree initially."""
+    """TESTS IF THE INDEXER BUILDS THE CORRECT FILE TREE INITIALLY."""
     context, _ = app_components
     indexer = context.indexer
     assert "app.py" in indexer.files_by_rel
@@ -15,7 +19,7 @@ async def test_indexer_build(app_components):
 
 
 async def test_indexer_find_matches(app_components):
-    """Tests exact, glob, and fuzzy matching."""
+    """TESTS EXACT, GLOB, AND FUZZY MATCHING."""
     context, _ = app_components
     indexer = context.indexer
     # EXACT
@@ -27,7 +31,7 @@ async def test_indexer_find_matches(app_components):
 
 
 async def test_indexer_extensions(app_components):
-    """Tests extension indexing and retrieval."""
+    """TESTS EXTENSION INDEXING AND RETRIEVAL."""
     context, _ = app_components
     indexer = context.indexer
     exts = indexer.get_all_extensions()
@@ -39,7 +43,7 @@ async def test_indexer_extensions(app_components):
 
 
 async def test_indexer_events(app_components, test_sandbox):
-    """Tests the thread-safe state update triggered by filesystem changes."""
+    """TESTS THE THREAD-SAFE STATE UPDATE TRIGGERED BY FILESYSTEM CHANGES."""
     context, _ = app_components
     indexer = context.indexer
     demo_dir = test_sandbox["demo"]
