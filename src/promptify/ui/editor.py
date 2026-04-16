@@ -614,8 +614,8 @@ class InteractiveEditor:
                 "mention-class": "fg:#00ff00 bold",  # BRIGHT GREEN: MYCLASS
                 "mention-function": "fg:#5555ff",  # BLUE: MY_FUNC
                 "mention-method": "fg:#55ffff",  # LIGHT CYAN: METHOD
-                # INVALID SYNTAX OVERRIDE (RED BG, BLACK FG)
-                "invalid-syntax": "bg:#ff0000 fg:#000000",
+                # INVALID SYNTAX OVERRIDE (RED BG, WHITE FG)
+                "invalid-syntax": "bg:#ff0000 fg:#ffffff",
                 # HELP MENU OVERRIDES
                 "help-header": "fg:#00ff00 bold",  # GREEN SECTION HEADERS
                 "help-key": "fg:#ffff00",  # YELLOW NAVIGATION KEYS
