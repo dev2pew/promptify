@@ -1,20 +1,5 @@
 # TODO
 
-## SEARCH
-
-improve search user experience...
-
-ensure the overall search experience is similar to `nano` text editor. ensure to add basic hotkeys and controls which user expects from a text editor. (related to search)
-
-- [^F] triggers search;
-- user can do basic editing in search field;
-    + cut, copy, paste, select, select all, arrows;
-- in search mode...
-    + ENTER - find next;
-    + SHIFT ENTER - find previous;
-    + ESC - leave search mode;
-- user can use HELP while in search mode.
-
 ## TOKEN
 
 improve estimated token counter...
@@ -44,7 +29,7 @@ improve `file` mod...
 5
 ...
 
-```
+- ...and on other number select, automatically close the tag.
 
 ## SPEED
 
