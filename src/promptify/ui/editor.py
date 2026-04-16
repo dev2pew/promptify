@@ -278,7 +278,7 @@ if HAS_PYGMENTS:
                     start, end = m.span()
                     m_text = m.group(0)
 
-                    # 1. RECOVER ORIGINAL MARKDOWN TOKENS BEFORE THE MATCH
+                    # RECOVER ORIGINAL MARKDOWN TOKENS BEFORE THE MATCH
                     curr_style = None
                     curr_text = []
                     for i in range(last_idx, start):
@@ -293,7 +293,7 @@ if HAS_PYGMENTS:
                     if curr_text:
                         new_tokens.append((curr_style, "".join(curr_text)))
 
-                    # 2. INJECT GRANULAR MENTION TOKENS OR INVALID STYLING
+                    # INJECT GRANULAR MENTION TOKENS OR INVALID STYLING
                     if not self.is_valid_mention(m_text):
                         new_tokens.append(("class:invalid-syntax", m_text))
                     else:
@@ -301,7 +301,7 @@ if HAS_PYGMENTS:
 
                     last_idx = end
 
-                # 3. RECOVER ORIGINAL MARKDOWN TOKENS AFTER THE LAST MATCH
+                # RECOVER ORIGINAL MARKDOWN TOKENS AFTER THE LAST MATCH
                 curr_style = None
                 curr_text = []
                 for i in range(last_idx, len(chars)):
@@ -325,9 +325,11 @@ class HelpLexer(Lexer):
     """ROBUST REGEX-BASED LEXER FOR THE HELP WINDOW TEXT."""
 
     def __init__(self):
-        # 1. HEADERS: [ GENERAL ]
+
+        # HEADERS: [ GENERAL ]
         self.header_re = re.compile(r"^\s*\[ .* \]\s*$")
-        # 2. MENTIONS OR KEYS: <@...> | [@PROJECT] | ^[X]
+
+        # MENTIONS OR KEYS: <@...> | [@PROJECT] | ^[X]
         self.combined_re = re.compile(r"(<@[^>]+>|\[@project\])|(\^?\[[^\]]+\])")
 
     def lex_document(self, document: Document):

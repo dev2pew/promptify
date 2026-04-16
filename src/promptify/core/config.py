@@ -92,15 +92,17 @@ class CaseConfig:
         if file_path.is_file() and self.types and "*" not in self.types:
             matched = False
             for t in self.types:
-                # 1. EXACT MATCH
+                # EXACT MATCH
                 if rel_path == t or file_path.name == t:
                     matched = True
                     break
-                # 2. GLOB MATCH (.GITHUB/WORKFLOWS/*.YML)
+
+                # GLOB MATCH (.GITHUB/WORKFLOWS/*.YML)
                 if fnmatch.fnmatch(rel_path, t) or fnmatch.fnmatch(file_path.name, t):
                     matched = True
                     break
-                # 3. EXTENSION MATCH (.TRAVIS.YML, .YML)
+
+                # EXTENSION MATCH (.TRAVIS.YML, .YML)
                 if t.startswith(".") and file_path.name.endswith(t):
                     matched = True
                     break

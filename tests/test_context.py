@@ -130,7 +130,8 @@ async def test_git_mentions(app_components):
             "error: git not available",
             clean_state,
             error_state,
-            "```log",  # <--- FIXES THE FAILURE WHEN YOU HAVE UNCOMMITTED CHANGES
+            # FIXES THE FAILURE WHEN YOU HAVE UNCOMMITTED CHANGES
+            "```log",
         ]
     ), f"Unexpected git status result: {result!r}"
 
@@ -139,7 +140,7 @@ async def test_tree_depth_mentions(app_components):
     """TESTS `<@TREE:PATH:LEVEL>` PROPERLY LIMITS THE RECURSIVE DEPTH."""
     context, _ = app_components
 
-    # 1. EVALUATE DEPTH RESTRICTION MECHANISM
+    # EVALUATE DEPTH RESTRICTION MECHANISM
     scoped_tree = await context.get_tree_contents("src", depth_str="1")
     assert "tree_header_1" not in scoped_tree
     assert "main.py" in scoped_tree

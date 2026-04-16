@@ -32,12 +32,12 @@ def test_sandbox():
     if root.exists():
         shutil.rmtree(root)
 
-    # 1. CREATE DIRECTORIES
+    # CREATE DIRECTORIES
     demo_dir.mkdir(parents=True)
     case_dir.mkdir(parents=True)
     outs_dir.mkdir(parents=True)
 
-    # 2. GENERATE DEMO PROJECT FILES
+    # GENERATE DEMO PROJECT FILES
     # 20-LINE FILE FOR RANGE TESTING
     lines = [f"print('This is line {i}')" for i in range(1, 21)]
     (demo_dir / "app.py").write_text("\n".join(lines), encoding="utf-8")
@@ -60,7 +60,7 @@ def test_sandbox():
     (src_dir / "main.py").write_text("def main():\n    pass\n", encoding="utf-8")
     (src_dir / "utils.py").write_text("def util():\n    pass\n", encoding="utf-8")
 
-    # 3. GENERATE CASE CONFIGURATION
+    # GENERATE CASE CONFIGURATION
     (case_dir / "config.json").write_text(
         '{"name": "test_case", "types": ["*"]}', encoding="utf-8"
     )
@@ -72,7 +72,7 @@ def test_sandbox():
 
     yield {"root": root, "demo": demo_dir, "case": case_dir, "outs": outs_dir}
 
-    # 4. TEARDOWN SANDBOX
+    # TEARDOWN SANDBOX
     if root.exists():
         shutil.rmtree(root)
 

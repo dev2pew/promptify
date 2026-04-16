@@ -272,7 +272,7 @@ class TreeMod(MentionMod):
             path = match_depth.group(1)
             partial = match_depth.group(2)
 
-            # 1. IDENTIFY MAX AVAILABLE DEPTH FOR THE PATH IN REAL-TIME
+            # IDENTIFY MAX AVAILABLE DEPTH FOR THE PATH IN REAL-TIME
             clean_dir = path.replace("\\", "/").strip("/")
             max_depth = 1
             for d in indexer.dirs:
