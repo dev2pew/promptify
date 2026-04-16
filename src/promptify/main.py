@@ -275,7 +275,7 @@ class App:
                 indexer.stop_watching()
                 return
 
-        # --- EXECUTION ---
+        # EXECUTION
         try:
             if mode == 1:
                 await self.run_legacy_mode(case, resolver)
