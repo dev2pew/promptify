@@ -206,6 +206,21 @@ class FileMod(MentionMod):
     name = "mod_file"
     pattern = r"<@file:([^>]+?)(?::([^>]+))?>"
 
+    def __init__(self):
+        self._lines_cache: dict[str, tuple[float, int]] = {}
+
+    def _get_lines_count(self, meta: "FileMeta") -> int:
+        cached = self._lines_cache.get(meta.rel_path)
+        if cached and cached[0] == meta.mtime:
+            return cached[1]
+        try:
+            with open(meta.path, "rb") as f:
+                lines_count = sum(1 for _ in f)
+            self._lines_cache[meta.rel_path] = (meta.mtime, lines_count)
+            return lines_count
+        except Exception:
+            return 0
+
     async def resolve(self, text: str, context: "ProjectContext") -> str:
         m = re.match(self.pattern, text)
         return await context.get_file_content(m.group(1), m.group(2))
@@ -215,25 +230,121 @@ class FileMod(MentionMod):
     ) -> Iterable[Completion]:
         match_range = re.search(r"<@file:([^>:]+):([^><]*)$", text_before_cursor)
         if match_range:
-            meta = indexer.files_by_rel.get(match_range.group(1))
-            if meta:
-                try:
-                    with open(meta.path, "rb") as f:
-                        lines = sum(1 for _ in f)
-                    yield Completion(
-                        "",
-                        start_position=0,
-                        display=f"[{lines} lines available]",
-                    )
-                except Exception:
-                    pass
+            path = match_range.group(1)
+            partial = match_range.group(2).lower()
+
+            meta = indexer.files_by_rel.get(path)
+            if not meta:
+                return
+
+            lines_count = self._get_lines_count(meta)
+            if lines_count == 0:
+                return
+
+            if not partial:
+                yield Completion("first ", start_position=0, display="first [n]")
+                yield Completion("last ", start_position=0, display="last [n]")
+                yield Completion("", start_position=0, display="[n]-[m]")
+                yield Completion("#", start_position=0, display="#[n]")
+                return
+
+            if partial.startswith("first ") or partial.startswith("last "):
+                num_part = partial[6:]
+                count = 0
+                for i in range(1, lines_count + 1):
+                    s = str(i)
+                    if s.startswith(num_part):
+                        yield Completion(
+                            s + ">", start_position=-len(num_part), display=s + ">"
+                        )
+                        count += 1
+                        if count >= 15:
+                            break
+                return
+
+            if partial.startswith("#"):
+                num_part = partial[1:]
+                count = 0
+                for i in range(1, lines_count + 1):
+                    s = str(i)
+                    if s.startswith(num_part):
+                        yield Completion(
+                            s + ">", start_position=-len(num_part), display=s + ">"
+                        )
+                        count += 1
+                        if count >= 15:
+                            break
+                return
+
+            if "-" in partial:
+                parts = partial.split("-")
+                if len(parts) == 2:
+                    start_num = parts[0]
+                    num_part = parts[1]
+                    try:
+                        start_idx = int(start_num)
+                    except ValueError:
+                        start_idx = 1
+
+                    count = 0
+                    for i in range(start_idx, lines_count + 1):
+                        s = str(i)
+                        if s.startswith(num_part):
+                            yield Completion(
+                                s + ">", start_position=-len(num_part), display=s + ">"
+                            )
+                            count += 1
+                            if count >= 15:
+                                break
+                return
+
+            if partial.isdigit():
+                count = 0
+                for i in range(1, lines_count + 1):
+                    s = str(i)
+                    if s.startswith(partial):
+                        yield Completion(
+                            s + "-", start_position=-len(partial), display=s + "-"
+                        )
+                        count += 1
+                        if count >= 15:
+                            break
+                return
+
+            for c, d in [("first ", "first [n]"), ("last ", "last [n]")]:
+                if c.startswith(partial):
+                    yield Completion(c, start_position=-len(partial), display=d)
             return
 
         match_path = re.search(r"<@file:([^><]*)$", text_before_cursor)
         if match_path:
-            yield from fuzzy_complete(
-                match_path.group(1), list(indexer.files_by_rel.keys())
+            partial = match_path.group(1)
+
+            if not partial:
+                for c in sorted(list(indexer.files_by_rel.keys()))[:15]:
+                    yield Completion(c, start_position=0, display=c)
+                return
+
+            results = process.extract(
+                partial,
+                list(indexer.files_by_rel.keys()),
+                limit=15,
+                processor=fuzz_utils.default_process,
             )
+            matched_items = [res[0] for res in results if res[1] > 40] or [
+                res[0] for res in results
+            ]
+
+            for c in matched_items:
+                if c == partial:
+                    yield Completion(
+                        c + ">", start_position=-len(partial), display=f"{c}>"
+                    )
+                    yield Completion(
+                        c + ":", start_position=-len(partial), display=f"{c}:"
+                    )
+                else:
+                    yield Completion(c, start_position=-len(partial), display=c)
 
 
 class DirMod(MentionMod):

@@ -161,35 +161,35 @@ if HAS_PYGMENTS:
             else:
                 add_sep()
                 tokens.append(("class:mention-git-cmd", rest))
-
-        elif tag_type in ("file", "symbol"):
+        elif tag_type in ("file", "symbol", "tree"):
             # STRUCTURE: <@TAG:PATH:ARG2>
-            # USE RSPLIT IN CASE THE PATH CONTAINS COLONS (E.G., C:/...)
-            if ":" in rest:
-                path, arg2 = rest.rsplit(":", 1)
+            # USE REGEX TO SAFELY SPLIT PATH AND OPTIONAL ARGUMENT, RESPECTING WINDOWS PATHS (E.G., C:/...)
+            m = re.match(r"^([^>]+?)(?::([^>:]+))?$", rest)
+            if m:
+                path, arg2 = m.groups()
                 add_sep()
                 tokens.append(("class:mention-path", path))
-                add_sep()
-
-                if tag_type == "symbol":
-                    if "." in arg2:
-                        cls, dot, method = arg2.partition(".")
-                        tokens.append(("class:mention-class", cls))
-                        tokens.append(("", dot))
-                        tokens.append(("class:mention-method", method))
-                    elif arg2 and arg2[0].isupper():
-                        tokens.append(("class:mention-class", arg2))
-                    else:
-                        tokens.append(("class:mention-function", arg2))
-                elif tag_type == "tree":
-                    tokens.append(("class:mention-depth", arg2))
-                else:  # FILE
-                    tokens.append(("class:mention-range", arg2))
+                if arg2:
+                    add_sep()
+                    if tag_type == "symbol":
+                        if "." in arg2:
+                            cls, dot, method = arg2.partition(".")
+                            tokens.append(("class:mention-class", cls))
+                            tokens.append(("", dot))
+                            tokens.append(("class:mention-method", method))
+                        elif arg2 and arg2[0].isupper():
+                            tokens.append(("class:mention-class", arg2))
+                        else:
+                            tokens.append(("class:mention-function", arg2))
+                    elif tag_type == "tree":
+                        tokens.append(("class:mention-depth", arg2))
+                    else:  # FILE
+                        tokens.append(("class:mention-range", arg2))
             else:
                 add_sep()
                 tokens.append(("class:mention-path", rest))
 
-        elif tag_type == "ext":
+        elif tag_type in ("ext", "type"):
             # STRUCTURE: <@EXT:LIST>
             add_sep()
             tokens.append(("class:mention-ext", rest))
@@ -209,7 +209,7 @@ if HAS_PYGMENTS:
             self.md_lexer = PygmentsLexer(MarkdownLexer)
             self.registry = registry
             self.indexer = indexer
-            self.mention_pattern = re.compile(r"<@[^>\s]+(?:>|$)|\[@project\]")
+            self.mention_pattern = re.compile(r"<@[^>\n]+(?:>|$)|\[@project\]")
 
         def is_valid_mention(self, text: str) -> bool:
             """VALIDATES THE INTEGRITY OF A MENTION AND ITS EXISTENCE IN THE INDEXER."""

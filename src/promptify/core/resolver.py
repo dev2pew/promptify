@@ -24,11 +24,12 @@ class PromptResolver:
         self.registry = registry
         if self.registry.pattern is None:
             self.registry.build()
+        self._estimate_cache: dict[str, tuple[float, int]] = {}
 
     async def estimate_tokens(self, text: str) -> int:
         """
         CALCULATES AN ULTRA-FAST ESTIMATION OF TOKENS BASED STRICTLY ON
-        SIZES PROVIDED BY THE IN-MEMORY INDEXER WITHOUT EXECUTING FULL FILE READS.
+        SIZES PROVIDED BY THE IN-MEMORY INDEXER AND CACHED RESOLUTIONS.
         """
         matches = list(self.registry.pattern.finditer(text))
         if not matches:
@@ -39,16 +40,24 @@ class PromptResolver:
 
         for m in matches:
             try:
-                mod, _ = self.registry.get_mod_and_text(m)
+                mod, match_text = self.registry.get_mod_and_text(m)
 
                 if mod.name == "mod_file":
-                    match_path = re.match(r"<@file:([^>:]+)", m.group(0))
+                    match_path = re.match(r"<@file:([^>:]+?)(?::([^>]+))?>", match_text)
                     if match_path:
                         files = self.context.indexer.find_matches(match_path.group(1))
                         if files:
-                            added_len += files[0].size
+                            meta = files[0]
+                            range_str = match_path.group(2)
+                            if range_str:
+                                content = await self.context._read_cached(meta)
+                                lines = content.splitlines(keepends=True)
+                                lines, _ = self.context._apply_range(lines, range_str)
+                                added_len += sum(len(line) for line in lines)
+                            else:
+                                added_len += meta.size
                 elif mod.name == "mod_dir":
-                    match_path = re.match(r"<@dir:([^>]+)>", m.group(0))
+                    match_path = re.match(r"<@dir:([^>]+)>", match_text)
                     if match_path:
                         clean_dir = match_path.group(1).lstrip("/\\")
                         files = [
@@ -58,7 +67,7 @@ class PromptResolver:
                         ]
                         added_len += sum(f.size for f in files)
                 elif mod.name == "mod_ext":
-                    match_path = re.match(r"<@(type|ext):([^>]+)>", m.group(0))
+                    match_path = re.match(r"<@(type|ext):([^>]+)>", match_text)
                     if match_path:
                         exts = list(
                             dict.fromkeys(
@@ -68,14 +77,37 @@ class PromptResolver:
                         )
                         files = self.context.indexer.get_by_extensions(exts)
                         added_len += sum(f.size for f in files)
-                elif mod.name in ("mod_tree", "mod_project"):
-                    added_len += len(self.context.indexer.files_by_rel) * 45
-                elif mod.name == "mod_symbol":
-                    match_path = re.match(r"<@symbol:([^>:]+)", m.group(0))
+                elif mod.name == "mod_tree":
+                    match_path = re.match(r"<@tree:([^>:]+?)(?::([^>]+))?>", match_text)
                     if match_path:
-                        files = self.context.indexer.find_matches(match_path.group(1))
-                        if files:
-                            added_len += files[0].size // 4
+                        tree_str = await self.context.get_tree_contents(
+                            match_path.group(1), match_path.group(2)
+                        )
+                        added_len += len(tree_str)
+                elif mod.name == "mod_project":
+                    tree_str = self.context.generate_tree()
+                    added_len += len(tree_str)
+                elif mod.name == "mod_symbol":
+                    match_path = re.match(
+                        r"<@symbol:([^>:]+?)(?::([^>]+))?>", match_text
+                    )
+                    if match_path:
+                        symbol_content = await self.context.get_symbol_content(
+                            match_path.group(1), match_path.group(2)
+                        )
+                        added_len += len(symbol_content)
+                elif mod.name == "mod_git":
+                    now = asyncio.get_running_loop().time()
+                    if match_text in self._estimate_cache:
+                        cached_time, cached_len = self._estimate_cache[match_text]
+                        if now - cached_time < 5.0:
+                            added_len += cached_len
+                            continue
+
+                    git_content = await mod.resolve(match_text, self.context)
+                    length = len(git_content)
+                    self._estimate_cache[match_text] = (now, length)
+                    added_len += length
             except Exception:
                 pass
 
