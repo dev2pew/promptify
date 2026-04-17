@@ -68,6 +68,25 @@ async def test_file_mentions_outside_project_are_invalid(app_components):
     assert not lexer.is_valid_mention("<@file:../app.py>")
 
 
+async def test_root_dir_mentions_are_valid(app_components):
+    """ROOT-SCOPED DIR/TREE MENTIONS SHOULD MATCH RESOLVER BEHAVIOR."""
+    context, resolver = app_components
+    lexer = CustomPromptLexer(resolver.registry, context.indexer, resolver)
+
+    assert lexer.is_valid_mention("<@dir:/>")
+    assert lexer.is_valid_mention("<@tree:/>")
+
+
+async def test_symbol_mentions_follow_resolver_validation(app_components):
+    """SYMBOL VALIDATION SHOULD ACCEPT OPTIONAL SYMBOL PARTS BUT REJECT ESCAPES."""
+    context, resolver = app_components
+    lexer = CustomPromptLexer(resolver.registry, context.indexer, resolver)
+
+    assert lexer.is_valid_mention("<@symbol:app.py>")
+    assert lexer.is_valid_mention("<@symbol:app.py:main>")
+    assert not lexer.is_valid_mention("<@symbol:../app.py:main>")
+
+
 async def test_estimate_tokens_caches_expensive_tree_lookups(
     app_components, monkeypatch
 ):

@@ -242,6 +242,8 @@ if HAS_PYGMENTS:
                     p = re.match(r"<@(dir|tree):([^>:]+)", text)
                     if p:
                         clean = p.group(2).replace("\\", "/").strip("/")
+                        if clean == "":
+                            return True
                         if not self.resolver.context.is_safe_query_path(clean):
                             return False
                         if (
@@ -251,8 +253,13 @@ if HAS_PYGMENTS:
                         ):
                             return False
                 elif mod.name == "mod_symbol":
-                    p = re.match(r"<@symbol:([^>:]+):([^>]+)>", text)
-                    if not p or not self.indexer.find_matches(p.group(1)):
+                    p = re.match(r"<@symbol:([^>:]+?)(?::([^>]+))?>", text)
+                    if not p:
+                        return False
+                    path = p.group(1)
+                    if not self.resolver.context.is_safe_query_path(path):
+                        return False
+                    if not self.indexer.find_matches(path):
                         return False
                 elif mod.name == "mod_ext":
                     p = re.match(r"<@(type|ext):([^>]+)>", text)
