@@ -4,6 +4,7 @@ UNIT TESTS VERIFYING THE RELIABILITY OF THE MENTION EVALUATION ENGINE.
 
 import pytest
 from promptify.utils.i18n import strings
+from promptify.ui.editor import CustomPromptLexer
 
 pytestmark = pytest.mark.asyncio
 
@@ -56,3 +57,34 @@ async def test_invalid_syntax_highlighting(app_components):
         )
         in res_not_found
     )
+
+
+async def test_file_mentions_outside_project_are_invalid(app_components):
+    """ABSOLUTE OR ESCAPING FILE QUERIES SHOULD BE FLAGGED INVALID IN THE EDITOR."""
+    context, resolver = app_components
+    lexer = CustomPromptLexer(resolver.registry, context.indexer, resolver)
+
+    assert not lexer.is_valid_mention("<@file:C:/outside/app.py:10>")
+    assert not lexer.is_valid_mention("<@file:../app.py>")
+
+
+async def test_estimate_tokens_caches_expensive_tree_lookups(
+    app_components, monkeypatch
+):
+    """TREE TOKEN ESTIMATION SHOULD STAY EXACT WITHOUT REBUILDING ON EVERY PASS."""
+    context, resolver = app_components
+    calls = 0
+    original = resolver._estimate_tree_length
+
+    def wrapped(root_rel: str = "", max_depth: int | None = None) -> int:
+        nonlocal calls
+        calls += 1
+        return original(root_rel, max_depth)
+
+    monkeypatch.setattr(resolver, "_estimate_tree_length", wrapped)
+
+    first = await resolver.estimate_tokens("<@tree:src>")
+    second = await resolver.estimate_tokens("<@tree:src>")
+
+    assert first == second
+    assert calls == 1

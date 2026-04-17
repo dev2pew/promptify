@@ -52,6 +52,22 @@ def fuzzy_complete(
         )
 
 
+def split_file_query_and_range(query: str) -> tuple[str, str | None]:
+    """
+    SPLITS A FILE QUERY INTO ITS RELATIVE PATH AND OPTIONAL RANGE SEGMENT.
+
+    ABSOLUTE PATHS ARE LEFT INTACT SO CALLERS CAN REJECT THEM CONSISTENTLY.
+    """
+    normalized = query.replace("\\", "/")
+    if re.match(r"^[a-zA-Z]:/", normalized):
+        return normalized, None
+
+    parts = normalized.split(":", 1)
+    if len(parts) == 1:
+        return parts[0], None
+    return parts[0], parts[1]
+
+
 class MentionMod(ABC):
     """BASE CLASS FOR BUILDING CUSTOMIZABLE MENTION EXTENSIONS (MODS)."""
 
@@ -249,7 +265,8 @@ class FileMod(MentionMod):
                 return
 
             if partial.startswith("first ") or partial.startswith("last "):
-                num_part = partial[6:]
+                prefix = "first " if partial.startswith("first ") else "last "
+                num_part = partial[len(prefix) :]
                 count = 0
                 for i in range(1, lines_count + 1):
                     s = str(i)
