@@ -9,6 +9,7 @@ import asyncio
 
 from .context import ProjectContext
 from .mods import ModRegistry
+from .mods import split_file_query_and_range
 from ..utils.i18n import strings
 
 
@@ -24,7 +25,76 @@ class PromptResolver:
         self.registry = registry
         if self.registry.pattern is None:
             self.registry.build()
-        self._estimate_cache: dict[str, tuple[float, int]] = {}
+        self._estimate_cache: dict[tuple[str, str, int], int] = {}
+        self._git_estimate_cache: dict[str, tuple[float, int]] = {}
+
+    def _estimate_tree_length(
+        self, root_rel: str = "", max_depth: int | None = None
+    ) -> int:
+        """ESTIMATES TREE OUTPUT LENGTH USING INDEXED PATHS WITHOUT BUILDING THE STRING."""
+        root_rel = root_rel.replace("\\", "/").strip("/")
+        if not root_rel:
+            header_name = self.context.target_dir.name
+        else:
+            header_name = root_rel.split("/")[-1]
+
+        lines = [
+            strings.get("tree_header_1", "TREE /F"),
+            strings.get("tree_header_2", "Folder PATH for {name}").format(
+                name=header_name
+            ),
+            strings.get("tree_header_3", "C:."),
+        ]
+        search_prefix = root_rel + "/" if root_rel else ""
+        children: set[str] = set()
+
+        for path in self.context.indexer.files_by_rel:
+            if not path.startswith(search_prefix):
+                continue
+            rel = path[len(search_prefix) :]
+            if not rel:
+                continue
+            parts = rel.split("/")
+            depth = len(parts)
+            if max_depth is not None and depth > max_depth:
+                continue
+            for idx in range(depth - 1):
+                children.add("/".join(parts[: idx + 1]) + "/")
+            children.add(rel)
+
+        lines.extend(sorted(children))
+        return sum(len(line) + 1 for line in lines) + 1
+
+    async def _estimate_file_length(self, query: str, range_str: str | None) -> int:
+        """ESTIMATES FILE MENTION EXPANSION LENGTH, USING EXACT CACHED CONTENT WHEN NEEDED."""
+        matches = self.context.indexer.find_matches(query)
+        if not matches:
+            return len(
+                strings.get("err_file_not_found", "file not found").format(query=query)
+            )
+
+        meta = matches[0]
+        if not range_str:
+            return meta.size
+
+        cache_key = ("mod_file", f"{meta.rel_path}:{range_str}", int(meta.mtime))
+        if cache_key in self._estimate_cache:
+            return self._estimate_cache[cache_key]
+
+        content = await self.context._read_cached(meta)
+        lines = content.splitlines(keepends=True)
+        lines, omitted = self.context._apply_range(lines, range_str)
+        length = sum(len(line) for line in lines)
+        if omitted > 0:
+            syntax = strings.get("comment_syntax", {}).get(meta.ext, ["// ", ""])
+            prefix, suffix = syntax[0], syntax[1]
+            notice = strings.get("truncation_notice", "truncated").format(
+                prefix=prefix, omitted=omitted, suffix=suffix
+            )
+            length += len(notice)
+
+        self._estimate_cache[cache_key] = length
+        return length
 
     async def estimate_tokens(self, text: str) -> int:
         """
@@ -41,21 +111,12 @@ class PromptResolver:
         for m in matches:
             try:
                 mod, match_text = self.registry.get_mod_and_text(m)
+                revision = self.context.indexer.revision
 
                 if mod.name == "mod_file":
-                    match_path = re.match(r"<@file:([^>:]+?)(?::([^>]+))?>", match_text)
-                    if match_path:
-                        files = self.context.indexer.find_matches(match_path.group(1))
-                        if files:
-                            meta = files[0]
-                            range_str = match_path.group(2)
-                            if range_str:
-                                content = await self.context._read_cached(meta)
-                                lines = content.splitlines(keepends=True)
-                                lines, _ = self.context._apply_range(lines, range_str)
-                                added_len += sum(len(line) for line in lines)
-                            else:
-                                added_len += meta.size
+                    match_text = match_text.removeprefix("<@file:").removesuffix(">")
+                    query, range_str = split_file_query_and_range(match_text)
+                    added_len += await self._estimate_file_length(query, range_str)
                 elif mod.name == "mod_dir":
                     match_path = re.match(r"<@dir:([^>]+)>", match_text)
                     if match_path:
@@ -80,33 +141,54 @@ class PromptResolver:
                 elif mod.name == "mod_tree":
                     match_path = re.match(r"<@tree:([^>:]+?)(?::([^>]+))?>", match_text)
                     if match_path:
-                        tree_str = await self.context.get_tree_contents(
-                            match_path.group(1), match_path.group(2)
+                        depth = match_path.group(2)
+                        depth_val = (
+                            int(depth.strip())
+                            if depth and depth.strip().isdigit()
+                            else None
                         )
-                        added_len += len(tree_str)
+                        key = ("mod_tree", match_text, revision)
+                        cached = self._estimate_cache.get(key)
+                        if cached is None:
+                            cached = self._estimate_tree_length(
+                                match_path.group(1), depth_val
+                            )
+                            self._estimate_cache[key] = cached
+                        added_len += cached
                 elif mod.name == "mod_project":
-                    tree_str = self.context.generate_tree()
-                    added_len += len(tree_str)
+                    key = ("mod_project", match_text, revision)
+                    cached = self._estimate_cache.get(key)
+                    if cached is None:
+                        cached = self._estimate_tree_length()
+                        self._estimate_cache[key] = cached
+                    added_len += cached
                 elif mod.name == "mod_symbol":
-                    match_path = re.match(
-                        r"<@symbol:([^>:]+?)(?::([^>]+))?>", match_text
-                    )
-                    if match_path:
-                        symbol_content = await self.context.get_symbol_content(
-                            match_path.group(1), match_path.group(2)
+                    key = ("mod_symbol", match_text, revision)
+                    cached = self._estimate_cache.get(key)
+                    if cached is None:
+                        match_path = re.match(
+                            r"<@symbol:([^>:]+?)(?::([^>]+))?>", match_text
                         )
-                        added_len += len(symbol_content)
+                        if match_path:
+                            symbol_content = await self.context.get_symbol_content(
+                                match_path.group(1), match_path.group(2)
+                            )
+                            cached = len(symbol_content)
+                            self._estimate_cache[key] = cached
+                        else:
+                            cached = 0
+                    added_len += cached
                 elif mod.name == "mod_git":
                     now = asyncio.get_running_loop().time()
-                    if match_text in self._estimate_cache:
-                        cached_time, cached_len = self._estimate_cache[match_text]
+                    if match_text in self._git_estimate_cache:
+                        cached_time, cached_len = self._git_estimate_cache[match_text]
                         if now - cached_time < 5.0:
                             added_len += cached_len
                             continue
 
                     git_content = await mod.resolve(match_text, self.context)
                     length = len(git_content)
-                    self._estimate_cache[match_text] = (now, length)
+                    self._git_estimate_cache[match_text] = (now, length)
                     added_len += length
             except Exception:
                 pass

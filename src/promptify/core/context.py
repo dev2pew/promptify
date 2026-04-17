@@ -5,6 +5,7 @@ TO SOURCE FILES, DIRECTORIES, AND AST SYMBOLS.
 
 import asyncio
 import aiofiles
+import re
 from pathlib import Path
 
 from .config import CaseConfig
@@ -41,6 +42,23 @@ class ProjectContext:
         self.indexer = indexer
         self.cache: dict[str, CachedContent] = {}
         self.has_git = has_git
+
+    def normalize_query_path(self, query: str) -> str:
+        """NORMALIZES USER-INPUTTED PATHS TO THE INTERNAL PROJECT FORMAT."""
+        return query.replace("\\", "/").strip()
+
+    def is_safe_query_path(self, query: str) -> bool:
+        """VALIDATES THAT A QUERY PATH STAYS INSIDE THE PROJECT ROOT."""
+        normalized = self.normalize_query_path(query)
+        if not normalized:
+            return False
+        if normalized.startswith(("/", "//")) or re.match(
+            r"^[a-zA-Z]:[/\\]", normalized
+        ):
+            return False
+
+        target = (self.target_dir / normalized).resolve()
+        return target.is_relative_to(self.target_dir.resolve())
 
     def is_sandboxed(self, path: Path) -> bool:
         """

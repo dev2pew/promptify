@@ -11,7 +11,7 @@ from typing import Iterable
 from .logger import log
 from ..core.indexer import ProjectIndexer
 from ..core.resolver import PromptResolver
-from ..core.mods import ModRegistry
+from ..core.mods import ModRegistry, split_file_query_and_range
 from .bindings import setup_keybindings
 from ..utils.i18n import strings
 
@@ -205,10 +205,16 @@ if HAS_PYGMENTS:
     class CustomPromptLexer(Lexer):
         """CUSTOM LEXER TO EMBED TAG HIGHLIGHTING AND INVALID MENTION DETECTION NATIVELY."""
 
-        def __init__(self, registry: ModRegistry, indexer: ProjectIndexer):
+        def __init__(
+            self,
+            registry: ModRegistry,
+            indexer: ProjectIndexer,
+            resolver: PromptResolver,
+        ):
             self.md_lexer = PygmentsLexer(MarkdownLexer)
             self.registry = registry
             self.indexer = indexer
+            self.resolver = resolver
             self.mention_pattern = re.compile(r"<@[^>\n]+(?:>|$)|\[@project\]")
 
         def is_valid_mention(self, text: str) -> bool:
@@ -226,13 +232,18 @@ if HAS_PYGMENTS:
                 mod, _ = self.registry.get_mod_and_text(match)
 
                 if mod.name == "mod_file":
-                    p = re.match(r"<@file:([^>:]+)", text)
-                    if not p or not self.indexer.find_matches(p.group(1)):
+                    body = text.removeprefix("<@file:").removesuffix(">")
+                    path, _ = split_file_query_and_range(body)
+                    if not self.resolver.context.is_safe_query_path(
+                        path
+                    ) or not self.indexer.find_matches(path):
                         return False
                 elif mod.name in ("mod_dir", "mod_tree"):
                     p = re.match(r"<@(dir|tree):([^>:]+)", text)
                     if p:
                         clean = p.group(2).replace("\\", "/").strip("/")
+                        if not self.resolver.context.is_safe_query_path(clean):
+                            return False
                         if (
                             clean
                             and clean not in self.indexer.dirs
@@ -429,7 +440,11 @@ class InteractiveEditor:
 
         self.search_toolbar = SearchToolbar()
 
-        lexer = CustomPromptLexer(resolver.registry, indexer) if HAS_PYGMENTS else None
+        lexer = (
+            CustomPromptLexer(resolver.registry, indexer, resolver)
+            if HAS_PYGMENTS
+            else None
+        )
         processors = [
             HighlightTrailingWhitespaceProcessor(),
             HighlightMatchingBracketProcessor(),

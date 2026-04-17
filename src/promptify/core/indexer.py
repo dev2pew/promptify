@@ -39,6 +39,7 @@ class ProjectIndexer(FileSystemEventHandler):
 
         self.files_by_rel: FileIndex = {}
         self.dirs: set[str] = set()
+        self.revision = 0
 
         self._observer = None
         self._lock = asyncio.Lock()
@@ -82,6 +83,7 @@ class ProjectIndexer(FileSystemEventHandler):
                 pass
 
         await asyncio.to_thread(_scan, self.target_dir)
+        self.revision += 1
         log.success(
             strings.get("indexed_success", "indexed success").format(
                 files=len(self.files_by_rel), dirs=len(self.dirs)
@@ -118,6 +120,7 @@ class ProjectIndexer(FileSystemEventHandler):
         src_path_str = getattr(event, "src_path", None)
         if not src_path_str:
             return
+        self.revision += 1
 
         path = Path(src_path_str).resolve()
         target = self.target_dir.resolve()
