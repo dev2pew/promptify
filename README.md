@@ -39,9 +39,10 @@ the editor is powered by `prompt-toolkit` and supports standard IDE shortcuts...
 
 | controls | do | icon |
 | :-- | :-- | :--: |
-| `^[S]` | save and resolve | 💾 |
-| `^[Q]` | quit | 🚫 |
-| `^[G]` / `[F1]` | toggle help | 📖 |
+| `^[G]` / `[F1]` | help | 📖 |
+| `^[F]` | find | 👁️‍🗨️ |
+| `^[S]` | resolve | 💾 |
+| `^[Q]` | abort | 🚫 |
 
 ---
 
