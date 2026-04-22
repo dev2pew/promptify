@@ -1,0 +1,116 @@
+# ----------------------------------------------------------------
+# COMPILED OUTPUT & BUILD TOOLS
+# ----------------------------------------------------------------
+
+/build/
+*/build/
+.gradle/
+/captures/
+.externalNativeBuild/
+.cxx/
+obj/
+gen/
+bin/
+out/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.jar
+*.war
+gradle-wrapper.jar
+
+# ----------------------------------------------------------------
+# LOGS & PROFILING
+# ----------------------------------------------------------------
+
+*.log
+*.hprof
+output.json
+
+# ----------------------------------------------------------------
+# IDES AND EDITORS
+# ----------------------------------------------------------------
+
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.history/
+.project
+.classpath
+.settings/
+.cproject
+local.properties
+*.swp
+*~
+
+# ----------------------------------------------------------------
+# SECRETS & ENVIRONMENTS
+# ----------------------------------------------------------------
+
+*.jks
+*.keystore
+*.p12
+*.pem
+*.env
+.env.*
+secret-*.json
+credentials
+google-services.json
+.signing/
+
+# ----------------------------------------------------------------
+# NODE & WEB (IF USING REACT NATIVE / WEBVIEWS)
+# ----------------------------------------------------------------
+
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+pubspec.lock
+
+# ----------------------------------------------------------------
+# AI & SESSIONS
+# ----------------------------------------------------------------
+
+.tmp/
+prev/
+prompt/
+prompts/
+*.prompt
+*.conversation
+*.session
+
+# ----------------------------------------------------------------
+# MISCELLANEOUS & OS
+# ----------------------------------------------------------------
+
+.DS_Store
+Thumbs.db
+.venv/
+venv/
+.cache/
+
+# ----------------------------------------------------------------
+# MEDIA, FONTS & AUDIO
+# ----------------------------------------------------------------
+
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.ico
+*.bmp
+*.svg
+*.ttf
+*.otf
+*.woff
+*.woff2
+*.mp3
+*.wav
+*.ogg
