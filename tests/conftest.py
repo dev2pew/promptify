@@ -6,6 +6,7 @@ import pytest
 import shutil
 import sys
 from pathlib import Path
+from typing import cast
 
 # ADD THE SRC FOLDER TO THE PATH SO TESTS CAN IMPORT OUR MODULES NATIVELY
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -78,7 +79,9 @@ def test_sandbox():
 
 
 @pytest.fixture
-async def app_components(test_sandbox):
+async def app_components(
+    test_sandbox,
+) -> tuple[ProjectContext, PromptResolver]:
     """
     BOOTSTRAPS THE CORE LOGIC COMPONENTS POINTING TO THE DYNAMIC SANDBOX.
     """
@@ -86,10 +89,10 @@ async def app_components(test_sandbox):
     indexer = ProjectIndexer(test_sandbox["demo"], case)
     await indexer.build_index()
 
-    context = ProjectContext(test_sandbox["demo"], case, indexer)
+    context = ProjectContext(test_sandbox["demo"], case, cast(ProjectIndexer, indexer))
     registry = ModRegistry()
     registry.register_defaults()
 
-    resolver = PromptResolver(context, registry)
+    resolver = PromptResolver(context, cast(ModRegistry, registry))
 
     return context, resolver

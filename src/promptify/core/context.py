@@ -7,12 +7,28 @@ import asyncio
 import aiofiles
 import re
 from pathlib import Path
+from typing import cast
 
 from .config import CaseConfig
 from .indexer import ProjectIndexer
 from .models import FileMeta, CachedContent
 from .settings import MAX_FILE_SIZE, MAX_CONCURRENT_READS
-from ..utils.i18n import strings
+from ..utils.i18n import get_string, strings
+
+
+def get_comment_syntax(ext: str) -> tuple[str, str]:
+    """RETURNS COMMENT DELIMITERS FOR AN EXTENSION WITH A SAFE FALLBACK."""
+    syntax_map = strings.get("comment_syntax")
+    if isinstance(syntax_map, dict):
+        syntax = syntax_map.get(ext)
+        if (
+            isinstance(syntax, list)
+            and len(syntax) >= 2
+            and isinstance(syntax[0], str)
+            and isinstance(syntax[1], str)
+        ):
+            return cast(str, syntax[0]), cast(str, syntax[1])
+    return "// ", ""
 
 
 class ProjectContext:
@@ -85,7 +101,7 @@ class ProjectContext:
         """
         matches = self.indexer.find_matches(query)
         if not matches:
-            return strings.get("err_file_not_found", "file not found").format(
+            return get_string("err_file_not_found", "file not found").format(
                 query=query
             )
 
@@ -112,7 +128,7 @@ class ProjectContext:
         matches = self.indexer.get_by_extensions(exts)
 
         if not matches:
-            return strings.get("err_type_not_found", "type not found").format(
+            return get_string("err_type_not_found", "type not found").format(
                 exts=exts_str
             )
 
@@ -140,7 +156,7 @@ class ProjectContext:
         ]
 
         if not matches:
-            return strings.get("err_dir_empty", "dir empty").format(query=dir_query)
+            return get_string("err_dir_empty", "dir empty").format(query=dir_query)
 
         async with asyncio.TaskGroup() as tg:
             tasks = [
@@ -167,7 +183,7 @@ class ProjectContext:
         target = (self.target_dir / clean_dir).resolve()
 
         if not target.is_relative_to(self.target_dir.resolve()):
-            return strings.get("err_access_denied", "access denied").format(
+            return get_string("err_access_denied", "access denied").format(
                 path=clean_dir
             )
 
@@ -176,14 +192,14 @@ class ProjectContext:
             rel_target = ""
 
         if rel_target and rel_target not in self.indexer.dirs:
-            return strings.get("err_dir_empty", "dir empty").format(query=dir_query)
+            return get_string("err_dir_empty", "dir empty").format(query=dir_query)
 
         max_depth = None
         if depth_str:
             try:
                 max_depth = int(depth_str.strip())
             except ValueError:
-                return strings.get("err_invalid_depth", "\n\n").format(depth=depth_str)
+                return get_string("err_invalid_depth", "\n\n").format(depth=depth_str)
 
         return self.generate_tree(rel_target, max_depth)
 
@@ -203,13 +219,13 @@ class ProjectContext:
 
         matches = self.indexer.find_matches(query)
         if not matches:
-            return strings.get("err_file_not_found", "file not found").format(
+            return get_string("err_file_not_found", "file not found").format(
                 query=query
             )
 
         meta = matches[0]
         if meta.size > self.MAX_FILE_SIZE:
-            return strings.get("err_file_too_large", "file too large").format(
+            return get_string("err_file_too_large", "file too large").format(
                 path=meta.rel_path
             )
 
@@ -221,12 +237,14 @@ class ProjectContext:
             extractor = SymbolExtractor(content, meta.path.name)
             extracted = extractor.extract(symbol_name)
             if not extracted:
-                return strings.get("symbol_not_found", "symbol not found").format(
+                return get_string("symbol_not_found", "symbol not found").format(
                     symbol=symbol_name, path=meta.rel_path
                 )
-            return f"- `{meta.rel_path}:{symbol_name}`\n\n```{meta.ext}\n{extracted}\n```\n"
+            return (
+                f"- `{meta.rel_path}:{symbol_name}`\n\n```{meta.ext}\n{extracted}\n```\n"
+            )
         except ValueError as e:
-            return strings.get("symbol_error", "symbol error").format(error=e)
+            return get_string("symbol_error", "symbol error").format(error=e)
 
     async def get_git_diff(self, path: str | None = None) -> str:
         """
@@ -253,13 +271,13 @@ class ProjectContext:
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            return strings.get("git_diff_error", "git diff error").format(
+            return get_string("git_diff_error", "git diff error").format(
                 error=stderr.decode(errors="replace").strip()
             )
 
         diff_text = stdout.decode(errors="replace")
         if not diff_text.strip():
-            return strings.get("no_changes", "no changes")
+            return get_string("no_changes", "no changes")
         return f"```diff\n{diff_text}\n```\n"
 
     async def get_git_status(self) -> str:
@@ -282,13 +300,13 @@ class ProjectContext:
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
-            return strings.get("git_status_error", "git status error").format(
+            return get_string("git_status_error", "git status error").format(
                 error=stderr.decode(errors="replace").strip()
             )
 
         status_text = stdout.decode(errors="replace")
         if not status_text.strip():
-            return strings.get("working_tree_clean", "clean tree")
+            return get_string("working_tree_clean", "clean tree")
         return f"```log\n{status_text}\n```\n"
 
     async def _read_and_format(self, meta: FileMeta, range_str: str | None) -> str:
@@ -303,12 +321,12 @@ class ProjectContext:
             str: The evaluated final markdown block.
         """
         if meta.size > self.MAX_FILE_SIZE:
-            return strings.get("err_file_too_large", "file too large").format(
+            return get_string("err_file_too_large", "file too large").format(
                 path=meta.rel_path
             )
 
         if not self.is_sandboxed(meta.path):
-            return strings.get("err_access_denied", "access denied").format(
+            return get_string("err_access_denied", "access denied").format(
                 path=meta.rel_path
             )
 
@@ -318,9 +336,8 @@ class ProjectContext:
         if range_str:
             lines, omitted = self._apply_range(lines, range_str)
             if omitted > 0:
-                syntax = strings.get("comment_syntax", {}).get(meta.ext, ["// ", ""])
-                prefix, suffix = syntax[0], syntax[1]
-                notice = strings.get("truncation_notice", "truncated").format(
+                prefix, suffix = get_comment_syntax(meta.ext)
+                notice = get_string("truncation_notice", "truncated").format(
                     prefix=prefix, omitted=omitted, suffix=suffix
                 )
                 lines.append(notice)
@@ -364,7 +381,7 @@ class ProjectContext:
         """
         range_str = range_str.strip().lower()
         total = len(lines)
-        error_msg = strings.get("err_invalid_range", "invalid range").format(
+        error_msg = get_string("err_invalid_range", "invalid range").format(
             range=range_str
         )
 
@@ -418,11 +435,11 @@ class ProjectContext:
             header_name = root_rel.split("/")[-1]
 
         tree_str = [
-            strings.get("tree_header_1", "TREE /F"),
-            strings.get("tree_header_2", "Folder PATH for {name}").format(
+            get_string("tree_header_1", "TREE /F"),
+            get_string("tree_header_2", "Folder PATH for {name}").format(
                 name=header_name
             ),
-            strings.get("tree_header_3", "C:."),
+            get_string("tree_header_3", "C:."),
         ]
 
         search_prefix = root_rel + "/" if root_rel else ""

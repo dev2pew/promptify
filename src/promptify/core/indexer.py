@@ -15,7 +15,7 @@ from ..ui.logger import log
 from .models import FileMeta
 from .config import CaseConfig
 from .matching import normalize_match_path, rank_path_candidates
-from ..utils.i18n import strings
+from ..utils.i18n import get_string
 
 type FileIndex = dict[str, FileMeta]
 
@@ -48,7 +48,7 @@ class ProjectIndexer(FileSystemEventHandler):
     async def build_index(self) -> None:
         """INITIAL FAST SCAN USING NATIVE OS SCANDIR MAPPINGS."""
         log.info(
-            strings.get("indexing_project", "indexing project").format(
+            get_string("indexing_project", "indexing project").format(
                 name=self.target_dir.name
             )
         )
@@ -86,7 +86,7 @@ class ProjectIndexer(FileSystemEventHandler):
         await asyncio.to_thread(_scan, self.target_dir)
         self.revision += 1
         log.success(
-            strings.get("indexed_success", "indexed success").format(
+            get_string("indexed_success", "indexed success").format(
                 files=len(self.files_by_rel), dirs=len(self.dirs)
             )
         )
@@ -99,7 +99,7 @@ class ProjectIndexer(FileSystemEventHandler):
             self._observer.start()
         except Exception as e:
             log.warning(
-                strings.get("observer_fallback", "observer failed").format(error=e)
+                get_string("observer_fallback", "observer failed").format(error=e)
             )
             self._observer = PollingObserver()
             self._observer.schedule(self, str(self.target_dir), recursive=True)

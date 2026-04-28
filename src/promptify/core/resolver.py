@@ -7,10 +7,10 @@ USER MODE OPERATES IN A STRICT SINGLE-PASS SANDBOX.
 import re
 import asyncio
 
-from .context import ProjectContext
+from .context import ProjectContext, get_comment_syntax
 from .mods import ModRegistry
 from .mods import split_file_query_and_range
-from ..utils.i18n import strings
+from ..utils.i18n import get_string
 
 
 class PromptResolver:
@@ -28,6 +28,14 @@ class PromptResolver:
         self._estimate_cache: dict[tuple[str, str, int], int] = {}
         self._git_estimate_cache: dict[str, tuple[float, int]] = {}
 
+    def _get_registry_pattern(self) -> re.Pattern[str]:
+        """RETURNS THE COMPILED MOD REGEX AFTER ENSURING IT EXISTS."""
+        if self.registry.pattern is None:
+            self.registry.build()
+        if self.registry.pattern is None:
+            raise RuntimeError("mod registry pattern was not initialized")
+        return self.registry.pattern
+
     def _estimate_tree_length(
         self, root_rel: str = "", max_depth: int | None = None
     ) -> int:
@@ -39,11 +47,11 @@ class PromptResolver:
             header_name = root_rel.split("/")[-1]
 
         lines = [
-            strings.get("tree_header_1", "TREE /F"),
-            strings.get("tree_header_2", "Folder PATH for {name}").format(
+            get_string("tree_header_1", "TREE /F"),
+            get_string("tree_header_2", "Folder PATH for {name}").format(
                 name=header_name
             ),
-            strings.get("tree_header_3", "C:."),
+            get_string("tree_header_3", "C:."),
         ]
         search_prefix = root_rel + "/" if root_rel else ""
         children: set[str] = set()
@@ -69,9 +77,7 @@ class PromptResolver:
         """ESTIMATES FILE MENTION EXPANSION LENGTH, USING EXACT CACHED CONTENT WHEN NEEDED."""
         matches = self.context.indexer.find_matches(query)
         if not matches:
-            return len(
-                strings.get("err_file_not_found", "file not found").format(query=query)
-            )
+            return len(get_string("err_file_not_found", "file not found").format(query=query))
 
         meta = matches[0]
         if not range_str:
@@ -86,9 +92,8 @@ class PromptResolver:
         lines, omitted = self.context._apply_range(lines, range_str)
         length = sum(len(line) for line in lines)
         if omitted > 0:
-            syntax = strings.get("comment_syntax", {}).get(meta.ext, ["// ", ""])
-            prefix, suffix = syntax[0], syntax[1]
-            notice = strings.get("truncation_notice", "truncated").format(
+            prefix, suffix = get_comment_syntax(meta.ext)
+            notice = get_string("truncation_notice", "truncated").format(
                 prefix=prefix, omitted=omitted, suffix=suffix
             )
             length += len(notice)
@@ -101,7 +106,7 @@ class PromptResolver:
         CALCULATES AN ULTRA-FAST ESTIMATION OF TOKENS BASED STRICTLY ON
         SIZES PROVIDED BY THE IN-MEMORY INDEXER AND CACHED RESOLUTIONS.
         """
-        matches = list(self.registry.pattern.finditer(text))
+        matches = list(self._get_registry_pattern().finditer(text))
         if not matches:
             return int(len(text) // 3.2)
 
@@ -200,14 +205,14 @@ class PromptResolver:
         if seen is None:
             seen = set()
 
-        matches = list(self.registry.pattern.finditer(text))
+        matches = list(self._get_registry_pattern().finditer(text))
         if not matches:
             return text
 
         async def _resolve_and_recurse(m: re.Match) -> str:
             full_match = m.group(0)
             if full_match in seen:
-                return strings.get("loop_detected", "loop detected").format(
+                return get_string("loop_detected", "loop detected").format(
                     match=full_match
                 )
 
@@ -234,7 +239,7 @@ class PromptResolver:
 
     async def resolve_user(self, text: str) -> str:
         """SINGLE-PASS RESOLUTION FOR USER TEXT (INTERACTIVE EDITOR)."""
-        matches = list(self.registry.pattern.finditer(text))
+        matches = list(self._get_registry_pattern().finditer(text))
         if not matches:
             return text
 

@@ -3,7 +3,7 @@ UNIT TESTS EVALUATING FILE SYSTEM ISOLATION, DATA RETRIEVAL AND CACHING MECHANIS
 """
 
 import pytest
-from promptify.utils.i18n import strings
+from promptify.utils.i18n import get_string
 
 pytestmark = pytest.mark.asyncio
 
@@ -20,7 +20,7 @@ async def test_get_file_content_not_found(app_components):
     """TESTS MISSING FILE HANDLING."""
     context, _ = app_components
     res = await context.get_file_content("missing.py")
-    assert res == strings.get("err_file_not_found", "file not found").format(
+    assert res == get_string("err_file_not_found", "file not found").format(
         query="missing.py"
     )
 
@@ -34,7 +34,7 @@ async def test_get_file_content_ranges(app_components):
     assert "This is line 4" in res
     assert "This is line 5" not in res
     assert (
-        strings.get("truncation_notice", "truncated")
+        get_string("truncation_notice", "truncated")
         .format(prefix="# ", omitted=17, suffix="")
         .strip()
         in res
@@ -58,7 +58,7 @@ async def test_get_file_content_ranges(app_components):
     # INVALID
     res = await context.get_file_content("app.py", "invalid")
     assert (
-        strings.get("err_invalid_range", "invalid range").format(range="invalid") in res
+        get_string("err_invalid_range", "invalid range").format(range="invalid") in res
     )
 
 
@@ -68,7 +68,7 @@ async def test_size_limits(app_components):
     context.MAX_FILE_SIZE = 10
     res = await context.get_file_content("app.py")
     assert (
-        strings.get("err_file_too_large", "file too large")
+        get_string("err_file_too_large", "file too large")
         .format(path="app.py")
         .strip()
         in res
@@ -114,7 +114,7 @@ async def test_generate_tree(app_components):
     """TESTS PROJECT TREE GENERATION."""
     context, _ = app_components
     res = context.generate_tree()
-    assert strings.get("tree_header_1", "TREE /F") in res
+    assert get_string("tree_header_1", "TREE /F") in res
     assert "app.py" in res
     assert "src" in res
 
@@ -126,8 +126,8 @@ async def test_git_mentions(app_components):
 
     # RETRIEVE THE CONFIGURED LOCALIZATION STRINGS DYNAMICALLY
     # SO THE TEST DOESN'T BREAK IF THE USER EDITS EN.JSON.
-    clean_state = strings.get("working_tree_clean", "working tree clean")
-    error_state = strings.get("git_status_error", "git status error").split("{")[0]
+    clean_state = get_string("working_tree_clean", "working tree clean")
+    error_state = get_string("git_status_error", "git status error").split("{")[0]
 
     # IN A REAL ENVIRONMENT, IT EITHER RETURNS AN ERROR STRING (NO GIT),
     # A CLEAN TREE STRING, OR A FORMATTED LOG OF THE CHANGES.
