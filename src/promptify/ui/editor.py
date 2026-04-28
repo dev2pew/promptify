@@ -6,7 +6,7 @@ IMPLEMENTS HIGHLIGHTING, AUTOCOMPLETION, INVALID MENTION MARKING, AND SEARCH.
 import re
 import sys
 import asyncio
-from typing import Iterable
+from typing import Callable, Iterable
 
 from .logger import log
 from ..core.indexer import ProjectIndexer
@@ -210,22 +210,33 @@ if HAS_PYGMENTS:
             registry: ModRegistry,
             indexer: ProjectIndexer,
             resolver: PromptResolver,
+            expensive_checks_enabled: Callable[[], bool] | None = None,
         ):
             self.md_lexer = PygmentsLexer(MarkdownLexer)
             self.registry = registry
             self.indexer = indexer
             self.resolver = resolver
+            self.expensive_checks_enabled = expensive_checks_enabled or (lambda: True)
             self.mention_pattern = re.compile(r"<@[^>\n]+(?:>|$)|\[@project\]")
+            self._validation_cache: dict[tuple[int, str], bool] = {}
 
         def is_valid_mention(self, text: str) -> bool:
             """VALIDATES THE INTEGRITY OF A MENTION AND ITS EXISTENCE IN THE INDEXER."""
+            cache_key = (self.indexer.revision, text)
+            cached = self._validation_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
             if text == "[@project]":
+                self._validation_cache[cache_key] = True
                 return True
             if not text.endswith(">"):
+                self._validation_cache[cache_key] = False
                 return False
 
             match = self.registry.pattern.fullmatch(text)
             if not match:
+                self._validation_cache[cache_key] = False
                 return False
 
             try:
@@ -237,39 +248,50 @@ if HAS_PYGMENTS:
                     if not self.resolver.context.is_safe_query_path(
                         path
                     ) or not self.indexer.find_matches(path):
+                        self._validation_cache[cache_key] = False
                         return False
                 elif mod.name in ("mod_dir", "mod_tree"):
                     p = re.match(r"<@(dir|tree):([^>:]+)", text)
                     if p:
                         clean = p.group(2).replace("\\", "/").strip("/")
                         if clean == "":
+                            self._validation_cache[cache_key] = True
                             return True
                         if not self.resolver.context.is_safe_query_path(clean):
+                            self._validation_cache[cache_key] = False
                             return False
                         if (
                             clean
                             and clean not in self.indexer.dirs
                             and not any(d.startswith(clean) for d in self.indexer.dirs)
                         ):
+                            self._validation_cache[cache_key] = False
                             return False
                 elif mod.name == "mod_symbol":
                     p = re.match(r"<@symbol:([^>:]+?)(?::([^>]+))?>", text)
                     if not p:
+                        self._validation_cache[cache_key] = False
                         return False
                     path = p.group(1)
                     if not self.resolver.context.is_safe_query_path(path):
+                        self._validation_cache[cache_key] = False
                         return False
                     if not self.indexer.find_matches(path):
+                        self._validation_cache[cache_key] = False
                         return False
                 elif mod.name == "mod_ext":
                     p = re.match(r"<@(type|ext):([^>]+)>", text)
                     if not p:
+                        self._validation_cache[cache_key] = False
                         return False
                     exts = [e.strip().lower() for e in p.group(2).split(",")]
                     if not self.indexer.get_by_extensions(exts):
+                        self._validation_cache[cache_key] = False
                         return False
+                self._validation_cache[cache_key] = True
                 return True
             except Exception:
+                self._validation_cache[cache_key] = False
                 return False
 
         def lex_document(self, document: Document):
@@ -312,7 +334,9 @@ if HAS_PYGMENTS:
                         new_tokens.append((curr_style, "".join(curr_text)))
 
                     # INJECT GRANULAR MENTION TOKENS OR INVALID STYLING
-                    if not self.is_valid_mention(m_text):
+                    if not self.expensive_checks_enabled():
+                        new_tokens.extend(tokenize_mention(m_text))
+                    elif not self.is_valid_mention(m_text):
                         new_tokens.append(("class:invalid-syntax", m_text))
                     else:
                         new_tokens.extend(tokenize_mention(m_text))
@@ -386,13 +410,22 @@ class HelpLexer(Lexer):
 class MentionCompleter(Completer):
     """ROUTES AUTOCOMPLETE GENERATION REQUESTS THROUGH THE DYNAMICALLY REGISTERED MODS."""
 
-    def __init__(self, indexer: ProjectIndexer, registry: ModRegistry):
+    def __init__(
+        self,
+        indexer: ProjectIndexer,
+        registry: ModRegistry,
+        should_complete: Callable[[Document], bool],
+    ):
         self.indexer = indexer
         self.registry = registry
+        self.should_complete = should_complete
 
     def get_completions(
         self, document: Document, complete_event: CompleteEvent
     ) -> Iterable[Completion]:
+        if not self.should_complete(document):
+            return
+
         # WRAP THE GENERATOR IN A LIST
         # THIS FORCES THE SCROLLBAR TO SEE THE FINAL COUNT IMMEDIATELY
         completions = list(
@@ -403,6 +436,9 @@ class MentionCompleter(Completer):
 
 class InteractiveEditor:
     """MANAGES THE CORE PROMPT-TOOLKIT TERMINAL EDITOR."""
+
+    BULK_EDIT_SUSPEND_SECONDS = 0.35
+    BULK_EDIT_SIZE_THRESHOLD = 2048
 
     def __init__(
         self,
@@ -415,11 +451,12 @@ class InteractiveEditor:
         self.indexer = indexer
         self.resolver = resolver
         self.token_count = 0
+        self._bulk_mode_until = 0.0
 
         self.buffer = Buffer(
             document=Document(initial_text, cursor_position=0),
-            completer=MentionCompleter(indexer, resolver.registry),
-            complete_while_typing=True,
+            completer=MentionCompleter(indexer, resolver.registry, self.should_complete),
+            complete_while_typing=Condition(self.should_complete_while_typing),
         )
         self.result: str | None = None
 
@@ -448,7 +485,12 @@ class InteractiveEditor:
         self.search_toolbar = SearchToolbar()
 
         lexer = (
-            CustomPromptLexer(resolver.registry, indexer, resolver)
+            CustomPromptLexer(
+                resolver.registry,
+                indexer,
+                resolver,
+                self.expensive_checks_enabled,
+            )
             if HAS_PYGMENTS
             else None
         )
@@ -663,3 +705,56 @@ class InteractiveEditor:
         token_task.cancel()
 
         return self.result
+
+    def expensive_checks_enabled(self) -> bool:
+        """SKIPS REDRAW-TIME VALIDATION WHILE A BULK EDIT IS STILL SETTLING."""
+        try:
+            now = asyncio.get_running_loop().time()
+        except RuntimeError:
+            return True
+        return now >= self._bulk_mode_until
+
+    def should_complete_while_typing(self) -> bool:
+        """ONLY RUNS FUZZY COMPLETION WHEN THE CURSOR IS INSIDE AN ACTIVE MENTION."""
+        if not self.expensive_checks_enabled():
+            return False
+        return self.should_complete(self.buffer.document)
+
+    def should_complete(self, document: Document) -> bool:
+        """GATES AUTOCOMPLETE SO PASTES AND NORMAL PROSE DO NOT TRIGGER FUZZY SEARCH."""
+        tail = document.text_before_cursor[-256:]
+        return bool(re.search(r"(<@[^>\n]*)|(\[@[^\]\n]*)$", tail))
+
+    def start_bulk_edit(self, inserted_text: str) -> None:
+        """TEMPORARILY RELAXES COMPLETION AND VALIDATION AFTER LARGE PASTES."""
+        if len(inserted_text) < self.BULK_EDIT_SIZE_THRESHOLD:
+            return
+
+        loop = asyncio.get_running_loop()
+        self._bulk_mode_until = max(
+            self._bulk_mode_until, loop.time() + self.BULK_EDIT_SUSPEND_SECONDS
+        )
+
+        async def _refresh_after_pause():
+            await asyncio.sleep(self.BULK_EDIT_SUSPEND_SECONDS)
+            try:
+                app = get_app()
+            except Exception:
+                return
+            app.invalidate()
+
+        asyncio.create_task(_refresh_after_pause())
+
+    def paste_text(self, buffer: Buffer, text: str) -> None:
+        """APPLIES PASTED TEXT THROUGH THE FAST BULK-EDIT PATH."""
+        if not text:
+            return
+
+        buffer.save_to_undo_stack()
+
+        if buffer.selection_state:
+            buffer.cut_selection()
+            buffer.selection_state = None
+
+        self.start_bulk_edit(text)
+        buffer.insert_text(text)
