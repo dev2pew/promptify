@@ -46,6 +46,7 @@ try:
         fragment_list_width,
         to_formatted_text,
     )
+    from prompt_toolkit.formatted_text.base import OneStyleAndTextTuple
     from prompt_toolkit.styles import Style
     from prompt_toolkit.widgets import Frame, SearchToolbar
     from prompt_toolkit.lexers import Lexer
@@ -503,7 +504,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
             return [("", dots)], len(dots)
 
         remaining_width = max_width - 3
-        tail: list[tuple[str, str]] = []
+        tail: list[OneStyleAndTextTuple] = []
 
         for style_and_ch in reversed(list(explode_text_fragments(formatted_text))):
             ch_width = get_cwidth(style_and_ch[1])
@@ -514,7 +515,11 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
                 break
 
         tail.reverse()
-        return [("", "...")] + tail, max_width - remaining_width
+
+        result: StyleAndTextTuples = [("", "...")]
+        result.extend(tail)
+
+        return result, max_width - remaining_width
 
     def _get_label_fragments(
         self, completion: Completion, is_current_completion: bool, width: int
@@ -578,7 +583,9 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         label_width = min(label_width, width - self.MIN_META_COLUMN_WIDTH)
         meta_width = width - label_width
 
-        max_meta_width = max(self.MIN_META_COLUMN_WIDTH, int(width * self.MAX_META_WIDTH_RATIO))
+        max_meta_width = max(
+            self.MIN_META_COLUMN_WIDTH, int(width * self.MAX_META_WIDTH_RATIO)
+        )
         if meta_width > max_meta_width:
             shift = meta_width - max_meta_width
             meta_width -= shift
@@ -587,7 +594,10 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         label_width = min(label_width, natural_label_width)
         meta_width = width - label_width
 
-        if label_width < self.MIN_LABEL_COLUMN_WIDTH or meta_width < self.MIN_META_COLUMN_WIDTH:
+        if (
+            label_width < self.MIN_LABEL_COLUMN_WIDTH
+            or meta_width < self.MIN_META_COLUMN_WIDTH
+        ):
             return min(width, natural_label_width), 0, False
 
         if natural_meta_width < self.MIN_META_COLUMN_WIDTH:
