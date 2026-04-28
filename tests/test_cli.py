@@ -100,3 +100,46 @@ async def test_save_output_uses_case_parent_folder(test_sandbox, monkeypatch):
     assert not (app.outs_dir / case.name).exists()
     assert list(case_parent_dir.rglob("*.md"))
     assert list(case_parent_dir.rglob("*.raw"))
+
+
+@pytest.mark.asyncio
+async def test_mode_state_is_persisted_per_case(test_sandbox):
+    """LAST MODE SHOULD BE STORED PER CASE USING A UNIQUE CASE KEY."""
+    app = App()
+    app.data_dir = test_sandbox["root"] / "data"
+    case = CaseConfig(test_sandbox["case"])
+    state = await app.get_state()
+
+    await app.save_last_mode(case, 2, state)
+
+    reloaded = await app.get_state()
+    assert await app.get_last_mode(case, reloaded) == 2
+
+
+@pytest.mark.asyncio
+async def test_mode_state_uses_unique_case_keys(test_sandbox):
+    """CASES WITH THE SAME DISPLAY NAME SHOULD NOT SHARE MODE HISTORY."""
+    app = App()
+    app.cases_dir = test_sandbox["root"] / "cases"
+    app.data_dir = test_sandbox["root"] / "data"
+    state = await app.get_state()
+
+    first_case_dir = test_sandbox["root"] / "cases" / "alpha" / "shared"
+    second_case_dir = test_sandbox["root"] / "cases" / "beta" / "shared"
+    first_case_dir.mkdir(parents=True)
+    second_case_dir.mkdir(parents=True)
+
+    for case_dir in [first_case_dir, second_case_dir]:
+        (case_dir / "config.json").write_text(
+            '{"name": "shared", "types": ["*"]}', encoding="utf-8"
+        )
+
+    first_case = CaseConfig(first_case_dir)
+    second_case = CaseConfig(second_case_dir)
+
+    await app.save_last_mode(first_case, 1, state)
+    await app.save_last_mode(second_case, 2, state)
+
+    reloaded = await app.get_state()
+    assert await app.get_last_mode(first_case, reloaded) == 1
+    assert await app.get_last_mode(second_case, reloaded) == 2
