@@ -79,7 +79,9 @@ def build_path_completions(
 
     for candidate in ranked:
         label, meta = display_map[candidate]
-        display_meta = meta if meta_candidates is None or candidate in meta_candidates else ""
+        display_meta = (
+            meta if meta_candidates is None or candidate in meta_candidates else ""
+        )
         if candidate == normalized_partial:
             yield Completion(
                 candidate + close_suffix,
