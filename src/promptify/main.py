@@ -10,6 +10,7 @@ import pyperclip
 import shutil
 import json
 from pathlib import Path
+from typing import cast
 
 from .ui.logger import log
 from .ui.ui import print_columnized, print_modes
@@ -20,7 +21,7 @@ from .core.resolver import PromptResolver
 from .core.mods import ModRegistry
 from .core.cli import CLIConfig, parse_cli_args
 from .ui.editor import InteractiveEditor
-from .utils.i18n import strings
+from .utils.i18n import get_string
 
 
 class App:
@@ -69,12 +70,20 @@ class App:
         state["lastcase"] = case_name
         await self.save_state(state)
 
+    def get_output_case_dir_name(self, case: CaseConfig) -> str:
+        """USES THE CASE'S PARENT FOLDER NAME FOR OUTPUT STORAGE SAFETY."""
+        return case.case_dir.parent.name
+
     async def save_output(
-        self, case_name: str, content: str, raw_content: str | None = None
+        self, case: CaseConfig, content: str, raw_content: str | None = None
     ) -> None:
         """FORMATS AND SAVES THE EXECUTED PAYLOAD DIRECTLY TO DISK, COPIES TO CLIPBOARD."""
         now = datetime.datetime.now()
-        out_dir = self.outs_dir / case_name / f"{now.year}_{now.month}_{now.day}"
+        out_dir = (
+            self.outs_dir
+            / self.get_output_case_dir_name(case)
+            / f"{now.year}_{now.month}_{now.day}"
+        )
         out_dir.mkdir(parents=True, exist_ok=True)
         time_str = now.strftime("%H_%M_%S")
         filepath = out_dir / f"{time_str}.md"
@@ -87,26 +96,22 @@ class App:
             async with aiofiles.open(raw_filepath, "w", encoding="utf-8") as f:
                 await f.write(raw_content)
 
-        log.success(strings.get("saved_output", "saved output").format(path=filepath))
+        log.success(get_string("saved_output", "saved output").format(path=filepath))
 
         try:
             await asyncio.to_thread(pyperclip.copy, content)
-            log.success(strings.get("copied_clipboard", "copied to clipboard"))
+            log.success(get_string("copied_clipboard", "copied to clipboard"))
         except Exception as e:
-            log.warning(
-                strings.get("clipboard_failed", "clipboard failed").format(error=e)
-            )
+            log.warning(get_string("clipboard_failed", "clipboard failed").format(error=e))
 
     async def run(self) -> None:
         """EXECUTES THE MAIN APPLICATION LOOP."""
-        print(strings.get("welcome", "welcome to promptify"))
+        print(get_string("welcome", "welcome to promptify"))
 
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
         if not cases:
-            log.error(strings.get("no_cases", "no cases found"))
-            log.info(
-                strings.get("root_dir_shows", "root dir").format(path=self.root_dir)
-            )
+            log.error(get_string("no_cases", "no cases found"))
+            log.info(get_string("root_dir_shows", "root dir").format(path=self.root_dir))
             return
 
         state = await self.get_state()
@@ -153,11 +158,11 @@ class App:
             if lastcase not in valid_names:
                 lastcase = ""
 
-            print(strings.get("available_cases", "available cases"))
+            print(get_string("available_cases", "available cases"))
             print_columnized(display_items)
 
             try:
-                prompt_str = strings.get("select_case", "select case")
+                prompt_str = get_string("select_case", "select case")
                 if lastcase:
                     prompt_str = f"{prompt_str} ('{lastcase}')"
                 case_input = (await log.input_async(prompt_str)).strip()
@@ -167,9 +172,7 @@ class App:
                         d for c, d in configs if c.name == lastcase
                     )
                 elif not case_input:
-                    log.warning(
-                        strings.get("operation_cancelled", "operation cancelled")
-                    )
+                    log.warning(get_string("operation_cancelled", "operation cancelled"))
                     return
                 else:
                     case_idx = int(case_input) - 1
@@ -177,7 +180,7 @@ class App:
                         raise IndexError
                     selected_case_dir = cases[case_idx]
             except (ValueError, IndexError):
-                log.error(strings.get("invalid_selection", "invalid selection"))
+                log.error(get_string("invalid_selection", "invalid selection"))
                 return
 
             case = CaseConfig(selected_case_dir)
@@ -189,7 +192,7 @@ class App:
         else:
             target_path_str = (
                 await log.input_async(
-                    strings.get("enter_target_path", "enter path").format(
+                    get_string("enter_target_path", "enter path").format(
                         path=last_path
                     )
                 )
@@ -197,11 +200,7 @@ class App:
 
         target_dir = Path(target_path_str).resolve()
         if not target_dir.is_dir():
-            log.error(
-                strings.get("dir_not_exist", "directory not exist").format(
-                    path=target_dir
-                )
-            )
+            log.error(get_string("dir_not_exist", "directory not exist").format(path=target_dir))
             return
 
         await self.save_last_path(case.name, str(target_dir), state)
@@ -210,12 +209,10 @@ class App:
         has_git = shutil.which("git") is not None
         has_git_folder = (target_dir / ".git").exists()
         if not has_git:
-            log.warning(
-                strings.get("git_not_found", "git executable not found in system path.")
-            )
+            log.warning(get_string("git_not_found", "git executable not found in system path."))
         if not has_git_folder:
             log.warning(
-                strings.get(
+                get_string(
                     "no_git_folder", "no .git folder found in '{path}'."
                 ).format(path=target_dir)
             )
@@ -225,11 +222,14 @@ class App:
         indexer.start_watching()
 
         context = ProjectContext(
-            target_dir, case, indexer, has_git=has_git and has_git_folder
+            target_dir,
+            case,
+            cast(ProjectIndexer, indexer),
+            has_git=has_git and has_git_folder,
         )
         registry = ModRegistry()
         registry.register_defaults()
-        resolver = PromptResolver(context, registry)
+        resolver = PromptResolver(context, cast(ModRegistry, registry))
 
         # MODE SELECTION
         mode = None
@@ -240,38 +240,36 @@ class App:
             elif m in ("i", "interactive", "a", "advanced", "e", "editor"):
                 mode = 2
             else:
-                log.error(strings.get("invalid_mode", "invalid mode"))
+                log.error(get_string("invalid_mode", "invalid mode"))
                 indexer.stop_watching()
                 return
         elif self.cli_config.case and self.cli_config.path:
             mode = 2  # DEFAULT TO INTERACTIVE MODE IF SKIPPING WIZARD VIA CLI
         else:
-            print(strings.get("available_modes", "available modes"))
+            print(get_string("available_modes", "available modes"))
             print_modes(
                 [
                     (
-                        strings.get("mode_simple_name", "simple"),
-                        strings.get("mode_simple_desc", "legacy desc"),
+                        get_string("mode_simple_name", "simple"),
+                        get_string("mode_simple_desc", "legacy desc"),
                     ),
                     (
-                        strings.get("mode_interactive_name", "interactive"),
-                        strings.get("mode_interactive_desc", "editor desc"),
+                        get_string("mode_interactive_name", "interactive"),
+                        get_string("mode_interactive_desc", "editor desc"),
                     ),
                 ]
             )
             try:
                 mode_input = (
-                    await log.input_async(strings.get("select_mode", "select mode"))
+                    await log.input_async(get_string("select_mode", "select mode"))
                 ).strip()
                 if not mode_input:
-                    log.warning(
-                        strings.get("operation_cancelled", "operation cancelled")
-                    )
+                    log.warning(get_string("operation_cancelled", "operation cancelled"))
                     indexer.stop_watching()
                     return
                 mode = int(mode_input)
             except ValueError:
-                log.error(strings.get("invalid_selection", "invalid selection"))
+                log.error(get_string("invalid_selection", "invalid selection"))
                 indexer.stop_watching()
                 return
 
@@ -282,7 +280,7 @@ class App:
             elif mode == 2:
                 await self.run_interactive_mode(case, resolver, indexer)
             else:
-                log.error(strings.get("invalid_mode", "invalid mode"))
+                log.error(get_string("invalid_mode", "invalid mode"))
         finally:
             indexer.stop_watching()
 
@@ -290,19 +288,15 @@ class App:
         """EXECUTES THE STATIC LEGACY RESOLVER MODE."""
         legacy_path = case.case_dir / case.legacy_file
         if not legacy_path.exists():
-            log.error(
-                strings.get("legacy_not_found", "legacy not found").format(
-                    path=legacy_path
-                )
-            )
+            log.error(get_string("legacy_not_found", "legacy not found").format(path=legacy_path))
             return
 
-        log.normal(strings.get("processing_legacy", "processing legacy"))
+        log.normal(get_string("processing_legacy", "processing legacy"))
         async with aiofiles.open(legacy_path, "r", encoding="utf-8") as f:
             content = await f.read()
 
         resolved_content = await resolver.resolve_user(content)
-        await self.save_output(case.name, resolved_content)
+        await self.save_output(case, resolved_content)
 
     async def run_interactive_mode(
         self, case: CaseConfig, resolver: PromptResolver, indexer: ProjectIndexer
@@ -318,12 +312,12 @@ class App:
         edited_text = await editor.run_async()
 
         if edited_text is None:
-            log.warning(strings.get("operation_cancelled", "operation cancelled"))
+            log.warning(get_string("operation_cancelled", "operation cancelled"))
             return
 
-        log.normal(strings.get("resolving_mentions", "resolving mentions"))
+        log.normal(get_string("resolving_mentions", "resolving mentions"))
         final_output = await resolver.resolve_user(edited_text)
-        await self.save_output(case.name, final_output, raw_content=edited_text)
+        await self.save_output(case, final_output, raw_content=edited_text)
 
 
 def cli():
@@ -333,5 +327,5 @@ def cli():
         asyncio.run(App(config).run())
     except KeyboardInterrupt:
         print()
-        log.warning(strings.get("exiting", "exiting"))
+        log.warning(get_string("exiting", "exiting"))
         sys.exit(0)

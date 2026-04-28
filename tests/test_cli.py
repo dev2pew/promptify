@@ -4,6 +4,8 @@ UNIT TESTS VERIFYING COMMAND LINE INTERFACE ARGUMENT MAPPINGS.
 
 import pytest
 from promptify.core.cli import parse_cli_args, CLIConfig, extract_help_from_docstring
+from promptify.core.config import CaseConfig
+from promptify.main import App
 
 
 def test_docstring_extraction():
@@ -81,3 +83,20 @@ def test_programmatic_config_creation():
     assert config.case == "manual"
     assert config.path == "/manual/path"
     assert config.mode == "editor"
+
+
+@pytest.mark.asyncio
+async def test_save_output_uses_case_parent_folder(test_sandbox, monkeypatch):
+    """OUTPUTS SHOULD BE STORED UNDER THE CASE PARENT FOLDER NAME, NOT THE CASE NAME."""
+    app = App()
+    app.outs_dir = test_sandbox["outs"]
+    case = CaseConfig(test_sandbox["case"])
+    monkeypatch.setattr("promptify.main.pyperclip.copy", lambda _text: None)
+
+    await app.save_output(case, "demo output", raw_content="raw output")
+
+    case_parent_dir = app.outs_dir / test_sandbox["case"].parent.name
+    assert case_parent_dir.exists()
+    assert not (app.outs_dir / case.name).exists()
+    assert list(case_parent_dir.rglob("*.md"))
+    assert list(case_parent_dir.rglob("*.raw"))
