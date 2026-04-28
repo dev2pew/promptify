@@ -102,7 +102,9 @@ class App:
             await asyncio.to_thread(pyperclip.copy, content)
             log.success(get_string("copied_clipboard", "copied to clipboard"))
         except Exception as e:
-            log.warning(get_string("clipboard_failed", "clipboard failed").format(error=e))
+            log.warning(
+                get_string("clipboard_failed", "clipboard failed").format(error=e)
+            )
 
     async def run(self) -> None:
         """EXECUTES THE MAIN APPLICATION LOOP."""
@@ -111,7 +113,9 @@ class App:
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
         if not cases:
             log.error(get_string("no_cases", "no cases found"))
-            log.info(get_string("root_dir_shows", "root dir").format(path=self.root_dir))
+            log.info(
+                get_string("root_dir_shows", "root dir").format(path=self.root_dir)
+            )
             return
 
         state = await self.get_state()
@@ -172,7 +176,9 @@ class App:
                         d for c, d in configs if c.name == lastcase
                     )
                 elif not case_input:
-                    log.warning(get_string("operation_cancelled", "operation cancelled"))
+                    log.warning(
+                        get_string("operation_cancelled", "operation cancelled")
+                    )
                     return
                 else:
                     case_idx = int(case_input) - 1
@@ -192,15 +198,17 @@ class App:
         else:
             target_path_str = (
                 await log.input_async(
-                    get_string("enter_target_path", "enter path").format(
-                        path=last_path
-                    )
+                    get_string("enter_target_path", "enter path").format(path=last_path)
                 )
             ).strip() or last_path
 
         target_dir = Path(target_path_str).resolve()
         if not target_dir.is_dir():
-            log.error(get_string("dir_not_exist", "directory not exist").format(path=target_dir))
+            log.error(
+                get_string("dir_not_exist", "directory not exist").format(
+                    path=target_dir
+                )
+            )
             return
 
         await self.save_last_path(case.name, str(target_dir), state)
@@ -209,12 +217,14 @@ class App:
         has_git = shutil.which("git") is not None
         has_git_folder = (target_dir / ".git").exists()
         if not has_git:
-            log.warning(get_string("git_not_found", "git executable not found in system path."))
+            log.warning(
+                get_string("git_not_found", "git executable not found in system path.")
+            )
         if not has_git_folder:
             log.warning(
-                get_string(
-                    "no_git_folder", "no .git folder found in '{path}'."
-                ).format(path=target_dir)
+                get_string("no_git_folder", "no .git folder found in '{path}'.").format(
+                    path=target_dir
+                )
             )
 
         indexer = ProjectIndexer(target_dir, case)
@@ -264,7 +274,9 @@ class App:
                     await log.input_async(get_string("select_mode", "select mode"))
                 ).strip()
                 if not mode_input:
-                    log.warning(get_string("operation_cancelled", "operation cancelled"))
+                    log.warning(
+                        get_string("operation_cancelled", "operation cancelled")
+                    )
                     indexer.stop_watching()
                     return
                 mode = int(mode_input)
@@ -288,7 +300,11 @@ class App:
         """EXECUTES THE STATIC LEGACY RESOLVER MODE."""
         legacy_path = case.case_dir / case.legacy_file
         if not legacy_path.exists():
-            log.error(get_string("legacy_not_found", "legacy not found").format(path=legacy_path))
+            log.error(
+                get_string("legacy_not_found", "legacy not found").format(
+                    path=legacy_path
+                )
+            )
             return
 
         log.normal(get_string("processing_legacy", "processing legacy"))

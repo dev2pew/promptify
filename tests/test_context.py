@@ -68,9 +68,7 @@ async def test_size_limits(app_components):
     context.MAX_FILE_SIZE = 10
     res = await context.get_file_content("app.py")
     assert (
-        get_string("err_file_too_large", "file too large")
-        .format(path="app.py")
-        .strip()
+        get_string("err_file_too_large", "file too large").format(path="app.py").strip()
         in res
     )
 

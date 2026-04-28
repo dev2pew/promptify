@@ -27,9 +27,7 @@ async def test_resolve_user_single_pass(app_components):
     _, resolver = app_components
     res = await resolver.resolve_user("<@file:trap.md>")
     assert "<@file:trap.md>" in res
-    assert (
-        get_string("loop_detected", "loop detected").split("-")[0].strip() not in res
-    )
+    assert get_string("loop_detected", "loop detected").split("-")[0].strip() not in res
     assert "[@project]" in res
 
 
