@@ -5,10 +5,11 @@ HANDLES PROJECT CASE SETTINGS AND GITIGNORE PATH SPECIFICATION RULES.
 import json
 import fnmatch
 from pathlib import Path
+from typing import Any, cast
 import pathspec
 
 from ..ui.logger import log
-from ..utils.i18n import strings
+from ..utils.i18n import get_string
 
 
 class CaseConfig:
@@ -32,19 +33,47 @@ class CaseConfig:
         if self.config_file.exists():
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if isinstance(data, list) and len(data) > 0:
-                        data = data[0]
+                    raw_data = json.load(f)
 
-                    self.name = data.get("name", self.name)
-                    self.types = data.get("types", self.types)
-                    self.ignores_file = data.get("ignores", self.ignores_file)
-                    self.system_file = data.get("system", self.system_file)
-                    self.prompt_file = data.get("prompt", self.prompt_file)
-                    self.legacy_file = data.get("legacy", self.legacy_file)
+                    data: dict[str, Any] | None = None
+                    if isinstance(raw_data, dict):
+                        data = cast(dict[str, Any], raw_data)
+                    elif raw_data and isinstance(raw_data, list):
+                        first_item = raw_data[0]
+                        if isinstance(first_item, dict):
+                            data = cast(dict[str, Any], first_item)
+
+                    if not data:
+                        return
+
+                    name = data.get("name")
+                    if isinstance(name, str) and name:
+                        self.name = name
+
+                    types = data.get("types")
+                    if isinstance(types, list) and all(
+                        isinstance(item, str) for item in types
+                    ):
+                        self.types = list(types)
+
+                    ignores_file = data.get("ignores")
+                    if isinstance(ignores_file, str) and ignores_file:
+                        self.ignores_file = ignores_file
+
+                    system_file = data.get("system")
+                    if isinstance(system_file, str) and system_file:
+                        self.system_file = system_file
+
+                    prompt_file = data.get("prompt")
+                    if isinstance(prompt_file, str) and prompt_file:
+                        self.prompt_file = prompt_file
+
+                    legacy_file = data.get("legacy")
+                    if isinstance(legacy_file, str) and legacy_file:
+                        self.legacy_file = legacy_file
             except Exception as e:
                 log.warning(
-                    strings.get("config_parse_failed", "failed to parse config").format(
+                    get_string("config_parse_failed", "failed to parse config").format(
                         name=self.name, error=e
                     )
                 )
@@ -60,7 +89,7 @@ class CaseConfig:
                     lines.extend(f.readlines())
             except Exception as e:
                 log.warning(
-                    strings.get("gitignore_read_failed", "gitignore error").format(
+                    get_string("gitignore_read_failed", "gitignore error").format(
                         error=e
                     )
                 )
@@ -72,7 +101,7 @@ class CaseConfig:
                     lines.extend(f.readlines())
             except Exception as e:
                 log.warning(
-                    strings.get("caseignore_read_failed", "caseignore error").format(
+                    get_string("caseignore_read_failed", "caseignore error").format(
                         error=e
                     )
                 )

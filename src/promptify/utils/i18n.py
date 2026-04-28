@@ -5,12 +5,16 @@ LOADS LANGUAGE STRINGS FROM JSON TO SUPPORT MULTIPLE REGION DEPLOYMENTS NATIVELY
 
 import json
 from pathlib import Path
+from typing import TypeAlias
 from ..core.settings import LOCALE
 
 STRINGS_DIR = Path(__file__).parent.parent.parent.parent / "strings"
+JsonValue: TypeAlias = (
+    str | int | float | bool | None | dict[str, "JsonValue"] | list["JsonValue"]
+)
 
 
-def load_strings() -> dict[str, str]:
+def load_strings() -> dict[str, JsonValue]:
     """
     LOADS JSON LOCALIZATION STRUCTURES PARSING SYSTEM ENVIRONMENTS CONFIGURATIONS.
     """
@@ -30,4 +34,10 @@ def load_strings() -> dict[str, str]:
 
 
 # GLOBALLY EXPOSED STRING MAP DICTIONARY
-strings = load_strings()
+strings: dict[str, JsonValue] = load_strings()
+
+
+def get_string(key: str, default: str = "") -> str:
+    """RETURNS A LOCALIZED STRING VALUE WITH A STRICT STRING FALLBACK."""
+    value = strings.get(key, default)
+    return value if isinstance(value, str) else default

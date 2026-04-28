@@ -154,6 +154,14 @@ class MentionMod(ABC):
         pass
 
 
+def _must_match(pattern: str, text: str) -> re.Match[str]:
+    """ASSERTS INTERNAL MOD REGEX INVARIANTS FOR TEXT ALREADY MATCHED BY THE REGISTRY."""
+    match = re.match(pattern, text)
+    if match is None:
+        raise ValueError(f"pattern '{pattern}' did not match '{text}'")
+    return match
+
+
 class ModRegistry:
     """CENTRAL REGISTRY MAPPING DYNAMICALLY LOADED MENTION MODS TO THE ENGINE."""
 
@@ -287,7 +295,7 @@ class FileMod(MentionMod):
             return 0
 
     async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = re.match(self.pattern, text)
+        m = _must_match(self.pattern, text)
         return await context.get_file_content(m.group(1), m.group(2))
 
     def get_completions(
@@ -394,7 +402,7 @@ class DirMod(MentionMod):
     pattern = r"<@dir:([^>]+)>"
 
     async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = re.match(self.pattern, text)
+        m = _must_match(self.pattern, text)
         return await context.get_dir_contents(m.group(1))
 
     def get_completions(
@@ -415,7 +423,7 @@ class TreeMod(MentionMod):
     pattern = r"<@tree:([^>:]+?)(?::([^>]+))?>"
 
     async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = re.match(self.pattern, text)
+        m = _must_match(self.pattern, text)
         return await context.get_tree_contents(m.group(1), m.group(2))
 
     def get_completions(
@@ -475,7 +483,7 @@ class ExtMod(MentionMod):
     pattern = r"<@(type|ext):([^>]+)>"
 
     async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = re.match(self.pattern, text)
+        m = _must_match(self.pattern, text)
         return await context.get_type_contents(m.group(2))
 
     def get_completions(
@@ -499,7 +507,7 @@ class GitMod(MentionMod):
     pattern = r"<@git:([^>:]+?)(?::([^>]+))?>"
 
     async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = re.match(self.pattern, text)
+        m = _must_match(self.pattern, text)
         query = m.group(1)
         path = m.group(2)
         if query == "status":
@@ -551,7 +559,7 @@ class SymbolMod(MentionMod):
             return []
 
     async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = re.match(self.pattern, text)
+        m = _must_match(self.pattern, text)
         return await context.get_symbol_content(m.group(1), m.group(2))
 
     def get_completions(

@@ -3,11 +3,20 @@ UNIT TESTS COVERING PATH MATCHING AND COMPLETION PRESENTATION HELPERS.
 """
 
 from pathlib import Path
-from types import SimpleNamespace
+from typing import cast
 
+from promptify.core.indexer import ProjectIndexer
 from promptify.core.matching import build_path_display_map, rank_path_candidates
 from promptify.core.models import FileMeta
 from promptify.core.mods import FileMod
+
+
+class IndexerStub:
+    """MINIMAL INDEXER SHAPE FOR COMPLETION TESTS."""
+
+    def __init__(self, files_by_rel: dict[str, FileMeta], dirs: set[str]):
+        self.files_by_rel = files_by_rel
+        self.dirs = dirs
 
 
 def test_rank_path_candidates_prioritizes_filename_hits():
@@ -44,7 +53,7 @@ def test_build_path_display_map_disambiguates_duplicate_names():
 
 def test_file_mod_completions_support_backslash_queries_and_compact_meta():
     """WINDOWS-STYLE PATH INPUTS SHOULD COMPLETE INTO NORMALIZED PROJECT PATHS."""
-    indexer = SimpleNamespace(
+    indexer = IndexerStub(
         files_by_rel={
             "src/main.py": FileMeta(
                 path=Path("src/main.py"),
@@ -64,7 +73,9 @@ def test_file_mod_completions_support_backslash_queries_and_compact_meta():
         dirs=set(),
     )
 
-    completions = list(FileMod().get_completions("<@file:src\\ma", indexer))
+    completions = list(
+        FileMod().get_completions("<@file:src\\ma", cast(ProjectIndexer, indexer))
+    )
 
     assert completions[0].text == "src/main.py"
     assert completions[0].display_text == "main.py"
@@ -83,8 +94,10 @@ def test_file_mod_completions_are_not_limited_to_fifteen_items():
         )
         for idx in range(20)
     }
-    indexer = SimpleNamespace(files_by_rel=files, dirs=set())
+    indexer = IndexerStub(files_by_rel=files, dirs=set())
 
-    completions = list(FileMod().get_completions("<@file:file_", indexer))
+    completions = list(
+        FileMod().get_completions("<@file:file_", cast(ProjectIndexer, indexer))
+    )
 
     assert len(completions) == 20

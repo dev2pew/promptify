@@ -73,9 +73,10 @@ def path_candidate_matches(query: str, candidate: str) -> bool:
 
     if query_tail and query_tail in leaf:
         return True
-    if _subsequence_score(normalized_query, normalized_candidate) >= len(
-        normalized_query
-    ) * 8:
+    if (
+        _subsequence_score(normalized_query, normalized_candidate)
+        >= len(normalized_query) * 8
+    ):
         return True
     if query_tail and _subsequence_score(query_tail, leaf) >= len(query_tail) * 8:
         return True
@@ -116,7 +117,9 @@ def _path_rank_key(query: str, candidate: str) -> tuple:
         normalized_candidate, normalized_query
     )
     leaf_subsequence = (
-        _subsequence_score(query_tail, leaf) if query_tail else _subsequence_score("", "")
+        _subsequence_score(query_tail, leaf)
+        if query_tail
+        else _subsequence_score("", "")
     )
     path_subsequence = _subsequence_score(normalized_query, normalized_candidate)
     leaf_partial = (
