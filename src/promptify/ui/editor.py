@@ -6,14 +6,14 @@ IMPLEMENTS HIGHLIGHTING, AUTOCOMPLETION, INVALID MENTION MARKING, AND SEARCH.
 import re
 import sys
 import asyncio
-from typing import Callable, Iterable
+from typing import Callable, Iterable, cast
 
 from .logger import log
 from ..core.indexer import ProjectIndexer
 from ..core.resolver import PromptResolver
 from ..core.mods import ModRegistry, split_file_query_and_range
 from .bindings import setup_keybindings
-from ..utils.i18n import strings
+from ..utils.i18n import get_string
 
 try:
     from prompt_toolkit import Application
@@ -30,29 +30,53 @@ try:
         ConditionalContainer,
         WindowAlign,
     )
-    from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+    from prompt_toolkit.layout.controls import (
+        BufferControl,
+        FormattedTextControl,
+        UIContent,
+    )
     from prompt_toolkit.layout.layout import Layout
-    from prompt_toolkit.layout.menus import CompletionsMenu
     from prompt_toolkit.layout.dimension import Dimension
+    from prompt_toolkit.layout.margins import ScrollbarMargin
+    from prompt_toolkit.data_structures import Point
     from prompt_toolkit.buffer import Buffer
     from prompt_toolkit.document import Document
     from prompt_toolkit.styles import Style
     from prompt_toolkit.widgets import Frame, SearchToolbar
     from prompt_toolkit.lexers import Lexer
-    from prompt_toolkit.filters import Condition
+    from prompt_toolkit.filters import (
+        Condition,
+        FilterOrBool,
+        has_completions,
+        is_done,
+        to_filter,
+    )
     from prompt_toolkit.layout.processors import (
         HighlightMatchingBracketProcessor,
         Processor,
         Transformation,
     )
+    from prompt_toolkit.layout.containers import ScrollOffsets
+    from prompt_toolkit.layout.menus import (
+        CompletionsMenuControl,
+        _get_menu_item_fragments,
+    )
 except ImportError:
     log.error(
-        strings.get(
+        get_string(
             "err_prompt_toolkit_missing",
             "'prompt_toolkit' library is missing. install it using: 'uv pip install prompt_toolkit'",
         )
     )
     sys.exit(1)
+
+
+def _fragment_text(fragment: tuple[object, ...]) -> str:
+    """READS PROMPT-TOOLKIT FRAGMENTS THAT MAY OPTIONALLY CARRY A THIRD FIELD."""
+    if len(fragment) < 2 or not isinstance(fragment[1], str):
+        return ""
+    return fragment[1]
+
 
 try:
     import pygments  # NOQA: F401
@@ -63,7 +87,7 @@ try:
 except ImportError:
     HAS_PYGMENTS = False
     log.warning(
-        strings.get(
+        get_string(
             "err_pygments_missing",
             "'pygments' library is missing. syntax highlighting will be disabled. install it using: 'uv pip install pygments'",
         )
@@ -73,7 +97,7 @@ try:
     from rapidfuzz import process, fuzz  # NOQA: F401
 except ImportError:
     log.error(
-        strings.get(
+        get_string(
             "err_rapidfuzz_missing",
             "'rapidfuzz' library is missing. install it using: 'uv pip install rapidfuzz'",
         )
@@ -89,7 +113,7 @@ class HighlightTrailingWhitespaceProcessor(Processor):
         if not fragments:
             return Transformation(fragments)
 
-        line_text = "".join(text for style, text in fragments)
+        line_text = "".join(_fragment_text(fragment) for fragment in fragments)
         stripped = line_text.rstrip(" \t")
 
         if len(stripped) == len(line_text):
@@ -97,7 +121,9 @@ class HighlightTrailingWhitespaceProcessor(Processor):
 
         new_fragments = []
         char_count = 0
-        for style, text in fragments:
+        for fragment in fragments:
+            style = cast(str, fragment[0])
+            text = _fragment_text(fragment)
             if char_count >= len(stripped):
                 new_fragments.append(("class:trailing-whitespace", text))
             elif char_count + len(text) > len(stripped):
@@ -234,7 +260,15 @@ if HAS_PYGMENTS:
                 self._validation_cache[cache_key] = False
                 return False
 
-            match = self.registry.pattern.fullmatch(text)
+            pattern = self.registry.pattern
+            if pattern is None:
+                self.registry.build()
+                pattern = self.registry.pattern
+            if pattern is None:
+                self._validation_cache[cache_key] = False
+                return False
+
+            match = pattern.fullmatch(text)
             if not match:
                 self._validation_cache[cache_key] = False
                 return False
@@ -307,7 +341,9 @@ if HAS_PYGMENTS:
 
                 # FLATTEN ORIGINAL PYGMENTS TOKENS TO A CHARACTER MAP
                 chars = []
-                for style, chars_str in original_tokens:
+                for fragment in original_tokens:
+                    style = cast(str, fragment[0])
+                    chars_str = _fragment_text(fragment)
                     for c in chars_str:
                         chars.append((style, c))
 
@@ -434,11 +470,115 @@ class MentionCompleter(Completer):
         yield from completions
 
 
+class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
+    """COMPLETION MENU CONTROL THAT RESPECTS THE ACTIVE VIEWPORT WIDTH."""
+
+    MIN_META_COLUMN_WIDTH = 12
+    MIN_WIDTH_FOR_META = 28
+
+    def preferred_width(self, max_available_width: int) -> int | None:
+        complete_state = get_app().current_buffer.complete_state
+        if not complete_state:
+            return 0
+
+        menu_width = self._get_menu_width(max_available_width, complete_state)
+        menu_meta_width = self._get_menu_meta_width(
+            max(0, max_available_width - menu_width), complete_state
+        )
+        preferred = menu_width + menu_meta_width
+        return min(max_available_width, preferred)
+
+    def _get_column_widths(self, width: int, complete_state) -> tuple[int, int, bool]:
+        """SPLITS AVAILABLE WIDTH BETWEEN THE LABEL AND THE PATH META COLUMN."""
+        menu_width = self._get_menu_width(width, complete_state)
+        meta_width = self._get_menu_meta_width(
+            max(0, width - menu_width), complete_state
+        )
+        show_meta = self._show_meta(complete_state)
+
+        if not show_meta or width < self.MIN_WIDTH_FOR_META:
+            return min(width, menu_width), 0, False
+
+        reserved_meta = min(
+            meta_width or self.MIN_META_COLUMN_WIDTH,
+            max(0, width - self.MIN_WIDTH),
+        )
+        reserved_meta = max(self.MIN_META_COLUMN_WIDTH, reserved_meta)
+        menu_width = min(menu_width, max(self.MIN_WIDTH, width - reserved_meta))
+        meta_width = min(meta_width, max(0, width - menu_width))
+
+        if meta_width < self.MIN_META_COLUMN_WIDTH:
+            return min(width, menu_width), 0, False
+
+        return menu_width, meta_width, True
+
+    def create_content(self, width: int, height: int) -> UIContent:
+        """RENDERS COMPLETIONS USING A VIEWPORT-AWARE LABEL/META SPLIT."""
+        complete_state = get_app().current_buffer.complete_state
+        if not complete_state:
+            return UIContent()
+
+        completions = complete_state.completions
+        index = complete_state.complete_index
+        menu_width, meta_width, show_meta = self._get_column_widths(
+            width, complete_state
+        )
+
+        def get_line(i: int):
+            completion = completions[i]
+            is_current_completion = i == index
+            result = _get_menu_item_fragments(
+                completion, is_current_completion, menu_width, space_after=show_meta
+            )
+
+            if show_meta:
+                result += self._get_menu_item_meta_fragments(
+                    completion, is_current_completion, meta_width
+                )
+            return result
+
+        return UIContent(
+            get_line=get_line,
+            cursor_position=Point(x=0, y=index or 0),
+            line_count=len(completions),
+        )
+
+
+class ResponsiveCompletionsMenu(ConditionalContainer):
+    """DROPDOWN MENU THAT TRACKS THE TERMINAL SIZE INSTEAD OF A FIXED WIDTH HINT."""
+
+    def __init__(
+        self,
+        max_height: int | None = None,
+        scroll_offset: int | Callable[[], int] = 0,
+        extra_filter: FilterOrBool = True,
+        display_arrows: FilterOrBool = False,
+        z_index: int = 10**8,
+    ) -> None:
+        extra_filter_filter = to_filter(extra_filter)
+        display_arrows_filter = to_filter(display_arrows)
+
+        super().__init__(
+            content=Window(
+                content=ResponsiveCompletionsMenuControl(),
+                width=Dimension(min=8),
+                height=Dimension(min=1, max=max_height),
+                scroll_offsets=ScrollOffsets(top=scroll_offset, bottom=scroll_offset),
+                right_margins=[ScrollbarMargin(display_arrows=display_arrows_filter)],
+                dont_extend_width=True,
+                style="class:completion-menu",
+                z_index=z_index,
+            ),
+            filter=extra_filter_filter & has_completions & ~is_done,
+        )
+
+
 class InteractiveEditor:
     """MANAGES THE CORE PROMPT-TOOLKIT TERMINAL EDITOR."""
 
     BULK_EDIT_SUSPEND_SECONDS = 0.35
     BULK_EDIT_SIZE_THRESHOLD = 2048
+    COMPLETION_MENU_MAX_HEIGHT = 12
 
     def __init__(
         self,
@@ -455,20 +595,24 @@ class InteractiveEditor:
 
         self.buffer = Buffer(
             document=Document(initial_text, cursor_position=0),
-            completer=MentionCompleter(indexer, resolver.registry, self.should_complete),
+            completer=MentionCompleter(
+                cast(ProjectIndexer, indexer),
+                cast(ModRegistry, resolver.registry),
+                self.should_complete,
+            ),
             complete_while_typing=Condition(self.should_complete_while_typing),
         )
         self.result: str | None = None
 
-        help_text = strings.get("help_text", "")
+        help_text = get_string("help_text", "")
         self.help_buffer = Buffer(document=Document(help_text), read_only=True)
 
         self.help_window = Window(
             content=BufferControl(buffer=self.help_buffer, lexer=HelpLexer()),
             style="class:help-text",
             wrap_lines=False,
-            width=Dimension(preferred=65, max=100),
-            height=Dimension(preferred=24, max=40),
+            width=Dimension(min=40, max=160, weight=1),
+            height=Dimension(min=12, max=40, weight=1),
         )
 
         self.error_visible = False
@@ -478,16 +622,16 @@ class InteractiveEditor:
             content=BufferControl(buffer=self.error_buffer),
             style="class:error-text",
             wrap_lines=True,
-            width=Dimension(preferred=60, max=80),
-            height=Dimension(preferred=10, max=20),
+            width=Dimension(min=36, max=120, weight=1),
+            height=Dimension(min=8, max=24, weight=1),
         )
 
         self.search_toolbar = SearchToolbar()
 
         lexer = (
             CustomPromptLexer(
-                resolver.registry,
-                indexer,
+                cast(ModRegistry, resolver.registry),
+                cast(ProjectIndexer, indexer),
                 resolver,
                 self.expensive_checks_enabled,
             )
@@ -507,6 +651,33 @@ class InteractiveEditor:
                 input_processors=processors,
                 search_buffer_control=self.search_toolbar.control,
             )
+        )
+        self.completions_menu = ResponsiveCompletionsMenu(
+            max_height=self.COMPLETION_MENU_MAX_HEIGHT,
+            scroll_offset=1,
+        )
+
+    def _build_centered_overlay(
+        self, container, visible_filter: Condition
+    ) -> ConditionalContainer:
+        """CENTERS AN INTERACTIVE PANEL WHILE ALLOWING IT TO SCALE WITH THE VIEWPORT."""
+        return ConditionalContainer(
+            content=HSplit(
+                [
+                    Window(height=Dimension(weight=1)),
+                    VSplit(
+                        [
+                            Window(width=Dimension(weight=1)),
+                            container,
+                            Window(width=Dimension(weight=1)),
+                        ],
+                        padding=0,
+                    ),
+                    Window(height=Dimension(weight=1)),
+                ],
+                padding=0,
+            ),
+            filter=visible_filter,
         )
 
     async def _update_tokens_loop(self):
@@ -561,7 +732,7 @@ class InteractiveEditor:
             style="class:topbar",
         )
 
-        toolbar_text = strings.get("toolbar_text", "")
+        toolbar_text = get_string("toolbar_text", "")
         bottom_toolbar = VSplit(
             [
                 Window(
@@ -587,48 +758,22 @@ class InteractiveEditor:
 
         help_frame = Frame(
             body=self.help_window,
-            title=" < " + strings.get("help_title", "help") + " > ",
+            title=" < " + get_string("help_title", "help") + " > ",
             style="class:help-frame",
         )
 
-        help_overlay = ConditionalContainer(
-            content=HSplit(
-                [
-                    Window(height=Dimension(weight=1)),
-                    VSplit(
-                        [
-                            Window(width=Dimension(weight=1)),
-                            help_frame,
-                            Window(width=Dimension(weight=1)),
-                        ]
-                    ),
-                    Window(height=Dimension(weight=1)),
-                ]
-            ),
-            filter=Condition(lambda: self.help_visible),
+        help_overlay = self._build_centered_overlay(
+            help_frame, Condition(lambda: self.help_visible)
         )
 
         error_frame = Frame(
             body=self.error_window,
-            title=" < " + strings.get("error_title", "error") + " > ",
+            title=" < " + get_string("error_title", "error") + " > ",
             style="class:error-frame",
         )
 
-        error_overlay = ConditionalContainer(
-            content=HSplit(
-                [
-                    Window(height=Dimension(weight=1)),
-                    VSplit(
-                        [
-                            Window(width=Dimension(weight=1)),
-                            error_frame,
-                            Window(width=Dimension(weight=1)),
-                        ]
-                    ),
-                    Window(height=Dimension(weight=1)),
-                ]
-            ),
-            filter=Condition(lambda: self.error_visible),
+        error_overlay = self._build_centered_overlay(
+            error_frame, Condition(lambda: self.error_visible)
         )
 
         layout = Layout(
@@ -638,7 +783,7 @@ class InteractiveEditor:
                     Float(
                         xcursor=True,
                         ycursor=True,
-                        content=CompletionsMenu(max_height=12, scroll_offset=1),
+                        content=self.completions_menu,
                     ),
                     Float(
                         content=help_overlay,

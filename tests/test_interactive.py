@@ -3,12 +3,16 @@ UNIT TESTS EXERCISING THE RUNTIME INTERACTIVE EDITOR SURFACE.
 """
 
 import asyncio
+from typing import Any, cast
 
 import pytest
 from prompt_toolkit.application.current import create_app_session
-from prompt_toolkit.completion import CompleteEvent
+from prompt_toolkit.buffer import CompletionState
+from prompt_toolkit.completion import CompleteEvent, Completion
+from prompt_toolkit.document import Document
 from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
+from prompt_toolkit.layout.dimension import Dimension
 from prompt_toolkit.output.base import DummyOutput
 from prompt_toolkit.selection import SelectionState
 
@@ -182,7 +186,9 @@ async def test_interactive_editor_completer_surfaces_full_ranked_path_results(
     context, resolver = app_components
     for idx in range(20):
         rel_path = f"src/file_{idx:02d}.py"
-        context.indexer.files_by_rel[rel_path] = context.indexer.files_by_rel["app.py"].__class__(
+        context.indexer.files_by_rel[rel_path] = context.indexer.files_by_rel[
+            "app.py"
+        ].__class__(
             path=context.target_dir / rel_path,
             rel_path=rel_path,
             ext="py",
@@ -203,3 +209,59 @@ async def test_interactive_editor_completer_surfaces_full_ranked_path_results(
     assert len(completions) == 20
     assert completions[0].display_text == "file_00.py"
     assert completions[0].display_meta_text == "src"
+
+
+async def test_interactive_completion_menu_respects_available_width(app_components):
+    """THE COMPLETION MENU SHOULD CLAMP ITS PREFERRED WIDTH TO THE VIEWPORT."""
+    context, resolver = app_components
+    editor = InteractiveEditor("", context.indexer, resolver)
+    completions = [
+        Completion(
+            "src/really_long_path_name.py",
+            display="really_long_path_name.py",
+            display_meta="some/deeply/nested/path/segment",
+        )
+    ]
+    editor.buffer.complete_state = CompletionState(
+        editor.buffer.document,
+        completions=completions,
+        complete_index=0,
+    )
+
+    control = cast(Any, editor.completions_menu.content).content
+    app = type("AppStub", (), {"current_buffer": editor.buffer})()
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr("promptify.ui.editor.get_app", lambda: app)
+        assert control.preferred_width(24) == 24
+        assert control.preferred_width(80) < 80
+
+        medium_content = control.create_content(width=40, height=1)
+        medium_line = "".join(text for _, text in medium_content.get_line(0))
+        assert "really_long_path_name.py" in medium_line
+        assert "some/" in medium_line
+
+        narrow_content = control.create_content(width=20, height=1)
+        narrow_line = "".join(text for _, text in narrow_content.get_line(0))
+        assert "really_long_path" in narrow_line
+        assert "some/" not in narrow_line
+
+
+async def test_interactive_overlay_windows_use_responsive_dimensions(app_components):
+    """HELP AND ERROR PANELS SHOULD SCALE VIA MIN/MAX BOUNDS INSTEAD OF FIXED SIZES."""
+    context, resolver = app_components
+    editor = InteractiveEditor("", context.indexer, resolver)
+
+    help_width = cast(Dimension, editor.help_window.width)
+    help_height = cast(Dimension, editor.help_window.height)
+    error_width = cast(Dimension, editor.error_window.width)
+    error_height = cast(Dimension, editor.error_window.height)
+
+    assert help_width.weight == 1
+    assert help_width.min == 40
+    assert help_width.max == 160
+    assert help_height.weight == 1
+    assert error_width.weight == 1
+    assert error_width.min == 36
+    assert error_width.max == 120
+    assert error_height.weight == 1

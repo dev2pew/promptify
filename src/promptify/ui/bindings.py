@@ -16,7 +16,8 @@ from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 from prompt_toolkit.search import start_search
 
-from ..utils.i18n import strings
+from ..utils.i18n import get_string
+from ..core.context import get_comment_syntax
 
 
 def detect_indent_style(document: Document) -> str:
@@ -541,8 +542,7 @@ def setup_keybindings(editor) -> KeyBindings:
         if not in_block:
             prefix, suffix = "<!-- ", " -->"
         else:
-            syntax = strings.get("comment_syntax", {}).get(lang, ["# ", ""])
-            prefix, suffix = syntax[0], syntax[1]
+            prefix, suffix = get_comment_syntax(lang)
 
         if b.selection_state:
             start_row = doc.translate_index_to_position(
@@ -633,7 +633,7 @@ def setup_keybindings(editor) -> KeyBindings:
                 except Exception as e:
                     editor.error_message = str(e)
                     editor.error_visible = True
-                    editor.error_buffer.text = strings.get(
+                    editor.error_buffer.text = get_string(
                         "invalid_syntax_window", "invalid syntax"
                     ).format(path=meta.rel_path, error=e)
                     event.app.layout.focus(editor.error_window)

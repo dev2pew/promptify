@@ -8,7 +8,7 @@ from typing import Any
 from prompt_toolkit import print_formatted_text, HTML
 from prompt_toolkit.shortcuts import PromptSession
 
-from ..utils.i18n import strings
+from ..utils.i18n import get_string
 
 
 class Logger:
@@ -80,7 +80,7 @@ class Logger:
             return await self._session.prompt_async(formatted_text)
         except (EOFError, KeyboardInterrupt):
             print()
-            self.warning(strings.get("operation_cancelled", "operation cancelled"))
+            self.warning(get_string("operation_cancelled", "operation cancelled"))
             sys.exit(0)
 
     def error(self, message: str, **kwargs: Any) -> None:
