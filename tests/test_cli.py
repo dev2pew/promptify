@@ -86,8 +86,8 @@ def test_programmatic_config_creation():
 
 
 @pytest.mark.asyncio
-async def test_save_output_uses_case_parent_folder(test_sandbox, monkeypatch):
-    """OUTPUTS SHOULD BE STORED UNDER THE CASE PARENT FOLDER NAME, NOT THE CASE NAME."""
+async def test_save_output_uses_case_folder(test_sandbox, monkeypatch):
+    """OUTPUTS SHOULD BE STORED UNDER THE CASE FOLDER NAME."""
     app = App()
     app.outs_dir = test_sandbox["outs"]
     case = CaseConfig(test_sandbox["case"])
@@ -95,11 +95,11 @@ async def test_save_output_uses_case_parent_folder(test_sandbox, monkeypatch):
 
     await app.save_output(case, "demo output", raw_content="raw output")
 
-    case_parent_dir = app.outs_dir / test_sandbox["case"].parent.name
-    assert case_parent_dir.exists()
+    parent_dir = app.outs_dir / test_sandbox["case"].name
+    assert parent_dir.exists()
     assert not (app.outs_dir / case.name).exists()
-    assert list(case_parent_dir.rglob("*.md"))
-    assert list(case_parent_dir.rglob("*.raw"))
+    assert list(parent_dir.rglob("*.md"))
+    assert list(parent_dir.rglob("*.raw"))
 
 
 @pytest.mark.asyncio

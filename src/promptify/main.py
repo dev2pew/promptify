@@ -95,8 +95,8 @@ class App:
         await self.save_state(state)
 
     def get_output_case_dir_name(self, case: CaseConfig) -> str:
-        """USES THE CASE'S PARENT FOLDER NAME FOR OUTPUT STORAGE SAFETY."""
-        return case.case_dir.parent.name
+        """USES THE CASE'S FOLDER NAME FOR OUTPUT STORAGE SAFETY."""
+        return case.case_dir.name
 
     async def save_output(
         self, case: CaseConfig, content: str, raw_content: str | None = None
