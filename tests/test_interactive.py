@@ -234,16 +234,17 @@ async def test_interactive_completion_menu_respects_available_width(app_componen
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr("promptify.ui.editor.get_app", lambda: app)
         assert control.preferred_width(24) == 24
-        assert control.preferred_width(80) < 80
+        assert control.preferred_width(40) < control.preferred_width(80)
+        assert control.preferred_width(80) <= 57
 
         medium_content = control.create_content(width=40, height=1)
         medium_line = "".join(text for _, text in medium_content.get_line(0))
-        assert "really_long_path_name.py" in medium_line
-        assert "some/" in medium_line
+        assert "name.py" in medium_line
+        assert "segment" in medium_line
 
         narrow_content = control.create_content(width=20, height=1)
         narrow_line = "".join(text for _, text in narrow_content.get_line(0))
-        assert "really_long_path" in narrow_line
+        assert "name.py" in narrow_line
         assert "some/" not in narrow_line
 
 

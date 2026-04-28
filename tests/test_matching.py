@@ -8,7 +8,7 @@ from typing import cast
 from promptify.core.indexer import ProjectIndexer
 from promptify.core.matching import build_path_display_map, rank_path_candidates
 from promptify.core.models import FileMeta
-from promptify.core.mods import FileMod
+from promptify.core.mods import DirMod, FileMod
 
 
 class IndexerStub:
@@ -101,3 +101,42 @@ def test_file_mod_completions_are_not_limited_to_fifteen_items():
     )
 
     assert len(completions) == 20
+
+
+def test_file_mod_exact_match_helpers_do_not_show_path_meta():
+    """CLOSING HELPERS SHOULD STAY PLAIN INSTEAD OF REPEATING DIRECTORY META."""
+    indexer = IndexerStub(
+        files_by_rel={
+            "src/main.py": FileMeta(
+                path=Path("src/main.py"),
+                rel_path="src/main.py",
+                ext="py",
+                size=1,
+                mtime=1.0,
+            )
+        },
+        dirs=set(),
+    )
+
+    completions = list(
+        FileMod().get_completions("<@file:src/main.py", cast(ProjectIndexer, indexer))
+    )
+
+    assert completions[0].display_text == "main.py>"
+    assert completions[0].display_meta_text == ""
+    assert completions[1].display_text == "main.py:"
+    assert completions[1].display_meta_text == ""
+
+
+def test_dir_mod_completions_do_not_show_path_meta():
+    """DIRECTORY COMPLETIONS SHOULD KEEP THE MENU LIGHTWEIGHT AND LABEL-ONLY."""
+    indexer = IndexerStub(
+        files_by_rel={},
+        dirs={"src/features/auth", "src/features/billing"},
+    )
+
+    completions = list(
+        DirMod().get_completions("<@dir:auth", cast(ProjectIndexer, indexer))
+    )
+
+    assert completions[0].display_meta_text == ""

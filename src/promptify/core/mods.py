@@ -69,6 +69,7 @@ def build_path_completions(
     *,
     close_suffix: str = ">",
     exact_suffixes: tuple[str, ...] = (),
+    meta_candidates: set[str] | None = None,
 ) -> Iterable[Completion]:
     """YIELDS PATH COMPLETIONS WITH COMPACT, DISAMBIGUATED DISPLAY LABELS."""
     normalized_partial = normalize_match_path(partial)
@@ -78,26 +79,27 @@ def build_path_completions(
 
     for candidate in ranked:
         label, meta = display_map[candidate]
+        display_meta = meta if meta_candidates is None or candidate in meta_candidates else ""
         if candidate == normalized_partial:
             yield Completion(
                 candidate + close_suffix,
                 start_position=start_position,
                 display=label + close_suffix,
-                display_meta=meta,
+                display_meta="",
             )
             for suffix in exact_suffixes:
                 yield Completion(
                     candidate + suffix,
                     start_position=start_position,
                     display=label + suffix,
-                    display_meta=meta,
+                    display_meta="",
                 )
         else:
             yield Completion(
                 candidate,
                 start_position=start_position,
                 display=label,
-                display_meta=meta,
+                display_meta=display_meta,
             )
 
 
@@ -384,6 +386,7 @@ class FileMod(MentionMod):
                     list(indexer.files_by_rel.keys()),
                     close_suffix=">",
                     exact_suffixes=(":",),
+                    meta_candidates=set(indexer.files_by_rel),
                 )
                 return
 
@@ -392,6 +395,7 @@ class FileMod(MentionMod):
                 list(indexer.files_by_rel.keys()),
                 close_suffix=">",
                 exact_suffixes=(":",),
+                meta_candidates=set(indexer.files_by_rel),
             )
 
 
@@ -413,6 +417,7 @@ class DirMod(MentionMod):
             yield from build_path_completions(
                 match_path.group(1),
                 list(indexer.dirs),
+                meta_candidates=set(),
             )
 
 
@@ -465,6 +470,7 @@ class TreeMod(MentionMod):
                     list(indexer.dirs),
                     close_suffix=">",
                     exact_suffixes=(":",),
+                    meta_candidates=set(),
                 )
                 return
 
@@ -473,6 +479,7 @@ class TreeMod(MentionMod):
                 list(indexer.dirs),
                 close_suffix=">",
                 exact_suffixes=(":",),
+                meta_candidates=set(),
             )
 
 
@@ -522,7 +529,11 @@ class GitMod(MentionMod):
         match_git_diff = re.search(r"<@git:diff:([^><]*)$", text_before_cursor)
         if match_git_diff:
             candidates = list(indexer.files_by_rel.keys()) + list(indexer.dirs)
-            yield from build_path_completions(match_git_diff.group(1), candidates)
+            yield from build_path_completions(
+                match_git_diff.group(1),
+                candidates,
+                meta_candidates=set(indexer.files_by_rel),
+            )
             return
 
         match_git = re.search(r"<@git:([^><:]*)$", text_before_cursor)
@@ -573,6 +584,7 @@ class SymbolMod(MentionMod):
                     parts[0],
                     list(indexer.files_by_rel.keys()),
                     close_suffix=":",
+                    meta_candidates=set(indexer.files_by_rel),
                 )
             elif len(parts) == 2:
                 meta = indexer.files_by_rel.get(normalize_match_path(parts[0]))
