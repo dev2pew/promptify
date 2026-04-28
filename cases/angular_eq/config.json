@@ -1,0 +1,18 @@
+{
+    "name": "angular_eq",
+    "types": [
+        ".ts",
+        ".html",
+        ".scss",
+        ".css",
+        ".sass",
+        ".less",
+        ".json",
+        ".js",
+        ".mjs",
+        ".cjs"
+    ],
+    "ignores": ".caseignore",
+    "system": "system.md",
+    "prompt": "prompt.md"
+}
