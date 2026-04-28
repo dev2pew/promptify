@@ -9,6 +9,12 @@ from typing import Iterable, TYPE_CHECKING
 from prompt_toolkit.completion import Completion
 from rapidfuzz import process, utils as fuzz_utils
 
+from .matching import (
+    build_path_display_map,
+    normalize_match_path,
+    rank_path_candidates,
+)
+
 if TYPE_CHECKING:
     from .context import ProjectContext
     from .indexer import ProjectIndexer
@@ -20,7 +26,7 @@ def fuzzy_complete(
     candidates: list[str],
     prefix: str = "",
     suffix: str = ">",
-    limit: int = 15,
+    limit: int | None = None,
 ) -> Iterable[Completion]:
     """
     HELPER TO PROVIDE FAST, CASE-INSENSITIVE FUZZY COMPLETIONS.
@@ -30,18 +36,23 @@ def fuzzy_complete(
         candidates (list[str]): All available lookup targets.
         prefix (str): Prefix formatting attached on output.
         suffix (str): Suffix attached formatting to close out selection payload.
-        limit (int): Size limiter for rendered completion lines.
+        limit (int | None): Optional size limiter for rendered completion lines.
 
     Yields:
         Completion: Processed payload prompt-toolkit completion object.
     """
+    size_limit = len(candidates) if limit is None else limit
+
     if not partial:
-        for c in sorted(candidates)[:limit]:
+        for c in sorted(candidates)[:size_limit]:
             yield Completion(prefix + c + suffix, start_position=0, display=prefix + c)
         return
 
     results = process.extract(
-        partial, candidates, limit=limit, processor=fuzz_utils.default_process
+        partial,
+        candidates,
+        limit=size_limit,
+        processor=fuzz_utils.default_process,
     )
     matched_items = [res[0] for res in results if res[1] > 40] or [
         res[0] for res in results
@@ -50,6 +61,44 @@ def fuzzy_complete(
         yield Completion(
             prefix + c + suffix, start_position=-len(partial), display=prefix + c
         )
+
+
+def build_path_completions(
+    partial: str,
+    candidates: list[str],
+    *,
+    close_suffix: str = ">",
+    exact_suffixes: tuple[str, ...] = (),
+) -> Iterable[Completion]:
+    """YIELDS PATH COMPLETIONS WITH COMPACT, DISAMBIGUATED DISPLAY LABELS."""
+    normalized_partial = normalize_match_path(partial)
+    ranked = rank_path_candidates(normalized_partial, candidates)
+    display_map = build_path_display_map(ranked)
+    start_position = -len(partial)
+
+    for candidate in ranked:
+        label, meta = display_map[candidate]
+        if candidate == normalized_partial:
+            yield Completion(
+                candidate + close_suffix,
+                start_position=start_position,
+                display=label + close_suffix,
+                display_meta=meta,
+            )
+            for suffix in exact_suffixes:
+                yield Completion(
+                    candidate + suffix,
+                    start_position=start_position,
+                    display=label + suffix,
+                    display_meta=meta,
+                )
+        else:
+            yield Completion(
+                candidate,
+                start_position=start_position,
+                display=label,
+                display_meta=meta,
+            )
 
 
 def split_file_query_and_range(query: str) -> tuple[str, str | None]:
@@ -246,7 +295,7 @@ class FileMod(MentionMod):
     ) -> Iterable[Completion]:
         match_range = re.search(r"<@file:([^>:]+):([^><]*)$", text_before_cursor)
         if match_range:
-            path = match_range.group(1)
+            path = normalize_match_path(match_range.group(1))
             partial = match_range.group(2).lower()
 
             meta = indexer.files_by_rel.get(path)
@@ -267,30 +316,22 @@ class FileMod(MentionMod):
             if partial.startswith("first ") or partial.startswith("last "):
                 prefix = "first " if partial.startswith("first ") else "last "
                 num_part = partial[len(prefix) :]
-                count = 0
                 for i in range(1, lines_count + 1):
                     s = str(i)
                     if s.startswith(num_part):
                         yield Completion(
                             s + ">", start_position=-len(num_part), display=s + ">"
                         )
-                        count += 1
-                        if count >= 15:
-                            break
                 return
 
             if partial.startswith("#"):
                 num_part = partial[1:]
-                count = 0
                 for i in range(1, lines_count + 1):
                     s = str(i)
                     if s.startswith(num_part):
                         yield Completion(
                             s + ">", start_position=-len(num_part), display=s + ">"
                         )
-                        count += 1
-                        if count >= 15:
-                            break
                 return
 
             if "-" in partial:
@@ -303,29 +344,21 @@ class FileMod(MentionMod):
                     except ValueError:
                         start_idx = 1
 
-                    count = 0
                     for i in range(start_idx, lines_count + 1):
                         s = str(i)
                         if s.startswith(num_part):
                             yield Completion(
                                 s + ">", start_position=-len(num_part), display=s + ">"
                             )
-                            count += 1
-                            if count >= 15:
-                                break
                 return
 
             if partial.isdigit():
-                count = 0
                 for i in range(1, lines_count + 1):
                     s = str(i)
                     if s.startswith(partial):
                         yield Completion(
                             s + "-", start_position=-len(partial), display=s + "-"
                         )
-                        count += 1
-                        if count >= 15:
-                            break
                 return
 
             for c, d in [("first ", "first [n]"), ("last ", "last [n]")]:
@@ -338,30 +371,20 @@ class FileMod(MentionMod):
             partial = match_path.group(1)
 
             if not partial:
-                for c in sorted(list(indexer.files_by_rel.keys()))[:15]:
-                    yield Completion(c, start_position=0, display=c)
+                yield from build_path_completions(
+                    "",
+                    list(indexer.files_by_rel.keys()),
+                    close_suffix=">",
+                    exact_suffixes=(":",),
+                )
                 return
 
-            results = process.extract(
+            yield from build_path_completions(
                 partial,
                 list(indexer.files_by_rel.keys()),
-                limit=15,
-                processor=fuzz_utils.default_process,
+                close_suffix=">",
+                exact_suffixes=(":",),
             )
-            matched_items = [res[0] for res in results if res[1] > 40] or [
-                res[0] for res in results
-            ]
-
-            for c in matched_items:
-                if c == partial:
-                    yield Completion(
-                        c + ">", start_position=-len(partial), display=f"{c}>"
-                    )
-                    yield Completion(
-                        c + ":", start_position=-len(partial), display=f"{c}:"
-                    )
-                else:
-                    yield Completion(c, start_position=-len(partial), display=c)
 
 
 class DirMod(MentionMod):
@@ -379,7 +402,10 @@ class DirMod(MentionMod):
     ) -> Iterable[Completion]:
         match_path = re.search(r"<@dir:([^><]*)$", text_before_cursor)
         if match_path:
-            yield from fuzzy_complete(match_path.group(1), list(indexer.dirs))
+            yield from build_path_completions(
+                match_path.group(1),
+                list(indexer.dirs),
+            )
 
 
 class TreeMod(MentionMod):
@@ -426,33 +452,20 @@ class TreeMod(MentionMod):
             partial = match_path.group(1)
 
             if not partial:
-                for c in sorted(list(indexer.dirs))[:15]:
-                    yield Completion(c, start_position=0, display=c)
+                yield from build_path_completions(
+                    "",
+                    list(indexer.dirs),
+                    close_suffix=">",
+                    exact_suffixes=(":",),
+                )
                 return
 
-            results = process.extract(
+            yield from build_path_completions(
                 partial,
                 list(indexer.dirs),
-                limit=15,
-                processor=fuzz_utils.default_process,
+                close_suffix=">",
+                exact_suffixes=(":",),
             )
-            matched_items = [res[0] for res in results if res[1] > 40] or [
-                res[0] for res in results
-            ]
-
-            for c in matched_items:
-                if c == partial:
-                    # PROVIDE AN EXACT MATCH BRANCHING CHOICE!
-                    yield Completion(
-                        c + ">", start_position=-len(partial), display=f"{c}>"
-                    )
-                    yield Completion(
-                        c + ":",
-                        start_position=-len(partial),
-                        display=f"{c}:",
-                    )
-                else:
-                    yield Completion(c, start_position=-len(partial), display=c)
 
 
 class ExtMod(MentionMod):
@@ -501,7 +514,7 @@ class GitMod(MentionMod):
         match_git_diff = re.search(r"<@git:diff:([^><]*)$", text_before_cursor)
         if match_git_diff:
             candidates = list(indexer.files_by_rel.keys()) + list(indexer.dirs)
-            yield from fuzzy_complete(match_git_diff.group(1), candidates)
+            yield from build_path_completions(match_git_diff.group(1), candidates)
             return
 
         match_git = re.search(r"<@git:([^><:]*)$", text_before_cursor)
@@ -548,11 +561,13 @@ class SymbolMod(MentionMod):
         if match_path:
             parts = match_path.group(1).split(":", 1)
             if len(parts) == 1:
-                yield from fuzzy_complete(
-                    parts[0], list(indexer.files_by_rel.keys()), suffix=":"
+                yield from build_path_completions(
+                    parts[0],
+                    list(indexer.files_by_rel.keys()),
+                    close_suffix=":",
                 )
             elif len(parts) == 2:
-                meta = indexer.files_by_rel.get(parts[0])
+                meta = indexer.files_by_rel.get(normalize_match_path(parts[0]))
                 if meta:
                     symbols = self._get_symbols_for_file(meta)
                     yield from fuzzy_complete(parts[1], symbols)
