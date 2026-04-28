@@ -24,10 +24,11 @@ async def test_indexer_find_matches(app_components):
     indexer = context.indexer
     # EXACT
     assert len(indexer.find_matches("app.py")) == 1
+    assert indexer.find_matches("src\\main.py")[0].rel_path == "src/main.py"
     # GLOB
     assert len(indexer.find_matches("src/*.py")) == 2
     # FUZZY
-    assert len(indexer.find_matches("main")) == 1
+    assert indexer.find_matches("main")[0].rel_path == "src/main.py"
 
 
 async def test_indexer_extensions(app_components):

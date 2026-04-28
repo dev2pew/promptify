@@ -134,7 +134,7 @@ class ProjectContext:
         Returns:
             str: Markdown-formatted list of file contents.
         """
-        clean_dir = dir_query.lstrip("/\\")
+        clean_dir = self.normalize_query_path(dir_query).strip("/")
         matches = [
             m for p, m in self.indexer.files_by_rel.items() if p.startswith(clean_dir)
         ]
@@ -163,7 +163,7 @@ class ProjectContext:
         Returns:
             str: Visual tree representation.
         """
-        clean_dir = dir_query.lstrip("/\\")
+        clean_dir = self.normalize_query_path(dir_query).strip("/")
         target = (self.target_dir / clean_dir).resolve()
 
         if not target.is_relative_to(self.target_dir.resolve()):

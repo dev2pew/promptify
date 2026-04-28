@@ -14,6 +14,7 @@ from watchdog.events import FileSystemEventHandler, FileSystemEvent
 from ..ui.logger import log
 from .models import FileMeta
 from .config import CaseConfig
+from .matching import normalize_match_path, rank_path_candidates
 from ..utils.i18n import strings
 
 type FileIndex = dict[str, FileMeta]
@@ -175,7 +176,7 @@ class ProjectIndexer(FileSystemEventHandler):
         Returns:
             list[FileMeta]: Re-ordered array with the closest elements prioritised.
         """
-        query = query.replace("\\", "/")
+        query = normalize_match_path(query)
 
         if query in self.files_by_rel:
             return [self.files_by_rel[query]]
@@ -187,15 +188,8 @@ class ProjectIndexer(FileSystemEventHandler):
                 if fnmatch.fnmatch(p, query) or Path(p).match(query)
             ]
 
-        query_lower = query.lower()
-        matches = [
-            meta for p, meta in self.files_by_rel.items() if query_lower in p.lower()
-        ]
-
-        matches.sort(
-            key=lambda m: (m.path.name.lower() != query_lower, len(m.rel_path))
-        )
-        return matches
+        ranked_paths = rank_path_candidates(query, list(self.files_by_rel.keys()))
+        return [self.files_by_rel[path] for path in ranked_paths]
 
     def get_by_extensions(self, exts: list[str]) -> list[FileMeta]:
         """

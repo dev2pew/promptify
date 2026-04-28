@@ -91,6 +91,10 @@ async def test_get_dir_contents(app_components):
     assert "utils.py" in res
     assert "app.py" not in res
 
+    res = await context.get_dir_contents("src\\")
+    assert "main.py" in res
+    assert "utils.py" in res
+
 
 async def test_get_tree_contents(app_components):
     """TESTS FETCHING A SCOPED PROJECT TREE VIA <@TREE:PATH> IMPLEMENTATION"""
@@ -100,6 +104,10 @@ async def test_get_tree_contents(app_components):
     assert "main.py" in res
     assert "utils.py" in res
     assert "app.py" not in res
+
+    res = await context.get_tree_contents("src\\")
+    assert "main.py" in res
+    assert "utils.py" in res
 
 
 async def test_generate_tree(app_components):
