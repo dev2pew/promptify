@@ -49,11 +49,12 @@ class App:
                     return json.loads(await f.read())
             except Exception:
                 pass
-        return {"lastcase": "", "paths": {}}
+        return {"lastcase": "", "paths": {}, "modes": {}}
 
     async def save_state(self, state: dict) -> None:
         """PERSISTS THE JSON STATE RESUME METADATA."""
         state_file = self.data_dir / "state.json"
+        state_file.parent.mkdir(parents=True, exist_ok=True)
         async with aiofiles.open(state_file, "w", encoding="utf-8") as f:
             await f.write(json.dumps(state, indent=4))
 
@@ -68,6 +69,29 @@ class App:
             state["paths"] = {}
         state["paths"][case_name] = path
         state["lastcase"] = case_name
+        await self.save_state(state)
+
+    def get_case_state_key(self, case: CaseConfig) -> str:
+        """RETURNS A STABLE, UNIQUE CASE KEY FOR PER-CASE STATE."""
+        try:
+            return str(case.case_dir.relative_to(self.cases_dir)).replace("\\", "/")
+        except ValueError:
+            return case.case_dir.name
+
+    async def get_last_mode(self, case: CaseConfig, state: dict) -> int | None:
+        """FETCHES THE LAST SELECTED MODE FOR A SPECIFIC CASE."""
+        modes = state.get("modes", {})
+        if not isinstance(modes, dict):
+            return None
+
+        mode = modes.get(self.get_case_state_key(case))
+        return mode if mode in (1, 2) else None
+
+    async def save_last_mode(self, case: CaseConfig, mode: int, state: dict) -> None:
+        """PERSISTS THE LAST SELECTED MODE FOR A SPECIFIC CASE."""
+        if "modes" not in state or not isinstance(state["modes"], dict):
+            state["modes"] = {}
+        state["modes"][self.get_case_state_key(case)] = mode
         await self.save_state(state)
 
     def get_output_case_dir_name(self, case: CaseConfig) -> str:
@@ -256,6 +280,7 @@ class App:
         elif self.cli_config.case and self.cli_config.path:
             mode = 2  # DEFAULT TO INTERACTIVE MODE IF SKIPPING WIZARD VIA CLI
         else:
+            last_mode = await self.get_last_mode(case, state)
             print(get_string("available_modes", "available modes"))
             print_modes(
                 [
@@ -270,20 +295,28 @@ class App:
                 ]
             )
             try:
-                mode_input = (
-                    await log.input_async(get_string("select_mode", "select mode"))
-                ).strip()
+                prompt_str = get_string("select_mode", "select mode")
+                if last_mode is not None:
+                    prompt_str = f"{prompt_str} ('{last_mode}')"
+
+                mode_input = (await log.input_async(prompt_str)).strip()
                 if not mode_input:
-                    log.warning(
-                        get_string("operation_cancelled", "operation cancelled")
-                    )
-                    indexer.stop_watching()
-                    return
-                mode = int(mode_input)
+                    if last_mode is None:
+                        log.warning(
+                            get_string("operation_cancelled", "operation cancelled")
+                        )
+                        indexer.stop_watching()
+                        return
+                    mode = last_mode
+                else:
+                    mode = int(mode_input)
             except ValueError:
                 log.error(get_string("invalid_selection", "invalid selection"))
                 indexer.stop_watching()
                 return
+
+        if mode in (1, 2):
+            await self.save_last_mode(case, mode, state)
 
         # EXECUTION
         try:
