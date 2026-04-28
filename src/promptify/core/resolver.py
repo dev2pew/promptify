@@ -77,7 +77,9 @@ class PromptResolver:
         """ESTIMATES FILE MENTION EXPANSION LENGTH, USING EXACT CACHED CONTENT WHEN NEEDED."""
         matches = self.context.indexer.find_matches(query)
         if not matches:
-            return len(get_string("err_file_not_found", "file not found").format(query=query))
+            return len(
+                get_string("err_file_not_found", "file not found").format(query=query)
+            )
 
         meta = matches[0]
         if not range_str:

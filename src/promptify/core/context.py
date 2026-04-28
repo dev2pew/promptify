@@ -240,9 +240,7 @@ class ProjectContext:
                 return get_string("symbol_not_found", "symbol not found").format(
                     symbol=symbol_name, path=meta.rel_path
                 )
-            return (
-                f"- `{meta.rel_path}:{symbol_name}`\n\n```{meta.ext}\n{extracted}\n```\n"
-            )
+            return f"- `{meta.rel_path}:{symbol_name}`\n\n```{meta.ext}\n{extracted}\n```\n"
         except ValueError as e:
             return get_string("symbol_error", "symbol error").format(error=e)
 
