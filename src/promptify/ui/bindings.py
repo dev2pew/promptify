@@ -4,10 +4,12 @@ KEYBINDING REGISTRY IMPLEMENTING STANDARD AND CUSTOM SHORTCUTS.
 
 import asyncio
 import aiofiles
+import pyperclip
 import re
 import time
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.filters import Condition, has_selection, has_focus
+from prompt_toolkit.keys import Keys
 from prompt_toolkit.selection import SelectionState
 from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
@@ -67,6 +69,21 @@ def setup_keybindings(editor) -> KeyBindings:
             b.selection_state = SelectionState(
                 original_cursor_position=b.cursor_position
             )
+
+    def _schedule_system_clipboard_paste() -> None:
+        b = get_app().current_buffer
+
+        async def _do_paste():
+            try:
+                text = await asyncio.to_thread(pyperclip.paste)
+            except Exception:
+                return
+
+            if text:
+                editor.paste_text(b, text)
+                get_app().invalidate()
+
+        asyncio.create_task(_do_paste())
 
     @custom_bindings.add("f1")
     @custom_bindings.add("c-g")
@@ -149,18 +166,31 @@ def setup_keybindings(editor) -> KeyBindings:
     @custom_bindings.add("c-v", filter=editor_focus)
     def _paste(event) -> None:
         b = event.app.current_buffer
-        if b.selection_state:
-            b.cut_selection()
-            b.selection_state = None
         data = event.app.clipboard.get_data()
         if data and data.text:
-            b.insert_text(data.text)
+            editor.paste_text(b, data.text)
+
+    @custom_bindings.add("s-insert", filter=editor_focus)
+    @custom_bindings.add("c-s-insert", filter=editor_focus)
+    def _paste_system_clipboard(event) -> None:
+        _schedule_system_clipboard_paste()
+
+    @custom_bindings.add("escape", "[", "2", ";", "2", "~", filter=editor_focus)
+    @custom_bindings.add("escape", "[", "2", ";", "6", "~", filter=editor_focus)
+    def _paste_system_clipboard_xterm_insert(event) -> None:
+        _schedule_system_clipboard_paste()
+
+    @custom_bindings.add(Keys.BracketedPaste, filter=editor_focus)
+    def _paste_terminal_payload(event) -> None:
+        b = event.app.current_buffer
+        text = event.data.replace("\r\n", "\n").replace("\r", "\n")
+        editor.paste_text(b, text)
 
     @custom_bindings.add("c-z", filter=editor_focus)
     def _undo(event) -> None:
         event.app.current_buffer.undo()
 
-    @custom_bindings.add("c-y", filter=editor_focus)
+    @custom_bindings.add("c-y", filter=editor_focus, eager=True)
     def _redo(event) -> None:
         event.app.current_buffer.redo()
 
