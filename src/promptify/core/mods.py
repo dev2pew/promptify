@@ -14,6 +14,7 @@ from .matching import (
     normalize_match_path,
     rank_path_candidates,
 )
+from .settings import APP_SETTINGS
 
 if TYPE_CHECKING:
     from .context import ProjectContext
@@ -54,9 +55,11 @@ def fuzzy_complete(
         limit=size_limit,
         processor=fuzz_utils.default_process,
     )
-    matched_items = [res[0] for res in results if res[1] > 40] or [
-        res[0] for res in results
-    ]
+    matched_items = [
+        res[0]
+        for res in results
+        if res[1] > APP_SETTINGS.matching.completion_fuzzy_score_cutoff
+    ] or [res[0] for res in results]
     for c in matched_items:
         yield Completion(
             prefix + c + suffix, start_position=-len(partial), display=prefix + c

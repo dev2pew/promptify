@@ -4,9 +4,9 @@ PATH-AWARE MATCHING AND DISPLAY HELPERS FOR INDEXER SEARCH AND COMPLETIONS.
 
 from collections import defaultdict
 from rapidfuzz import fuzz
+from .settings import APP_SETTINGS
 
 _PATH_SEPARATORS = "/._- "
-_PATH_META_TAIL_SEGMENTS = 3
 
 
 def normalize_match_path(path: str) -> str:
@@ -80,8 +80,17 @@ def path_candidate_matches(query: str, candidate: str) -> bool:
         return True
     if query_tail and _subsequence_score(query_tail, leaf) >= len(query_tail) * 8:
         return True
-    path_threshold = 86 if len(normalized_query) >= 6 else 78
-    leaf_threshold = 90 if len(query_tail) >= 6 else 84
+    settings = APP_SETTINGS.matching
+    path_threshold = (
+        settings.path_threshold_long
+        if len(normalized_query) >= settings.query_length_switch
+        else settings.path_threshold_short
+    )
+    leaf_threshold = (
+        settings.leaf_threshold_long
+        if len(query_tail) >= settings.query_length_switch
+        else settings.leaf_threshold_short
+    )
     if (
         fuzz.partial_ratio(normalized_query, normalized_candidate, processor=None)
         >= path_threshold
@@ -207,8 +216,9 @@ def build_path_display_map(candidates: list[str]) -> dict[str, tuple[str, str]]:
             parents = parents[: max(0, len(parents) - label_parent_depth)]
 
         if parents:
-            tail = "/".join(parents[-_PATH_META_TAIL_SEGMENTS:])
-            if len(parents) > _PATH_META_TAIL_SEGMENTS:
+            tail_segments = APP_SETTINGS.matching.display_meta_tail_segments
+            tail = "/".join(parents[-tail_segments:])
+            if len(parents) > tail_segments:
                 tail = ".../" + tail
         else:
             tail = ""

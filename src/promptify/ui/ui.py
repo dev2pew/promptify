@@ -6,6 +6,7 @@ import shutil
 import math
 import re
 from prompt_toolkit import print_formatted_text, HTML
+from ..core.settings import APP_SETTINGS
 
 
 def format_index(i: int) -> str:
@@ -31,7 +32,12 @@ def print_columnized(items: list[str]) -> None:
     Args:
         items (list[str]): Structured list of configuration definitions objects target targets outputs.
     """
-    term_width, _ = shutil.get_terminal_size((80, 20))
+    term_width, _ = shutil.get_terminal_size(
+        (
+            APP_SETTINGS.render.terminal_fallback_width,
+            APP_SETTINGS.render.terminal_fallback_height,
+        )
+    )
 
     formatted_items = [f"{format_index(i + 1)} {item}" for i, item in enumerate(items)]
 
@@ -42,7 +48,7 @@ def print_columnized(items: list[str]) -> None:
         else 0
     )
 
-    col_width = max_width + 4
+    col_width = max_width + APP_SETTINGS.render.column_padding
     num_cols = max(1, term_width // col_width)
     num_rows = math.ceil(len(formatted_items) / num_cols)
 

@@ -15,6 +15,7 @@ from ..ui.logger import log
 from .models import FileMeta
 from .config import CaseConfig
 from .matching import normalize_match_path, rank_path_candidates
+from .settings import APP_SETTINGS
 from ..utils.i18n import get_string
 
 type FileIndex = dict[str, FileMeta]
@@ -93,11 +94,19 @@ class ProjectIndexer(FileSystemEventHandler):
 
     def start_watching(self) -> None:
         """BOOTSTRAPS WATCHDOG, FALLING BACK TO POLLING FOR NETWORK/CONTAINER MOUNTS."""
+        watch_mode = APP_SETTINGS.indexer.watch_mode
+        if watch_mode == "off":
+            return
+
         try:
-            self._observer = Observer()
+            self._observer = (
+                PollingObserver() if watch_mode == "polling" else Observer()
+            )
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
         except Exception as e:
+            if watch_mode == "native":
+                raise
             log.warning(
                 get_string("observer_fallback", "observer failed").format(error=e)
             )
