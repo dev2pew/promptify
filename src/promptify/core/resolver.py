@@ -10,6 +10,7 @@ import asyncio
 from .context import ProjectContext, get_comment_syntax
 from .mods import ModRegistry
 from .mods import split_file_query_and_range
+from .settings import APP_SETTINGS
 from ..utils.i18n import get_string
 
 
@@ -189,7 +190,10 @@ class PromptResolver:
                     now = asyncio.get_running_loop().time()
                     if match_text in self._git_estimate_cache:
                         cached_time, cached_len = self._git_estimate_cache[match_text]
-                        if now - cached_time < 5.0:
+                        if (
+                            now - cached_time
+                            < APP_SETTINGS.resolver.git_estimate_cache_ttl
+                        ):
                             added_len += cached_len
                             continue
 

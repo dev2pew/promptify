@@ -5,6 +5,7 @@ UNIT TESTS VERIFYING COMMAND LINE INTERFACE ARGUMENT MAPPINGS.
 import pytest
 from promptify.core.cli import parse_cli_args, CLIConfig, extract_help_from_docstring
 from promptify.core.config import CaseConfig
+from promptify.core.settings import build_settings
 from promptify.main import App
 
 
@@ -143,3 +144,29 @@ async def test_mode_state_uses_unique_case_keys(test_sandbox):
     reloaded = await app.get_state()
     assert await app.get_last_mode(first_case, reloaded) == 1
     assert await app.get_last_mode(second_case, reloaded) == 2
+
+
+@pytest.mark.asyncio
+async def test_save_output_respects_behavior_toggles(test_sandbox, monkeypatch):
+    """OUTPUT PERSISTENCE SHOULD RESPECT RAW-SAVE AND CLIPBOARD TOGGLES."""
+    app = App()
+    app.outs_dir = test_sandbox["outs"] / "toggle_case"
+    case = CaseConfig(test_sandbox["case"])
+    settings, _ = build_settings(
+        {
+            "PROMPTIFY_COPY_OUTPUT_TO_CLIPBOARD": "false",
+            "PROMPTIFY_SAVE_RAW_OUTPUT": "false",
+        }
+    )
+
+    monkeypatch.setattr("promptify.main.APP_SETTINGS", settings)
+    monkeypatch.setattr(
+        "promptify.main.pyperclip.copy",
+        lambda _text: (_ for _ in ()).throw(AssertionError("clipboard should be off")),
+    )
+
+    await app.save_output(case, "demo output", raw_content="raw output")
+
+    parent_dir = app.outs_dir / test_sandbox["case"].name
+    assert list(parent_dir.rglob("*.md"))
+    assert not list(parent_dir.rglob("*.raw"))
