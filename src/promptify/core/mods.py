@@ -5,6 +5,7 @@ DEFINES HOW SPECIFIC TAGS (LIKE <@FILE:...> OR <@GIT:...>) ARE PARSED AND RESOLV
 
 import re
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Iterable, TYPE_CHECKING
 from prompt_toolkit.completion import Completion
 from rapidfuzz import process, utils as fuzz_utils
@@ -212,6 +213,76 @@ def split_file_query_and_range(query: str) -> tuple[str, str | None]:
     if len(parts) == 1:
         return parts[0], None
     return parts[0], parts[1]
+
+
+@dataclass(slots=True, frozen=True)
+class GitMentionQuery:
+    """NORMALIZED REPRESENTATION OF A `<@git:...>` MENTION."""
+
+    branch: str | None
+    command: str
+    argument: str | None
+
+
+GIT_BRANCH_PATTERN = r"\[(?:\\.|[^\]\\])+\]"
+GIT_BRANCH_PREFIX_PATTERN = rf"(?:{GIT_BRANCH_PATTERN}:)?"
+GIT_COMMAND_COMPLETIONS = ("diff>", "status>", "diff:", "log>", "log:")
+GIT_LOG_COUNT_SUGGESTIONS = (1, 2, 5, 10, 20, 50)
+
+
+def escape_git_branch_name(branch: str) -> str:
+    """ESCAPES BRANCH CHARACTERS THAT WOULD BREAK THE MENTION GRAMMAR."""
+    escaped: list[str] = []
+    for char in branch:
+        if char in {"\\", "]", ">"}:
+            escaped.append("\\")
+        escaped.append(char)
+    return "".join(escaped)
+
+
+def split_git_branch_prefix(body: str) -> tuple[str | None, str | None, str] | None:
+    """SPLITS AN OPTIONAL BRACKETED BRANCH PREFIX FROM A GIT MENTION BODY."""
+    if not body.startswith("["):
+        return None, None, body
+
+    branch_chars: list[str] = []
+    raw_chars: list[str] = []
+    escaped = False
+
+    for index in range(1, len(body)):
+        char = body[index]
+        if escaped:
+            branch_chars.append(char)
+            raw_chars.extend(["\\", char])
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == "]":
+            if index + 1 >= len(body) or body[index + 1] != ":":
+                return None
+            return "".join(branch_chars), "".join(raw_chars), body[index + 2 :]
+        branch_chars.append(char)
+        raw_chars.append(char)
+
+    return None
+
+
+def parse_git_mention_query(body: str) -> GitMentionQuery | None:
+    """PARSES A GIT MENTION BODY INTO OPTIONAL BRANCH, COMMAND, AND ARGUMENT."""
+    branch, _, remainder = split_git_branch_prefix(body) or (None, None, body)
+    if remainder == "status":
+        return GitMentionQuery(branch=branch, command="status", argument=None)
+    if remainder == "diff":
+        return GitMentionQuery(branch=branch, command="diff", argument=None)
+    if remainder.startswith("diff:") and remainder[5:]:
+        return GitMentionQuery(branch=branch, command="diff", argument=remainder[5:])
+    if remainder == "log":
+        return GitMentionQuery(branch=branch, command="log", argument=None)
+    if remainder.startswith("log:") and remainder[4:].isdigit():
+        return GitMentionQuery(branch=branch, command="log", argument=remainder[4:])
+    return None
 
 
 class MentionMod(ABC):
@@ -531,22 +602,31 @@ class GitMod(MentionMod):
     """FETCHES REAL-TIME STATUS AND WORKING TREE MODIFICATIONS NATIVELY USING GIT."""
 
     name = "mod_git"
-    pattern = r"<@git:([^>:]+?)(?::([^>]+))?>"
+    pattern = (
+        rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}"
+        r"(?:status|diff(?:[:][^>]+)?|log(?:[:]\d+)?)>"
+    )
 
     async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = _must_match(self.pattern, text)
-        query = m.group(1)
-        path = m.group(2)
-        if query == "status":
-            return await context.get_git_status()
-        elif query == "diff":
-            return await context.get_git_diff(path)
+        body = text.removeprefix("<@git:").removesuffix(">")
+        query = parse_git_mention_query(body)
+        if query is None:
+            return text
+        if query.command == "status":
+            return await context.get_git_status(query.branch)
+        if query.command == "diff":
+            return await context.get_git_diff(query.argument, query.branch)
+        if query.command == "log":
+            limit = int(query.argument) if query.argument is not None else None
+            return await context.get_git_log(limit=limit, branch=query.branch)
         return text
 
     def get_completions(
         self, text_before_cursor: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
-        match_git_diff = re.search(r"<@git:diff:([^><]*)$", text_before_cursor)
+        match_git_diff = re.search(
+            rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}diff:([^><]*)$", text_before_cursor
+        )
         if match_git_diff:
             candidates = list(indexer.files_by_rel.keys()) + list(indexer.dirs)
             yield from build_path_completions(
@@ -556,10 +636,23 @@ class GitMod(MentionMod):
             )
             return
 
-        match_git = re.search(r"<@git:([^><:]*)$", text_before_cursor)
+        match_git_log = re.search(
+            rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}log:(\d*)$", text_before_cursor
+        )
+        if match_git_log:
+            yield from _yield_numeric_suffix_completions(
+                GIT_LOG_COUNT_SUGGESTIONS,
+                match_git_log.group(1),
+                suffix=">",
+            )
+            return
+
+        match_git = re.search(
+            rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}([^><:]*)$", text_before_cursor
+        )
         if match_git:
             partial = match_git.group(1).lower()
-            for c in ["diff>", "status>", "diff:"]:
+            for c in GIT_COMMAND_COMPLETIONS:
                 if c.startswith(partial):
                     yield Completion(c, start_position=-len(partial), display=c)
 
