@@ -3,7 +3,6 @@ KEYBINDING REGISTRY IMPLEMENTING STANDARD AND CUSTOM SHORTCUTS.
 """
 
 import asyncio
-import aiofiles
 import pyperclip
 import re
 import time
@@ -15,7 +14,6 @@ from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
 
-from ..utils.i18n import get_string
 from ..core.context import get_comment_syntax
 
 
@@ -41,6 +39,10 @@ def setup_keybindings(editor) -> KeyBindings:
     @Condition
     def is_error_visible() -> bool:
         return editor.error_visible
+
+    @Condition
+    def is_issue_mode_active() -> bool:
+        return editor.issue_mode_active and editor.error_visible
 
     @Condition
     def has_completions_menu() -> bool:
@@ -78,6 +80,7 @@ def setup_keybindings(editor) -> KeyBindings:
             try:
                 text = await asyncio.to_thread(pyperclip.paste)
             except Exception:
+                editor.set_passive_status("clipboard unavailable")
                 return
 
             if text:
@@ -89,6 +92,7 @@ def setup_keybindings(editor) -> KeyBindings:
     @custom_bindings.add("f1")
     @custom_bindings.add("c-g")
     def _toggle_help(event) -> None:
+        editor.note_user_activity()
         editor.toggle_help()
 
     @custom_bindings.add("c-f", filter=editor_focus | search_focus, eager=True)
@@ -99,11 +103,33 @@ def setup_keybindings(editor) -> KeyBindings:
     @custom_bindings.add("escape", filter=is_help_visible)
     @custom_bindings.add("enter", filter=is_help_visible)
     def _close_help_esc(event) -> None:
+        editor.note_user_activity()
         editor.close_help()
 
     @custom_bindings.add("escape", filter=is_error_visible)
-    @custom_bindings.add("enter", filter=is_error_visible)
     def _close_error(event) -> None:
+        editor.note_user_activity()
+        if editor.issue_mode_active:
+            editor.deactivate_issue_mode()
+        else:
+            editor.error_visible = False
+            event.app.layout.focus(editor.main_window)
+
+    @custom_bindings.add("enter", filter=is_issue_mode_active)
+    @custom_bindings.add("c-n", filter=is_issue_mode_active)
+    def _next_issue(event) -> None:
+        editor.note_user_activity()
+        editor.step_issue(1)
+
+    @custom_bindings.add("c-r", filter=is_issue_mode_active)
+    @custom_bindings.add("c-p", filter=is_issue_mode_active)
+    def _previous_issue(event) -> None:
+        editor.note_user_activity()
+        editor.step_issue(-1)
+
+    @custom_bindings.add("enter", filter=is_error_visible & ~is_issue_mode_active)
+    def _dismiss_error(event) -> None:
+        editor.note_user_activity()
         editor.error_visible = False
         event.app.layout.focus(editor.main_window)
 
@@ -139,15 +165,18 @@ def setup_keybindings(editor) -> KeyBindings:
 
     @custom_bindings.add("escape", filter=search_focus)
     def _close_search(event) -> None:
+        editor.note_user_activity()
         editor.close_search()
 
     @custom_bindings.add("enter", filter=search_focus)
     def _search_next(event) -> None:
+        editor.note_user_activity()
         editor.search_step(1)
         event.app.invalidate()
 
     @custom_bindings.add("c-r", filter=search_focus)
     def _search_previous(event) -> None:
+        editor.note_user_activity()
         editor.search_step(-1)
         event.app.invalidate()
 
@@ -205,12 +234,14 @@ def setup_keybindings(editor) -> KeyBindings:
 
     @custom_bindings.add("home", filter=text_focus)
     def _home(event) -> None:
+        editor.note_user_activity()
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position += get_home_position(b.document)
 
     @custom_bindings.add("end", filter=text_focus)
     def _end(event) -> None:
+        editor.note_user_activity()
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position += b.document.get_end_of_line_position()
@@ -229,12 +260,14 @@ def setup_keybindings(editor) -> KeyBindings:
 
     @custom_bindings.add("c-home", filter=text_focus)
     def _c_home(event) -> None:
+        editor.note_user_activity()
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position = 0
 
     @custom_bindings.add("c-end", filter=text_focus)
     def _c_end(event) -> None:
+        editor.note_user_activity()
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position = len(b.text)
@@ -468,6 +501,7 @@ def setup_keybindings(editor) -> KeyBindings:
 
     @custom_bindings.add("left", filter=text_focus & ~has_completions_menu)
     def _left(event) -> None:
+        editor.note_user_activity()
         b = event.current_buffer
         b.selection_state = None
         if b.cursor_position > 0:
@@ -475,6 +509,7 @@ def setup_keybindings(editor) -> KeyBindings:
 
     @custom_bindings.add("right", filter=text_focus & ~has_completions_menu)
     def _right(event) -> None:
+        editor.note_user_activity()
         b = event.current_buffer
         b.selection_state = None
         if b.cursor_position < len(b.text):
@@ -496,12 +531,14 @@ def setup_keybindings(editor) -> KeyBindings:
 
     @custom_bindings.add("up", filter=editor_focus & ~has_completions_menu)
     def _up(event) -> None:
+        editor.note_user_activity()
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position += b.document.get_cursor_up_position(count=1)
 
     @custom_bindings.add("down", filter=editor_focus & ~has_completions_menu)
     def _down(event) -> None:
+        editor.note_user_activity()
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position += b.document.get_cursor_down_position(count=1)
@@ -621,34 +658,15 @@ def setup_keybindings(editor) -> KeyBindings:
     @custom_bindings.add("c-s", filter=~search_focus)
     def _save(event) -> None:
         async def _do_save():
-            text = editor.buffer.text
-            matches = re.findall(r"<@symbol:([^>:]+):([^>]+)>", text)
-            for path, symbol in matches:
-                file_matches = editor.indexer.find_matches(path)
-                if not file_matches:
-                    continue
-                meta = file_matches[0]
-                try:
-                    async with aiofiles.open(
-                        meta.path, "r", encoding="utf-8", errors="replace"
-                    ) as f:
-                        content = await f.read()
-                    from ..core.extractor import SymbolExtractor
+            editor.note_user_activity()
+            issues = await editor.collect_save_issues()
+            if issues:
+                editor.activate_issue_mode(issues)
+                event.app.invalidate()
+                return
 
-                    extractor = SymbolExtractor(content, meta.path.name)
-                    if not extractor.extract(symbol):
-                        raise ValueError(f"symbol '{symbol}' not found")
-                except Exception as e:
-                    editor.error_message = str(e)
-                    editor.error_visible = True
-                    editor.error_buffer.text = get_string(
-                        "invalid_syntax_window", "invalid syntax"
-                    ).format(path=meta.rel_path, error=e)
-                    event.app.layout.focus(editor.error_window)
-                    event.app.invalidate()
-                    return
-
-            editor.result = text
+            editor.deactivate_issue_mode()
+            editor.result = editor.buffer.text
             event.app.exit()
 
         asyncio.create_task(_do_save())
