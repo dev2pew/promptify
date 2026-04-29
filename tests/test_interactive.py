@@ -544,10 +544,10 @@ async def test_interactive_editor_issue_mode_tracks_issue_navigation(
 
     assert editor.issue_mode_active
     assert "syntax issue 1 of 2" in editor.error_buffer.text
-    assert "[Enter] / ^[N] next" in editor.error_buffer.text
+    assert "[Enter/N] next" in editor.error_buffer.text
     assert editor.buffer.document.cursor_position_row == 0
 
     assert editor.step_issue(1)
     assert "reference issue 2 of 2" in editor.error_buffer.text
-    assert "[Esc] dismiss" in editor.error_buffer.text
+    assert "[Esc] close" in editor.error_buffer.text
     assert editor.buffer.document.cursor_position_row == 1
