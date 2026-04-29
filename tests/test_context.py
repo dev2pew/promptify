@@ -3,6 +3,7 @@ UNIT TESTS EVALUATING FILE SYSTEM ISOLATION, DATA RETRIEVAL AND CACHING MECHANIS
 """
 
 import pytest
+from promptify.core.terminal import detect_terminal_profile
 from promptify.utils.i18n import get_string
 
 pytestmark = pytest.mark.asyncio
@@ -119,6 +120,23 @@ async def test_generate_tree(app_components):
 
     scoped = context.generate_tree("src")
     assert get_string("tree_header_3", "{root}").format(root="./src") in scoped
+
+
+async def test_generate_tree_uses_ascii_connectors_for_legacy_cmd(app_components):
+    """LEGACY CMD PROFILES SHOULD AVOID BOX-DRAWING TREE CONNECTORS."""
+    context, _ = app_components
+    context.terminal_profile = detect_terminal_profile(
+        {
+            "COMSPEC": r"C:\Windows\System32\cmd.exe",
+            "PROMPT": "$P$G",
+        },
+        override="auto",
+    )
+
+    res = context.generate_tree("src")
+
+    assert "|---main.py" in res or "`---main.py" in res
+    assert "├───" not in res
 
 
 async def test_git_mentions(app_components):

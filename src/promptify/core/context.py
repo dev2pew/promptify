@@ -13,6 +13,7 @@ from .config import CaseConfig
 from .indexer import ProjectIndexer
 from .models import FileMeta, CachedContent
 from .settings import MAX_FILE_SIZE, MAX_CONCURRENT_READS
+from .terminal import APP_TERMINAL_PROFILE, TerminalProfile
 from ..utils.i18n import get_string, strings
 
 
@@ -43,6 +44,7 @@ class ProjectContext:
         case: CaseConfig,
         indexer: ProjectIndexer,
         has_git: bool = False,
+        terminal_profile: TerminalProfile | None = None,
     ):
         """
         INITIALIZES THE CONTEXT LINKING THE PROJECT PATH TO THE INDEXER.
@@ -58,6 +60,7 @@ class ProjectContext:
         self.indexer = indexer
         self.cache: dict[str, CachedContent] = {}
         self.has_git = has_git
+        self.terminal_profile = terminal_profile or APP_TERMINAL_PROFILE
 
     def normalize_query_path(self, query: str) -> str:
         """NORMALIZES USER-INPUTTED PATHS TO THE INTERNAL PROJECT FORMAT."""
@@ -458,12 +461,20 @@ class ProjectContext:
 
             for i, item in enumerate(items):
                 is_last = i == len(items) - 1
-                connector = "└───" if is_last else "├───"
+                connector = (
+                    self.terminal_profile.tree.last_branch
+                    if is_last
+                    else self.terminal_profile.tree.branch
+                )
                 tree_str.append(f"{prefix}{connector}{item}")
 
                 full_path = current_dir + item
                 if full_path in self.indexer.dirs:
-                    extension = "    " if is_last else "│   "
+                    extension = (
+                        self.terminal_profile.tree.spacer
+                        if is_last
+                        else self.terminal_profile.tree.vertical
+                    )
                     _build_tree(full_path + "/", prefix + extension, current_depth + 1)
 
         _build_tree(search_prefix)

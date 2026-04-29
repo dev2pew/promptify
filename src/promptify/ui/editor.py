@@ -14,6 +14,7 @@ from ..core.indexer import ProjectIndexer
 from ..core.resolver import PromptResolver
 from ..core.mods import ModRegistry, split_file_query_and_range
 from ..core.settings import APP_SETTINGS
+from ..core.terminal import APP_TERMINAL_PROFILE, TerminalProfile
 from .bindings import setup_keybindings
 from ..utils.i18n import get_string
 
@@ -50,7 +51,6 @@ try:
     )
     from prompt_toolkit.formatted_text.base import OneStyleAndTextTuple
     from prompt_toolkit.styles import Style
-    from prompt_toolkit.widgets import Frame
     from prompt_toolkit.lexers import Lexer
     from prompt_toolkit.filters import (
         Condition,
@@ -186,6 +186,9 @@ class HighlightTrailingWhitespaceProcessor(Processor):
 class EOFNewlineProcessor(Processor):
     """INDICATES MISSING EOF NEWLINE VISUALLY."""
 
+    def __init__(self, terminal_profile: TerminalProfile):
+        self.terminal_profile = terminal_profile
+
     def apply_transformation(self, transformation_input):
         document = transformation_input.document
         lineno = transformation_input.lineno
@@ -193,9 +196,13 @@ class EOFNewlineProcessor(Processor):
 
         if lineno == document.line_count - 1:
             if document.text.endswith("\n") or not document.text:
-                tokens = tokens + [("class:eof-newline", "¶")]
+                tokens = tokens + [
+                    ("class:eof-newline", self.terminal_profile.eof_newline_present)
+                ]
             else:
-                tokens = tokens + [("class:eof-newline", "∅")]
+                tokens = tokens + [
+                    ("class:eof-newline", self.terminal_profile.eof_newline_missing)
+                ]
 
         return Transformation(tokens)
 
@@ -1019,10 +1026,12 @@ class InteractiveEditor:
         indexer: ProjectIndexer,
         resolver: PromptResolver,
         show_help: bool | None = None,
+        terminal_profile: TerminalProfile | None = None,
     ):
         if show_help is None:
             show_help = APP_SETTINGS.editor_behavior.show_help_on_start
         self.help_visible = show_help
+        self.terminal_profile = terminal_profile or APP_TERMINAL_PROFILE
         self.indexer = indexer
         self.resolver = resolver
         self.token_count = 0
@@ -1145,7 +1154,7 @@ class InteractiveEditor:
         processors = [
             HighlightTrailingWhitespaceProcessor(),
             HighlightMatchingBracketProcessor(),
-            EOFNewlineProcessor(),
+            EOFNewlineProcessor(self.terminal_profile),
             ActiveLineProcessor(),
             SearchMatchProcessor(self._get_search_highlight_state),
         ]
@@ -1232,6 +1241,95 @@ class InteractiveEditor:
             filter=visible_filter,
         )
 
+    def _build_chrome(self, body, title, style: str):
+        """BUILDS RESIZE-SAFE CHROME USING ASCII OR UNICODE BORDER GLYPHS."""
+        border = self.terminal_profile.border
+        border_style = f"{style}.border"
+        label_style = f"{style}.label"
+        has_title = bool(title)
+        title_control = FormattedTextControl(
+            (lambda: f" {title()} ") if callable(title) else f" {title} "
+        )
+
+        top_row = (
+            VSplit(
+                [
+                    Window(
+                        width=1,
+                        height=1,
+                        char=border.top_left,
+                        style=border_style,
+                    ),
+                    Window(
+                        width=1, height=1, char=border.horizontal, style=border_style
+                    ),
+                    Window(content=title_control, style=label_style, height=1),
+                    Window(
+                        width=1, height=1, char=border.horizontal, style=border_style
+                    ),
+                    Window(
+                        width=1,
+                        height=1,
+                        char=border.top_right,
+                        style=border_style,
+                    ),
+                ],
+                height=1,
+            )
+            if has_title
+            else VSplit(
+                [
+                    Window(
+                        width=1,
+                        height=1,
+                        char=border.top_left,
+                        style=border_style,
+                    ),
+                    Window(height=1, char=border.horizontal, style=border_style),
+                    Window(
+                        width=1,
+                        height=1,
+                        char=border.top_right,
+                        style=border_style,
+                    ),
+                ],
+                height=1,
+            )
+        )
+
+        return HSplit(
+            [
+                top_row,
+                VSplit(
+                    [
+                        Window(width=1, char=border.vertical, style=border_style),
+                        body,
+                        Window(width=1, char=border.vertical, style=border_style),
+                    ],
+                    padding=0,
+                ),
+                VSplit(
+                    [
+                        Window(
+                            width=1,
+                            height=1,
+                            char=border.bottom_left,
+                            style=border_style,
+                        ),
+                        Window(height=1, char=border.horizontal, style=border_style),
+                        Window(
+                            width=1,
+                            height=1,
+                            char=border.bottom_right,
+                            style=border_style,
+                        ),
+                    ],
+                    height=1,
+                ),
+            ],
+            style=style,
+        )
+
     def _build_modal_float(
         self,
         body,
@@ -1239,8 +1337,8 @@ class InteractiveEditor:
         style: str,
         visible_filter: Condition,
     ) -> Float:
-        """BUILDS A FULL-VIEWPORT CENTERED MODAL FLOAT AROUND A FRAMED BODY."""
-        frame = Frame(body=body, title=title, style=style)
+        """BUILDS A FULL-VIEWPORT CENTERED MODAL FLOAT AROUND RESIZE-SAFE CHROME."""
+        frame = self._build_chrome(body, title, style)
         return Float(
             content=self._build_centered_overlay(frame, visible_filter),
             top=0,
@@ -2036,7 +2134,7 @@ class InteractiveEditor:
             style="class:toolbar",
         )
 
-        editor_frame = Frame(body=self.main_window, style="class:editor-frame")
+        editor_frame = self._build_chrome(self.main_window, "", "class:editor-frame")
 
         body = HSplit(
             [
@@ -2086,7 +2184,10 @@ class InteractiveEditor:
             key_bindings=bindings,
             style=style,
             full_screen=APP_SETTINGS.editor_layout.full_screen,
-            mouse_support=APP_SETTINGS.editor_layout.mouse_support,
+            mouse_support=(
+                APP_SETTINGS.editor_layout.mouse_support
+                and self.terminal_profile.supports_mouse
+            ),
         )
         app.ttimeoutlen = APP_SETTINGS.editor_layout.ttimeoutlen
 
