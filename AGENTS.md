@@ -7,9 +7,9 @@
 
 ## CORE RULES
 
-- Keep all user-facing copy in `strings/en.json`;
+- Keep user-facing copy indexed from `strings/en.json`;
 - In source code, always use string lookups with an inline fallback;
-- Treat `strings/en.json` as the single source of truth for UI and message text;
+- Treat `strings/en.json` as the single source of truth for UI and message text, using resource references for large multiline blocks when needed;
 - Route new environment configuration through `src/promptify/core/settings.py`;
 - Invalid configuration values must never crash import-time startup. Fall back safely;
 - Preserve Pylance basic type-checking cleanliness;
@@ -37,6 +37,6 @@ Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs
 
 - `src/` is the application source of truth;
 - `tests/` should remain unit-focused and cover regressions;
-- `strings/en.json` centralizes user-facing strings;
+- `strings/en.json` centralizes user-facing strings and can reference locale-scoped resource files under `strings/en/` for large text blocks;
 - `.env.example` documents safe, non-secret local configuration and preference toggles;
 - `README.md` should stay aligned with user-visible capabilities, controls, and configuration.

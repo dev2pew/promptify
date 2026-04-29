@@ -15,7 +15,7 @@
 - uses `watchdog` for live updates, with configurable native, polling, or disabled watch modes;
 - strictly validates paths so reads stay inside the chosen project root;
 - supports file slices, directory trees, extension filters, symbol extraction, and `git` status / diff / log / history mentions, including optional branch selectors;
-- stores all user-facing copy in `strings/en.json`;
+- stores user-facing copy through `strings/en.json`, with optional locale resource files for large multiline text;
 - exposes runtime behavior, editor tuning, logger formatting, and theme styles through `.env`;
 - detects terminal capabilities and adapts rendering for legacy `cmd.exe` and classic Windows console hosts.
 
