@@ -14,7 +14,7 @@
 - Invalid configuration values must never crash import-time startup. Fall back safely;
 - Preserve Pylance basic type-checking cleanliness;
 - Prefer shared helpers over repeated logic, especially in editor, resolver, and completion flows.
-- Preserve terminal compatibility across modern terminals and legacy `cmd.exe`; avoid assuming Unicode box-drawing support.
+- Preserve terminal compatibility across modern terminals, classic Windows console hosts, and legacy `cmd.exe`; avoid assuming Unicode box-drawing support or safe full-screen behavior everywhere.
 
 ## TESTING RULES
 

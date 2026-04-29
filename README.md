@@ -17,7 +17,7 @@
 - supports file slices, directory trees, extension filters, symbol extraction, and `git` status / diff mentions;
 - stores all user-facing copy in `strings/en.json`;
 - exposes runtime behavior, editor tuning, logger formatting, and theme styles through `.env`;
-- detects terminal capabilities and can fall back to legacy-safe ASCII rendering for older `cmd.exe` setups.
+- detects terminal capabilities and adapts rendering for legacy `cmd.exe` and classic Windows console hosts.
 
 ### MODES
 
@@ -118,7 +118,7 @@ the full documented surface is in [.env.example](/C:/Users/lucky/Documents/vscod
 
 invalid values fall back safely to code defaults through [settings.py](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/core/settings.py:1).
 
-when `PROMPTIFY_TERMINAL_PROFILE=auto`, `promptify` detects common environments such as VS Code, Windows Terminal, and legacy `cmd.exe`. older `cmd.exe` sessions automatically switch to ASCII-safe borders, tree connectors, and EOF markers so UI chrome remains readable even without box-drawing glyph support.
+when `PROMPTIFY_TERMINAL_PROFILE=auto`, `promptify` detects common environments such as VS Code, Windows Terminal, classic `conhost`, and legacy `cmd.exe`. older `cmd.exe` sessions automatically switch to ASCII-safe borders, tree connectors, and EOF markers so UI chrome remains readable even without box-drawing glyph support. classic Windows console hosts also disable prompt-toolkit full-screen mode automatically because window-state actions like `Win + Down` can hide the session while the process keeps running in the background.
 
 ## TESTING
 
@@ -185,7 +185,7 @@ uv run python -m promptify
 - default max file size is `5242880` bytes (`5 MiB`), configurable through `.env`;
 - default max concurrent reads is `64`, configurable through `.env`;
 - invalid env values never fail startup and instead fall back with warnings;
-- legacy terminal profiles avoid unsupported box-drawing glyphs and disable mouse support automatically where needed;
+- legacy terminal profiles avoid unsupported box-drawing glyphs, disable mouse support automatically where needed, and keep full-screen mode off on classic Windows console hosts;
 - recursive system resolution detects loops and neutralizes them;
 - clipboard failures do not abort prompt generation;
 - missing `git` or missing `.git` repositories are handled gracefully.
