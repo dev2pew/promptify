@@ -889,7 +889,7 @@ class InteractiveEditor:
             [
                 Window(
                     content=FormattedTextControl(
-                        lambda: " search < " if self.search_visible else ""
+                        lambda: " search " if self.search_visible else ""
                     ),
                     style="class:search-label",
                     width=Dimension(preferred=10),
