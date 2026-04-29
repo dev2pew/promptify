@@ -49,7 +49,7 @@ the in-app help screen is authoritative, but the main defaults are...
 ##### MENTIONS
 
 | call                  | description                           | example                         |
-|-:---------------------|-:-------------------------------------|-:-------------------------------|
+| :-------------------- | :------------------------------------ | :------------------------------ |
 | `<@file:path>`        | attach a file                         | `<@file:src/main.py>`           |
 | `<@file:path:range>`  | attach a sliced file                  | `<@file:src/main.py:first 32>`  |
 | `<@dir:path>`         | attach files under a directory        | `<@dir:src>`                    |
