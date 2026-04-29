@@ -87,6 +87,42 @@ def _fragment_text(fragment: tuple[object, ...]) -> str:
     return fragment[1]
 
 
+def _flatten_fragments_to_chars(
+    fragments: StyleAndTextTuples,
+) -> list[tuple[str, str]]:
+    """FLATTENS FRAGMENTS INTO STYLE/CHARACTER PAIRS FOR RANGE-SAFE REWRITES."""
+    chars = []
+    for fragment in fragments:
+        style = cast(str, fragment[0])
+        for char in _fragment_text(fragment):
+            chars.append((style, char))
+    return chars
+
+
+def _append_original_token_range(
+    tokens: list[tuple[str | None, str]],
+    chars: list[tuple[str, str]],
+    start: int,
+    end: int,
+) -> None:
+    """RESTORES A STYLE-PRESERVING TOKEN SLICE FROM FLATTENED CHARACTER DATA."""
+    curr_style = None
+    curr_text: list[str] = []
+
+    for i in range(start, end):
+        style, char = chars[i]
+        if style != curr_style:
+            if curr_text:
+                tokens.append((curr_style, "".join(curr_text)))
+            curr_style = style
+            curr_text = [char]
+        else:
+            curr_text.append(char)
+
+    if curr_text:
+        tokens.append((curr_style, "".join(curr_text)))
+
+
 try:
     import pygments  # NOQA: F401
     from pygments.lexers.markup import MarkdownLexer
@@ -414,6 +450,53 @@ if HAS_PYGMENTS:
             self._invalid_fence_cache = {cache_key: invalid_lines}
             return invalid_lines
 
+        def _cache_validation_result(
+            self,
+            cache_key: tuple[int, str],
+            style: str | None,
+            message: str | None,
+        ) -> MentionValidationResult:
+            """STORES AND RETURNS A VALIDATION RESULT IN ONE STEP."""
+            result = MentionValidationResult(style, message)
+            self._validation_cache[cache_key] = result
+            return result
+
+        def _validate_safe_path(
+            self,
+            path: str,
+            label: str = "path",
+        ) -> MentionValidationResult | None:
+            """REPORTS PATHS THAT ESCAPE THE PROJECT ROOT."""
+            if not self.resolver.context.is_safe_query_path(path):
+                return MentionValidationResult(
+                    "unresolved-reference",
+                    f"{label} '{path}' is outside the project",
+                )
+            return None
+
+        def _validate_indexed_path(
+            self,
+            path: str,
+            missing_message: str,
+            unsafe_message: str | None = None,
+        ) -> MentionValidationResult | None:
+            """VALIDATES THAT A QUERY PATH IS SAFE AND RESOLVES TO A FILE."""
+            path_issue = self._validate_safe_path(path)
+            if path_issue is not None:
+                if unsafe_message is not None:
+                    return MentionValidationResult(
+                        path_issue.style,
+                        unsafe_message,
+                    )
+                return path_issue
+
+            if not self.indexer.find_matches(path):
+                return MentionValidationResult(
+                    "unresolved-reference",
+                    missing_message,
+                )
+            return None
+
         def inspect_mention(self, text: str) -> MentionValidationResult:
             """CLASSIFIES A MENTION AS VALID, MALFORMED, OR UNRESOLVED."""
             cache_key = (self.indexer.revision, text)
@@ -422,34 +505,32 @@ if HAS_PYGMENTS:
                 return cached
 
             if text == "[@project]":
-                result = MentionValidationResult(None, None)
-                self._validation_cache[cache_key] = result
-                return result
+                return self._cache_validation_result(cache_key, None, None)
             if not text.endswith(">"):
-                result = MentionValidationResult(
-                    "invalid-syntax", "incomplete mention syntax"
+                return self._cache_validation_result(
+                    cache_key,
+                    "invalid-syntax",
+                    "incomplete mention syntax",
                 )
-                self._validation_cache[cache_key] = result
-                return result
 
             pattern = self.registry.pattern
             if pattern is None:
                 self.registry.build()
                 pattern = self.registry.pattern
             if pattern is None:
-                result = MentionValidationResult(
-                    "invalid-syntax", "mention registry is unavailable"
+                return self._cache_validation_result(
+                    cache_key,
+                    "invalid-syntax",
+                    "mention registry is unavailable",
                 )
-                self._validation_cache[cache_key] = result
-                return result
 
             match = pattern.fullmatch(text)
             if not match:
-                result = MentionValidationResult(
-                    "invalid-syntax", "malformed mention syntax"
+                return self._cache_validation_result(
+                    cache_key,
+                    "invalid-syntax",
+                    "malformed mention syntax",
                 )
-                self._validation_cache[cache_key] = result
-                return result
 
             try:
                 mod, _ = self.registry.get_mod_and_text(match)
@@ -457,90 +538,82 @@ if HAS_PYGMENTS:
                 if mod.name == "mod_file":
                     body = text.removeprefix("<@file:").removesuffix(">")
                     path, _ = split_file_query_and_range(body)
-                    if not self.resolver.context.is_safe_query_path(
-                        path
-                    ) or not self.indexer.find_matches(path):
-                        result = MentionValidationResult(
-                            "unresolved-reference",
-                            f"file '{path}' could not be resolved",
+                    path_issue = self._validate_indexed_path(
+                        path,
+                        f"file '{path}' could not be resolved",
+                        unsafe_message=f"file '{path}' could not be resolved",
+                    )
+                    if path_issue is not None:
+                        return self._cache_validation_result(
+                            cache_key,
+                            path_issue.style,
+                            path_issue.message,
                         )
-                        self._validation_cache[cache_key] = result
-                        return result
                 elif mod.name in ("mod_dir", "mod_tree"):
                     p = re.match(r"<@(dir|tree):([^>:]+)", text)
                     if p:
                         clean = p.group(2).replace("\\", "/").strip("/")
                         if clean == "":
-                            result = MentionValidationResult(None, None)
-                            self._validation_cache[cache_key] = result
-                            return result
-                        if not self.resolver.context.is_safe_query_path(clean):
-                            result = MentionValidationResult(
-                                "unresolved-reference",
-                                f"path '{clean}' is outside the project",
+                            return self._cache_validation_result(cache_key, None, None)
+                        path_issue = self._validate_safe_path(clean)
+                        if path_issue is not None:
+                            return self._cache_validation_result(
+                                cache_key,
+                                path_issue.style,
+                                path_issue.message,
                             )
-                            self._validation_cache[cache_key] = result
-                            return result
                         if (
                             clean
                             and clean not in self.indexer.dirs
                             and not any(d.startswith(clean) for d in self.indexer.dirs)
                         ):
-                            result = MentionValidationResult(
+                            return self._cache_validation_result(
+                                cache_key,
                                 "unresolved-reference",
                                 f"directory '{clean}' could not be resolved",
                             )
-                            self._validation_cache[cache_key] = result
-                            return result
                 elif mod.name == "mod_symbol":
                     p = re.match(r"<@symbol:([^>:]+?)(?::([^>]+))?>", text)
                     if not p:
-                        result = MentionValidationResult(
-                            "invalid-syntax", "malformed symbol mention"
+                        return self._cache_validation_result(
+                            cache_key,
+                            "invalid-syntax",
+                            "malformed symbol mention",
                         )
-                        self._validation_cache[cache_key] = result
-                        return result
                     path = p.group(1)
-                    if not self.resolver.context.is_safe_query_path(path):
-                        result = MentionValidationResult(
-                            "unresolved-reference",
-                            f"path '{path}' is outside the project",
+                    path_issue = self._validate_indexed_path(
+                        path,
+                        f"symbol file '{path}' could not be resolved",
+                    )
+                    if path_issue is not None:
+                        return self._cache_validation_result(
+                            cache_key,
+                            path_issue.style,
+                            path_issue.message,
                         )
-                        self._validation_cache[cache_key] = result
-                        return result
-                    if not self.indexer.find_matches(path):
-                        result = MentionValidationResult(
-                            "unresolved-reference",
-                            f"symbol file '{path}' could not be resolved",
-                        )
-                        self._validation_cache[cache_key] = result
-                        return result
                 elif mod.name == "mod_ext":
                     p = re.match(r"<@(type|ext):([^>]+)>", text)
                     if not p:
-                        result = MentionValidationResult(
-                            "invalid-syntax", "malformed extension mention"
+                        return self._cache_validation_result(
+                            cache_key,
+                            "invalid-syntax",
+                            "malformed extension mention",
                         )
-                        self._validation_cache[cache_key] = result
-                        return result
                     exts = [e.strip().lower() for e in p.group(2).split(",")]
                     if not self.indexer.get_by_extensions(exts):
-                        result = MentionValidationResult(
+                        return self._cache_validation_result(
+                            cache_key,
                             "unresolved-reference",
                             f"no files found for extensions '{p.group(2)}'",
                         )
-                        self._validation_cache[cache_key] = result
-                        return result
 
-                result = MentionValidationResult(None, None)
-                self._validation_cache[cache_key] = result
-                return result
+                return self._cache_validation_result(cache_key, None, None)
             except Exception:
-                result = MentionValidationResult(
-                    "invalid-syntax", "failed to parse mention"
+                return self._cache_validation_result(
+                    cache_key,
+                    "invalid-syntax",
+                    "failed to parse mention",
                 )
-                self._validation_cache[cache_key] = result
-                return result
 
         def is_valid_mention(self, text: str) -> bool:
             """BACKWARD-COMPATIBILITY HELPER FOR BOOLEAN VALIDATION CALLERS."""
@@ -560,35 +633,16 @@ if HAS_PYGMENTS:
                         return [("class:invalid-syntax", text)]
                     return original_tokens
 
-                # FLATTEN ORIGINAL PYGMENTS TOKENS TO A CHARACTER MAP
-                chars = []
-                for fragment in original_tokens:
-                    style = cast(str, fragment[0])
-                    chars_str = _fragment_text(fragment)
-                    for c in chars_str:
-                        chars.append((style, c))
+                chars = _flatten_fragments_to_chars(original_tokens)
 
-                new_tokens = []
+                new_tokens: list[tuple[str | None, str]] = []
                 last_idx = 0
 
                 for m in matches:
                     start, end = m.span()
                     m_text = m.group(0)
 
-                    # RECOVER ORIGINAL MARKDOWN TOKENS BEFORE THE MATCH
-                    curr_style = None
-                    curr_text = []
-                    for i in range(last_idx, start):
-                        st, c = chars[i]
-                        if st != curr_style:
-                            if curr_text:
-                                new_tokens.append((curr_style, "".join(curr_text)))
-                            curr_style = st
-                            curr_text = [c]
-                        else:
-                            curr_text.append(c)
-                    if curr_text:
-                        new_tokens.append((curr_style, "".join(curr_text)))
+                    _append_original_token_range(new_tokens, chars, last_idx, start)
 
                     # INJECT GRANULAR MENTION TOKENS OR INVALID STYLING
                     if not self.expensive_checks_enabled():
@@ -602,20 +656,7 @@ if HAS_PYGMENTS:
 
                     last_idx = end
 
-                # RECOVER ORIGINAL MARKDOWN TOKENS AFTER THE LAST MATCH
-                curr_style = None
-                curr_text = []
-                for i in range(last_idx, len(chars)):
-                    st, c = chars[i]
-                    if st != curr_style:
-                        if curr_text:
-                            new_tokens.append((curr_style, "".join(curr_text)))
-                        curr_style = st
-                        curr_text = [c]
-                    else:
-                        curr_text.append(c)
-                if curr_text:
-                    new_tokens.append((curr_style, "".join(curr_text)))
+                _append_original_token_range(new_tokens, chars, last_idx, len(chars))
 
                 if lineno in invalid_fence_lines:
                     return [("class:invalid-syntax", text)]
@@ -749,10 +790,24 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         else:
             style_str = "class:completion-menu.completion " + completion.style
 
-        text, text_width = self._trim_formatted_text_left(
-            to_formatted_text(completion.display), width - 1
+        return self._get_trimmed_column_fragments(
+            to_formatted_text(completion.display),
+            style_str,
+            width,
+            trim_delta=1,
         )
-        padding = " " * max(0, width - 1 - text_width)
+
+    def _get_trimmed_column_fragments(
+        self,
+        content: StyleAndTextTuples,
+        style_str: str,
+        width: int,
+        trim_delta: int,
+        padding_delta: int = 1,
+    ) -> StyleAndTextTuples:
+        """TRIMS AND PADDS A SINGLE COMPLETION COLUMN CONSISTENTLY."""
+        text, text_width = self._trim_formatted_text_left(content, width - trim_delta)
+        padding = " " * max(0, width - padding_delta - text_width)
 
         return to_formatted_text(
             cast(StyleAndTextTuples, []) + [("", " ")] + text + [("", padding)],
@@ -842,14 +897,11 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         else:
             style_str = "class:completion-menu.meta.completion"
 
-        text, text_width = self._trim_formatted_text_left(
-            to_formatted_text(completion.display_meta), width - 2
-        )
-        padding = " " * max(0, width - 1 - text_width)
-
-        return to_formatted_text(
-            cast(StyleAndTextTuples, []) + [("", " ")] + text + [("", padding)],
-            style=style_str,
+        return self._get_trimmed_column_fragments(
+            to_formatted_text(completion.display_meta),
+            style_str,
+            width,
+            trim_delta=2,
         )
 
     def create_content(self, width: int, height: int) -> UIContent:
@@ -982,8 +1034,8 @@ class InteractiveEditor:
             content=BufferControl(buffer=self.error_buffer),
             style="class:error-text",
             wrap_lines=True,
-            width=Dimension(min=36, max=120, weight=1),
-            height=Dimension(min=8, max=24, weight=1),
+            width=Dimension(min=28, max=96, weight=1),
+            height=Dimension(min=6, max=20, weight=1),
         )
         self.search_visible = False
         self.search_message = ""
@@ -1076,6 +1128,23 @@ class InteractiveEditor:
             filter=visible_filter,
         )
 
+    def _build_modal_float(
+        self,
+        body,
+        title,
+        style: str,
+        visible_filter: Condition,
+    ) -> Float:
+        """BUILDS A FULL-VIEWPORT CENTERED MODAL FLOAT AROUND A FRAMED BODY."""
+        frame = Frame(body=body, title=title, style=style)
+        return Float(
+            content=self._build_centered_overlay(frame, visible_filter),
+            top=0,
+            bottom=0,
+            left=0,
+            right=0,
+        )
+
     def _copy_selection_state(
         self, selection_state: SelectionState | None
     ) -> SelectionState | None:
@@ -1092,6 +1161,13 @@ class InteractiveEditor:
     ) -> None:
         """REAPPLIES A SAVED SELECTION SNAPSHOT TO A TARGET BUFFER."""
         buffer.selection_state = self._copy_selection_state(selection_state)
+
+    def _focus(self, target) -> None:
+        """FOCUSES A TARGET IF AN APPLICATION IS ACTIVE."""
+        try:
+            get_app().layout.focus(target)
+        except Exception:
+            pass
 
     def invalidate(self) -> None:
         """REQUESTS A REDRAW WHEN AN APPLICATION IS ACTIVE."""
@@ -1128,6 +1204,18 @@ class InteractiveEditor:
         self._search_message_transient = transient and bool(message)
         self.invalidate()
 
+    def _clear_search_message(self) -> None:
+        """CLEARS SEARCH STATUS MESSAGES WITHOUT TOUCHING HISTORY OR FOCUS."""
+        self.search_message = ""
+        self._search_message_transient = False
+
+    def _reset_search_navigation(self) -> None:
+        """CLEARS CACHED SEARCH NAVIGATION STATE AFTER QUERY OR MODE CHANGES."""
+        self._search_last_query = ""
+        self._search_last_direction = 1
+        self._search_last_match = -1
+        self._search_cache_state = None
+
     def _get_current_mode_name(self) -> str:
         """RETURNS THE EDITOR MODE CURRENTLY OWNING THE USER'S ATTENTION."""
         if self.help_visible:
@@ -1143,16 +1231,11 @@ class InteractiveEditor:
     def _get_mode_text(self) -> str:
         """RENDERS A COMPACT MODE STRIP FOR THE TOP BAR."""
         mode = self._get_current_mode_name()
-        if mode == "search":
-            state = self._get_search_highlight_state()
-            if state and state.query:
-                return f" [search {state.active_ordinal} of {len(state.matches)}] "
-            return " [search] "
         if mode == "issue":
             total = len(self._document_issue_cache)
             ordinal = min(self.issue_index + 1, total) if total else 0
             return f" [issue {ordinal} of {total}] "
-        return f" [{mode}] "
+        return f" [ {mode} ] "
 
     def _get_status_text(self) -> str:
         """SHOWS PASSIVE STATUS, ISSUE COUNTS, OR VALIDATION PAUSE FEEDBACK."""
@@ -1211,9 +1294,6 @@ class InteractiveEditor:
         """EMPHASIZES SEARCH MODE WITH AN ALWAYS-VISIBLE HEADER AND COUNT."""
         if not self.search_visible:
             return ""
-        state = self._get_search_highlight_state()
-        if state and state.query:
-            return f" SEARCH {state.active_ordinal}/{len(state.matches)} "
         return " SEARCH "
 
     async def _update_tokens_loop(self):
@@ -1248,21 +1328,14 @@ class InteractiveEditor:
             return f" {self.search_message} "
         if state and state.query:
             if not state.matches:
-                return " 0 of 0  [Enter] next  [Ctrl+R] prev  [Esc] close "
-            return (
-                f" {state.active_ordinal} of {len(state.matches)}"
-                "  [Enter] next  [Ctrl+R] prev  [Esc] close "
-            )
-        return " [Enter] next  [Ctrl+R] prev  [Esc] close "
+                return " 0 of 0 "
+            return f" {state.active_ordinal} of {len(state.matches)} "
+        return ""
 
     def _handle_search_text_changed(self, _buffer: Buffer) -> None:
         """CLEARS STALE SEARCH NAVIGATION STATE AFTER QUERY EDITS."""
-        self.search_message = ""
-        self._search_message_transient = False
-        self._search_last_query = ""
-        self._search_last_direction = 1
-        self._search_last_match = -1
-        self._search_cache_state = None
+        self._clear_search_message()
+        self._reset_search_navigation()
         self._search_history_index = -1
         self.invalidate()
 
@@ -1284,6 +1357,43 @@ class InteractiveEditor:
     ) -> EditorIssue:
         """BUILDS A STABLE ISSUE RECORD FOR NAVIGATION AND RENDERING."""
         return EditorIssue(line, column, end_column, style, message, fragment)
+
+    def _make_line_match_issue(
+        self,
+        lineno: int,
+        match: re.Match[str],
+        style: str,
+        message: str,
+    ) -> EditorIssue:
+        """BUILDS AN ISSUE FROM A SINGLE-LINE REGEX MATCH."""
+        return self._make_issue(
+            lineno,
+            match.start(),
+            match.end(),
+            style,
+            message,
+            match.group(0),
+        )
+
+    def _make_buffer_match_issue(
+        self,
+        match: re.Match[str],
+        style: str,
+        message: str,
+    ) -> EditorIssue:
+        """BUILDS AN ISSUE FROM A WHOLE-BUFFER REGEX MATCH."""
+        start_line, start_col = self.buffer.document.translate_index_to_position(
+            match.start()
+        )
+        end_col = start_col + (match.end() - match.start())
+        return self._make_issue(
+            start_line,
+            start_col,
+            end_col,
+            style,
+            message,
+            match.group(0),
+        )
 
     def get_document_issues(self) -> tuple[EditorIssue, ...]:
         """COLLECTS LIGHTWEIGHT SYNTAX AND REFERENCE ISSUES FROM THE BUFFER."""
@@ -1321,24 +1431,20 @@ class InteractiveEditor:
                         if validation.style is None or validation.message is None:
                             continue
                         issues.append(
-                            self._make_issue(
+                            self._make_line_match_issue(
                                 lineno,
-                                match.start(),
-                                match.end(),
+                                match,
                                 validation.style,
                                 validation.message,
-                                fragment,
                             )
                         )
                     elif not fragment.endswith(">") and fragment != "[@project]":
                         issues.append(
-                            self._make_issue(
+                            self._make_line_match_issue(
                                 lineno,
-                                match.start(),
-                                match.end(),
+                                match,
                                 "invalid-syntax",
                                 "incomplete mention syntax",
-                                fragment,
                             )
                         )
 
@@ -1357,21 +1463,15 @@ class InteractiveEditor:
         for match in re.finditer(r"<@symbol:([^>:]+):([^>]+)>", text):
             path, symbol = match.groups()
             file_matches = self.indexer.find_matches(path)
-            start_line, start_col = self.buffer.document.translate_index_to_position(
-                match.start()
+            issue = self._make_buffer_match_issue(
+                match,
+                "unresolved-reference",
+                f"symbol file '{path}' could not be resolved",
             )
-            end_col = start_col + (match.end() - match.start())
-            issue_key = (start_line, start_col, end_col)
+            issue_key = (issue.line, issue.column, issue.end_column)
 
             if not file_matches:
-                issues[issue_key] = self._make_issue(
-                    start_line,
-                    start_col,
-                    end_col,
-                    "unresolved-reference",
-                    f"symbol file '{path}' could not be resolved",
-                    match.group(0),
-                )
+                issues[issue_key] = issue
                 continue
 
             meta = file_matches[0]
@@ -1388,13 +1488,10 @@ class InteractiveEditor:
                 if not extractor.extract(symbol):
                     raise ValueError(f"symbol '{symbol}' not found")
             except Exception as error:
-                issues[issue_key] = self._make_issue(
-                    start_line,
-                    start_col,
-                    end_col,
-                    "unresolved-reference",
+                issues[issue_key] = self._make_buffer_match_issue(
+                    match,
+                    issue.style,
                     f"{meta.rel_path}: {error}",
-                    match.group(0),
                 )
 
         return tuple(
@@ -1467,24 +1564,17 @@ class InteractiveEditor:
 
     def _focus_search(self) -> None:
         """MOVES INPUT FOCUS INTO THE SEARCH FIELD IF AN APP IS ACTIVE."""
-        try:
-            get_app().layout.focus(self.search_buffer)
-        except Exception:
-            pass
+        self._focus(self.search_buffer)
 
     def _focus_main(self) -> None:
         """RESTORES INPUT FOCUS TO THE MAIN EDITOR BUFFER."""
-        try:
-            get_app().layout.focus(self.main_window)
-        except Exception:
-            pass
+        self._focus(self.main_window)
 
     def open_search(self) -> None:
         """SHOWS THE SEARCH BAR AND PREPARES IT FOR IMMEDIATE INPUT."""
         self.note_user_activity()
         self.search_visible = True
-        self.search_message = ""
-        self._search_message_transient = False
+        self._clear_search_message()
         self._search_cache_state = None
         if self.search_buffer.text:
             self._cycle_search_history()
@@ -1497,12 +1587,8 @@ class InteractiveEditor:
     def close_search(self) -> None:
         """HIDES THE SEARCH BAR AND RETURNS FOCUS TO THE EDITOR."""
         self.search_visible = False
-        self.search_message = ""
-        self._search_message_transient = False
-        self._search_last_query = ""
-        self._search_last_direction = 1
-        self._search_last_match = -1
-        self._search_cache_state = None
+        self._clear_search_message()
+        self._reset_search_navigation()
         self._focus_main()
 
     def open_help(self) -> None:
@@ -1529,10 +1615,7 @@ class InteractiveEditor:
             self.help_window.content.buffer.cursor_position = self._help_issue_anchor
         else:
             self.help_window.content.buffer.cursor_position = 0
-        try:
-            get_app().layout.focus(self.help_window)
-        except Exception:
-            pass
+        self._focus(self.help_window)
 
     def close_help(self) -> None:
         """HIDES THE HELP OVERLAY AND RETURNS FOCUS TO THE ACTIVE EDIT TARGET."""
@@ -1546,10 +1629,7 @@ class InteractiveEditor:
         if self._help_restore_focus == "search" and self.search_visible:
             self._focus_search()
         elif self._help_restore_focus == "error" and self.error_visible:
-            try:
-                get_app().layout.focus(self.error_window)
-            except Exception:
-                pass
+            self._focus(self.error_window)
         else:
             self._focus_main()
 
@@ -1638,20 +1718,18 @@ class InteractiveEditor:
         self.error_buffer.set_document(
             Document(
                 (
-                    f"\n  {title} issue {self.issue_index + 1} of {total}\n"
-                    f"  line {issue.line + 1}, col {issue.column + 1}\n"
-                    f"  {issue.message}\n"
-                    f"  {issue.fragment}\n\n"
-                    "  [Enter] next  [Ctrl+R] prev  [Esc] close"
+                    f"{title} issue {self.issue_index + 1} of {total}\n"
+                    f"line {issue.line + 1}, col {issue.column + 1}\n\n"
+                    f"{issue.message}\n\n"
+                    "context\n"
+                    f"{issue.fragment}\n\n"
+                    "[Enter/N] next  ^[R/P] prev  [Esc] dismiss"
                 ),
                 cursor_position=0,
             ),
             bypass_readonly=True,
         )
-        try:
-            get_app().layout.focus(self.error_window)
-        except Exception:
-            pass
+        self._focus(self.error_window)
         self.invalidate()
 
     def jump_to_issue(self, index: int) -> None:
@@ -1665,6 +1743,14 @@ class InteractiveEditor:
         )
         self._search_cache_state = None
         self.invalidate()
+
+    def _get_error_title_text(self) -> str:
+        """RETURNS A COMPACT, RESPONSIVE TITLE FOR ERROR AND ISSUE OVERLAYS."""
+        if self.issue_mode_active and self._document_issue_cache:
+            total = len(self._document_issue_cache)
+            ordinal = min(self.issue_index + 1, total)
+            return " < " + get_string("issues_title", "issues") + " > "
+        return " < " + get_string("error_title", "error") + " > "
 
     def step_issue(self, direction: int) -> bool:
         """MOVES TO THE NEXT OR PREVIOUS ISSUE WHILE ISSUE MODE IS ACTIVE."""
@@ -1688,7 +1774,7 @@ class InteractiveEditor:
                     width=Dimension(preferred=20),
                 ),
                 Window(
-                    content=FormattedTextControl(" < promptify editor > "),
+                    content=FormattedTextControl(" < promptify > "),
                     style="class:topbar-title",
                     align=WindowAlign.CENTER,
                     width=Dimension(weight=1),
@@ -1747,24 +1833,18 @@ class InteractiveEditor:
             ]
         )
 
-        help_frame = Frame(
-            body=self.help_window,
-            title=" < " + get_string("help_title", "help") + " > ",
-            style="class:help-frame",
+        help_float = self._build_modal_float(
+            self.help_window,
+            " < " + get_string("help_title", "help") + " > ",
+            "class:help-frame",
+            Condition(lambda: self.help_visible),
         )
 
-        help_overlay = self._build_centered_overlay(
-            help_frame, Condition(lambda: self.help_visible)
-        )
-
-        error_frame = Frame(
-            body=self.error_window,
-            title=" < " + get_string("error_title", "error") + " > ",
-            style="class:error-frame",
-        )
-
-        error_overlay = self._build_centered_overlay(
-            error_frame, Condition(lambda: self.error_visible)
+        error_float = self._build_modal_float(
+            self.error_window,
+            self._get_error_title_text,
+            "class:error-frame",
+            Condition(lambda: self.error_visible),
         )
 
         layout = Layout(
@@ -1776,20 +1856,8 @@ class InteractiveEditor:
                         ycursor=True,
                         content=self.completions_menu,
                     ),
-                    Float(
-                        content=help_overlay,
-                        top=0,
-                        bottom=0,
-                        left=0,
-                        right=0,
-                    ),
-                    Float(
-                        content=error_overlay,
-                        top=0,
-                        bottom=0,
-                        left=0,
-                        right=0,
-                    ),
+                    help_float,
+                    error_float,
                 ],
             )
         )
@@ -1814,6 +1882,10 @@ class InteractiveEditor:
                 "search-match": "bg:#5d4a1d #fff0cb",
                 "search-match-active": "bg:#1f5d8e #f7fbff bold",
                 "current-line": "bg:#262a31",
+                "error-frame": "bg:#101317",
+                "error-frame.border": "fg:#768394",
+                "error-frame.label": "bg:#101317 #d7e6f6 bold",
+                "error-text": "bg:#171c22 #f2f5f8",
                 # GRANULAR MENTION STYLES
                 "mention-tag": "fg:#00ffff bold",  # CYAN: <@FILE, >, [@PROJECT]
                 "mention-path": "fg:#ffaa00",  # ORANGE: SRC/MAIN.PY

@@ -265,8 +265,8 @@ async def test_interactive_overlay_windows_use_responsive_dimensions(app_compone
     assert help_width.max == 160
     assert help_height.weight == 1
     assert error_width.weight == 1
-    assert error_width.min == 36
-    assert error_width.max == 120
+    assert error_width.min == 28
+    assert error_width.max == 96
     assert error_height.weight == 1
 
 
@@ -408,7 +408,9 @@ async def test_interactive_editor_search_status_reports_active_match_counts(
     assert state is not None
     assert state.matches == (0, 11, 23)
     assert state.active_ordinal == 1
-    assert "1 of 3" in editor._get_search_status_text()
+    assert editor._get_search_label_text() == " SEARCH "
+    assert editor._get_mode_text() == " [ search ] "
+    assert editor._get_search_status_text().strip() == "1 of 3"
 
 
 async def test_interactive_editor_search_reuses_session_history(app_components):
@@ -459,7 +461,7 @@ async def test_interactive_editor_toolbar_and_token_status_follow_mode(
     context, resolver = app_components
     editor = InteractiveEditor("alpha", context.indexer, resolver)
 
-    assert "resolve" in editor._get_toolbar_text()
+    assert "find" in editor._get_toolbar_text()
     assert editor._get_token_status_text().endswith("  ")
 
     editor.search_visible = True
@@ -541,9 +543,11 @@ async def test_interactive_editor_issue_mode_tracks_issue_navigation(
     editor.activate_issue_mode(issues)
 
     assert editor.issue_mode_active
-    assert "issue 1 of 2" in editor.error_buffer.text
+    assert "syntax issue 1 of 2" in editor.error_buffer.text
+    assert "[Enter] / ^[N] next" in editor.error_buffer.text
     assert editor.buffer.document.cursor_position_row == 0
 
     assert editor.step_issue(1)
-    assert "issue 2 of 2" in editor.error_buffer.text
+    assert "reference issue 2 of 2" in editor.error_buffer.text
+    assert "[Esc] dismiss" in editor.error_buffer.text
     assert editor.buffer.document.cursor_position_row == 1
