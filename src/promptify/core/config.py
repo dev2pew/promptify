@@ -9,6 +9,7 @@ from typing import Any, cast
 import pathspec
 
 from ..ui.logger import log
+from .settings import APP_SETTINGS
 from ..utils.i18n import get_string
 
 
@@ -80,7 +81,7 @@ class CaseConfig:
 
     def get_ignore_spec(self, target_project_dir: Path) -> pathspec.PathSpec:
         """MERGES STANDARD IGNORES, PROJECT GITIGNORE, AND CASEIGNORE INTO ONE PATTERN SPEC."""
-        lines = [".git/", ".svn/", "__pycache__/", ".venv/", "node_modules/"]
+        lines = list(APP_SETTINGS.runtime.default_ignores)
 
         target_ignore_path = target_project_dir / ".gitignore"
         if target_ignore_path.exists():

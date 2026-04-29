@@ -1,0 +1,59 @@
+"""
+UNIT TESTS FOR ENVIRONMENT SETTINGS PARSING AND CONFIG FALLBACKS.
+"""
+
+from promptify.core.settings import build_settings
+
+
+def test_build_settings_accepts_behavior_and_theme_overrides():
+    """VALID SETTINGS SHOULD FLOW INTO THE TYPED CONFIG OBJECT."""
+    settings, warnings = build_settings(
+        {
+            "PROMPTIFY_MAX_FILE_SIZE": "1234",
+            "PROMPTIFY_COPY_OUTPUT_TO_CLIPBOARD": "false",
+            "PROMPTIFY_SAVE_RAW_OUTPUT": "no",
+            "PROMPTIFY_EDITOR_SHOW_HELP_ON_START": "yes",
+            "PROMPTIFY_THEME_TOPBAR": "bg:#000000 #ffffff",
+            "PROMPTIFY_INDEX_WATCH_MODE": "polling",
+            "PROMPTIFY_LOG_COLOR_INFO": "ansigreen",
+        }
+    )
+
+    assert warnings == []
+    assert settings.runtime.max_file_size == 1234
+    assert not settings.app_behavior.copy_output_to_clipboard
+    assert not settings.app_behavior.save_raw_output
+    assert settings.editor_behavior.show_help_on_start
+    assert settings.theme.styles["topbar"] == "bg:#000000 #ffffff"
+    assert settings.indexer.watch_mode == "polling"
+    assert settings.logger.info_color == "ansigreen"
+
+
+def test_build_settings_invalid_values_fall_back_and_warn():
+    """INVALID SETTINGS SHOULD NOT CRASH IMPORT-TIME CONFIGURATION."""
+    settings, warnings = build_settings(
+        {
+            "PROMPTIFY_MAX_FILE_SIZE": "oops",
+            "PROMPTIFY_LOG_TIMESTAMPS": "sometimes",
+            "PROMPTIFY_INDEX_WATCH_MODE": "broken",
+            "PROMPTIFY_LOG_COLOR_INFO": "orange",
+            "PROMPTIFY_EDITOR_HELP_WIDTH_MIN": "200",
+            "PROMPTIFY_EDITOR_HELP_WIDTH_MAX": "50",
+            "PROMPTIFY_DEFAULT_IGNORES": "   ",
+        }
+    )
+
+    assert settings.runtime.max_file_size == 5 * 1024 * 1024
+    assert not settings.logger.include_timestamp
+    assert settings.indexer.watch_mode == "auto"
+    assert settings.logger.info_color == "ansiblue"
+    assert settings.editor_layout.help_width_min == 40
+    assert settings.editor_layout.help_width_max == 160
+    assert settings.runtime.default_ignores == (
+        ".git/",
+        ".svn/",
+        "__pycache__/",
+        ".venv/",
+        "node_modules/",
+    )
+    assert len(warnings) >= 6

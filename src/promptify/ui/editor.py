@@ -13,6 +13,7 @@ from .logger import log
 from ..core.indexer import ProjectIndexer
 from ..core.resolver import PromptResolver
 from ..core.mods import ModRegistry, split_file_query_and_range
+from ..core.settings import APP_SETTINGS
 from .bindings import setup_keybindings
 from ..utils.i18n import get_string
 
@@ -1003,18 +1004,24 @@ class ResponsiveCompletionsMenu(ConditionalContainer):
 class InteractiveEditor:
     """MANAGES THE CORE PROMPT-TOOLKIT TERMINAL EDITOR."""
 
-    BULK_EDIT_SUSPEND_SECONDS = 0.35
-    BULK_EDIT_SIZE_THRESHOLD = 2048
-    COMPLETION_MENU_MAX_HEIGHT = 12
-    SEARCH_HISTORY_LIMIT = 8
+    BULK_EDIT_SUSPEND_SECONDS = APP_SETTINGS.editor_behavior.bulk_edit_suspend_seconds
+    BULK_EDIT_SIZE_THRESHOLD = APP_SETTINGS.editor_behavior.bulk_edit_size_threshold
+    COMPLETION_MENU_MAX_HEIGHT = APP_SETTINGS.editor_layout.completion_menu_max_height
+    COMPLETION_MENU_SCROLL_OFFSET = (
+        APP_SETTINGS.editor_layout.completion_menu_scroll_offset
+    )
+    SEARCH_HISTORY_LIMIT = APP_SETTINGS.editor_behavior.search_history_limit
+    TOKEN_UPDATE_INTERVAL = APP_SETTINGS.editor_behavior.token_update_interval
 
     def __init__(
         self,
         initial_text: str,
         indexer: ProjectIndexer,
         resolver: PromptResolver,
-        show_help: bool = False,
+        show_help: bool | None = None,
     ):
+        if show_help is None:
+            show_help = APP_SETTINGS.editor_behavior.show_help_on_start
         self.help_visible = show_help
         self.indexer = indexer
         self.resolver = resolver
@@ -1058,8 +1065,16 @@ class InteractiveEditor:
             content=BufferControl(buffer=self.help_buffer, lexer=HelpLexer()),
             style="class:help-text",
             wrap_lines=False,
-            width=Dimension(min=40, max=160, weight=1),
-            height=Dimension(min=12, max=40, weight=1),
+            width=Dimension(
+                min=APP_SETTINGS.editor_layout.help_width_min,
+                max=APP_SETTINGS.editor_layout.help_width_max,
+                weight=1,
+            ),
+            height=Dimension(
+                min=APP_SETTINGS.editor_layout.help_height_min,
+                max=APP_SETTINGS.editor_layout.help_height_max,
+                weight=1,
+            ),
         )
 
         self.error_visible = False
@@ -1069,8 +1084,16 @@ class InteractiveEditor:
             content=BufferControl(buffer=self.error_buffer),
             style="class:error-text",
             wrap_lines=True,
-            width=Dimension(min=28, max=96, weight=1),
-            height=Dimension(min=6, max=20, weight=1),
+            width=Dimension(
+                min=APP_SETTINGS.editor_layout.error_width_min,
+                max=APP_SETTINGS.editor_layout.error_width_max,
+                weight=1,
+            ),
+            height=Dimension(
+                min=APP_SETTINGS.editor_layout.error_height_min,
+                max=APP_SETTINGS.editor_layout.error_height_max,
+                weight=1,
+            ),
         )
         self.search_visible = False
         self.search_message = ""
@@ -1137,8 +1160,54 @@ class InteractiveEditor:
         )
         self.completions_menu = ResponsiveCompletionsMenu(
             max_height=self.COMPLETION_MENU_MAX_HEIGHT,
-            scroll_offset=1,
+            scroll_offset=self.COMPLETION_MENU_SCROLL_OFFSET,
         )
+
+    def _build_style(self) -> Style:
+        """BUILDS THE EDITOR STYLE MAP AND FALLS BACK IF CONFIG VALUES ARE INVALID."""
+        try:
+            return Style.from_dict(APP_SETTINGS.theme.styles)
+        except Exception:
+            return Style.from_dict(
+                {
+                    "topbar": "bg:#333333 #ffffff",
+                    "topbar-mode": "bg:#333333 #aee6ff bold",
+                    "topbar-title": "bg:#333333 #00ffff bold",
+                    "topbar-status": "bg:#333333 #ffd89a",
+                    "topbar-tokens": "bg:#333333 #ffff00",
+                    "toolbar": "bg:#333333 #ffffff",
+                    "toolbar-right": "bg:#333333 #00ff00",
+                    "completion-menu": "bg:#444444 #ffffff",
+                    "completion-menu.completion.current": "bg:#1d6f62 #f5fffb bold",
+                    "editor-frame.border": "fg:#4a4a4a",
+                    "search-bar": "bg:#1f1f1f #ffffff",
+                    "search-label": "bg:#1f1f1f #9fe9ff bold",
+                    "search-input": "bg:#2d2d2d #ffffff",
+                    "search-status": "bg:#1f1f1f #ffe09c",
+                    "search-match": "bg:#5d4a1d #fff0cb",
+                    "search-match-active": "bg:#1f5d8e #f7fbff bold",
+                    "current-line": "bg:#262a31",
+                    "error-frame": "bg:#101317",
+                    "error-frame.border": "fg:#768394",
+                    "error-frame.label": "bg:#101317 #d7e6f6 bold",
+                    "error-text": "bg:#171c22 #f2f5f8",
+                    "mention-tag": "fg:#00ffff bold",
+                    "mention-path": "fg:#ffaa00",
+                    "mention-range": "fg:#ff55ff",
+                    "mention-depth": "fg:#ff55ff",
+                    "mention-ext": "fg:#ffaa00",
+                    "mention-git-cmd": "fg:#00aa00",
+                    "mention-class": "fg:#00ff00 bold",
+                    "mention-function": "fg:#5555ff",
+                    "mention-method": "fg:#55ffff",
+                    "invalid-syntax": "bg:#7c1f24 #fff3f3",
+                    "unresolved-reference": "bg:#6e4a1c #fff0d8",
+                    "help-header": "fg:#00ff00 bold",
+                    "help-key": "fg:#ffff00",
+                    "trailing-whitespace": "bg:#ff0000",
+                    "eof-newline": "fg:#ff0000",
+                }
+            )
 
     def _build_centered_overlay(
         self, container, visible_filter: Condition
@@ -1375,7 +1444,7 @@ class InteractiveEditor:
         last_text = None
         last_count = 0
         while True:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(self.TOKEN_UPDATE_INTERVAL)
             if self.result is not None:
                 break
 
@@ -2010,60 +2079,16 @@ class InteractiveEditor:
             )
         )
 
-        style = Style.from_dict(
-            {
-                # UI LAYOUT
-                "topbar": "bg:#333333 #ffffff",
-                "topbar-mode": "bg:#333333 #aee6ff bold",
-                "topbar-title": "bg:#333333 #00ffff bold",
-                "topbar-status": "bg:#333333 #ffd89a",
-                "topbar-tokens": "bg:#333333 #ffff00",
-                "toolbar": "bg:#333333 #ffffff",
-                "toolbar-right": "bg:#333333 #00ff00",
-                "completion-menu": "bg:#444444 #ffffff",
-                "completion-menu.completion.current": "bg:#1d6f62 #f5fffb bold",
-                "editor-frame.border": "fg:#4a4a4a",
-                "search-bar": "bg:#1f1f1f #ffffff",
-                "search-label": "bg:#1f1f1f #9fe9ff bold",
-                "search-input": "bg:#2d2d2d #ffffff",
-                "search-status": "bg:#1f1f1f #ffe09c",
-                "search-match": "bg:#5d4a1d #fff0cb",
-                "search-match-active": "bg:#1f5d8e #f7fbff bold",
-                "current-line": "bg:#262a31",
-                "error-frame": "bg:#101317",
-                "error-frame.border": "fg:#768394",
-                "error-frame.label": "bg:#101317 #d7e6f6 bold",
-                "error-text": "bg:#171c22 #f2f5f8",
-                # GRANULAR MENTION STYLES
-                "mention-tag": "fg:#00ffff bold",  # CYAN: <@FILE, >, [@PROJECT]
-                "mention-path": "fg:#ffaa00",  # ORANGE: SRC/MAIN.PY
-                "mention-range": "fg:#ff55ff",  # MAGENTA/PINK: 12-20
-                "mention-depth": "fg:#ff55ff",
-                "mention-ext": "fg:#ffaa00",  # ORANGE: MD,PY
-                "mention-git-cmd": "fg:#00aa00",  # GREEN: DIFF, STATUS
-                "mention-class": "fg:#00ff00 bold",  # BRIGHT GREEN: MYCLASS
-                "mention-function": "fg:#5555ff",  # BLUE: MY_FUNC
-                "mention-method": "fg:#55ffff",  # LIGHT CYAN: METHOD
-                # ISSUE STYLES
-                "invalid-syntax": "bg:#7c1f24 #fff3f3",
-                "unresolved-reference": "bg:#6e4a1c #fff0d8",
-                # HELP MENU OVERRIDES
-                "help-header": "fg:#00ff00 bold",  # GREEN SECTION HEADERS
-                "help-key": "fg:#ffff00",  # YELLOW NAVIGATION KEYS
-                # ENHANCED VISIBILITY
-                "trailing-whitespace": "bg:#ff0000",
-                "eof-newline": "fg:#ff0000",
-            }
-        )
+        style = self._build_style()
 
         app = Application(
             layout=layout,
             key_bindings=bindings,
             style=style,
-            full_screen=True,
-            mouse_support=True,
+            full_screen=APP_SETTINGS.editor_layout.full_screen,
+            mouse_support=APP_SETTINGS.editor_layout.mouse_support,
         )
-        app.ttimeoutlen = 0.05
+        app.ttimeoutlen = APP_SETTINGS.editor_layout.ttimeoutlen
 
         if self.help_visible:
             app.layout.focus(self.help_window)
