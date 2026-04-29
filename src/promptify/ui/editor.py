@@ -1723,7 +1723,7 @@ class InteractiveEditor:
                     f"{issue.message}\n\n"
                     "context\n"
                     f"{issue.fragment}\n\n"
-                    "[Enter/N] next  ^[R/P] prev  [Esc] dismiss"
+                    "[Enter/N] next  ^[R/P] prev  [Esc] close"
                 ),
                 cursor_position=0,
             ),
@@ -1749,7 +1749,7 @@ class InteractiveEditor:
         if self.issue_mode_active and self._document_issue_cache:
             total = len(self._document_issue_cache)
             ordinal = min(self.issue_index + 1, total)
-            return " < " + get_string("issues_title", "issues") + " > "
+            return " < " + f"issues {ordinal} / {total} > "
         return " < " + get_string("error_title", "error") + " > "
 
     def step_issue(self, direction: int) -> bool:
