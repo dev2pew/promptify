@@ -16,7 +16,7 @@
 - strictly validates paths so reads stay inside the chosen project root;
 - supports file slices, directory trees, extension filters, symbol extraction, and `git` status / diff mentions;
 - stores all user-facing copy in `strings/en.json`;
-- exposes runtime behavior, editor tuning, logger formatting, and theme styles through `.env`.
+- exposes runtime behavior, editor tuning, logger formatting, and theme styles through `.env`;
 - detects terminal capabilities and can fall back to legacy-safe ASCII rendering for older `cmd.exe` setups.
 
 ### MODES
