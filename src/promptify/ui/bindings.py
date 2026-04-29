@@ -203,13 +203,13 @@ def setup_keybindings(editor) -> KeyBindings:
     def _redo(event) -> None:
         event.app.current_buffer.redo()
 
-    @custom_bindings.add("home", filter=editor_focus)
+    @custom_bindings.add("home", filter=text_focus)
     def _home(event) -> None:
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position += get_home_position(b.document)
 
-    @custom_bindings.add("end", filter=editor_focus)
+    @custom_bindings.add("end", filter=text_focus)
     def _end(event) -> None:
         b = event.current_buffer
         b.selection_state = None
@@ -227,19 +227,19 @@ def setup_keybindings(editor) -> KeyBindings:
         b.selection_state = None
         b.cursor_position += b.document.get_cursor_down_position(count=15)
 
-    @custom_bindings.add("c-home", filter=editor_focus)
+    @custom_bindings.add("c-home", filter=text_focus)
     def _c_home(event) -> None:
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position = 0
 
-    @custom_bindings.add("c-end", filter=editor_focus)
+    @custom_bindings.add("c-end", filter=text_focus)
     def _c_end(event) -> None:
         b = event.current_buffer
         b.selection_state = None
         b.cursor_position = len(b.text)
 
-    @custom_bindings.add("c-left", filter=editor_focus)
+    @custom_bindings.add("c-left", filter=text_focus)
     def _c_left(event) -> None:
         b = event.current_buffer
         b.selection_state = None
@@ -249,7 +249,7 @@ def setup_keybindings(editor) -> KeyBindings:
         else:
             b.cursor_position = 0
 
-    @custom_bindings.add("c-right", filter=editor_focus)
+    @custom_bindings.add("c-right", filter=text_focus)
     def _c_right(event) -> None:
         b = event.current_buffer
         b.selection_state = None
@@ -259,13 +259,13 @@ def setup_keybindings(editor) -> KeyBindings:
         else:
             b.cursor_position = len(b.text)
 
-    @custom_bindings.add("s-home", filter=editor_focus)
+    @custom_bindings.add("s-home", filter=text_focus)
     def _s_home(event) -> None:
         b = event.current_buffer
         _start_sel(b)
         b.cursor_position += get_home_position(b.document)
 
-    @custom_bindings.add("s-end", filter=editor_focus)
+    @custom_bindings.add("s-end", filter=text_focus)
     def _s_end(event) -> None:
         b = event.current_buffer
         _start_sel(b)
@@ -283,19 +283,19 @@ def setup_keybindings(editor) -> KeyBindings:
         _start_sel(b)
         b.cursor_position += b.document.get_cursor_down_position(count=15)
 
-    @custom_bindings.add("s-c-home", filter=editor_focus)
+    @custom_bindings.add("s-c-home", filter=text_focus)
     def _s_c_home(event) -> None:
         b = event.current_buffer
         _start_sel(b)
         b.cursor_position = 0
 
-    @custom_bindings.add("s-c-end", filter=editor_focus)
+    @custom_bindings.add("s-c-end", filter=text_focus)
     def _s_c_end(event) -> None:
         b = event.current_buffer
         _start_sel(b)
         b.cursor_position = len(b.text)
 
-    @custom_bindings.add("s-c-left", filter=editor_focus)
+    @custom_bindings.add("s-c-left", filter=text_focus)
     def _s_c_left(event) -> None:
         b = event.current_buffer
         _start_sel(b)
@@ -305,7 +305,7 @@ def setup_keybindings(editor) -> KeyBindings:
         else:
             b.cursor_position = 0
 
-    @custom_bindings.add("s-c-right", filter=editor_focus)
+    @custom_bindings.add("s-c-right", filter=text_focus)
     def _s_c_right(event) -> None:
         b = event.current_buffer
         _start_sel(b)
@@ -315,7 +315,7 @@ def setup_keybindings(editor) -> KeyBindings:
         else:
             b.cursor_position = len(b.text)
 
-    @custom_bindings.add("c-w", filter=editor_focus)
+    @custom_bindings.add("c-w", filter=text_focus)
     def _c_w(event) -> None:
         b = event.current_buffer
         if b.selection_state:
@@ -328,7 +328,7 @@ def setup_keybindings(editor) -> KeyBindings:
             else:
                 b.delete_before_cursor(count=b.cursor_position)
 
-    @custom_bindings.add("c-delete", filter=editor_focus)
+    @custom_bindings.add("c-delete", filter=text_focus)
     def _c_delete(event) -> None:
         b = event.current_buffer
         if b.selection_state:
@@ -341,14 +341,14 @@ def setup_keybindings(editor) -> KeyBindings:
             else:
                 b.delete(count=len(b.text) - b.cursor_position)
 
-    @custom_bindings.add("backspace", filter=editor_focus & has_selection)
-    @custom_bindings.add("delete", filter=editor_focus & has_selection)
+    @custom_bindings.add("backspace", filter=text_focus & has_selection)
+    @custom_bindings.add("delete", filter=text_focus & has_selection)
     def _delete_selection(event) -> None:
         b = event.current_buffer
         b.cut_selection()
         b.selection_state = None
 
-    @custom_bindings.add("<any>", filter=editor_focus & has_selection)
+    @custom_bindings.add("<any>", filter=text_focus & has_selection)
     def _type_over_selection(event) -> None:
         b = event.current_buffer
         if event.data and event.data.isprintable():
@@ -466,28 +466,28 @@ def setup_keybindings(editor) -> KeyBindings:
         new_col = max(0, cursor_col + cursor_col_offset)
         b.cursor_position = b.document.translate_row_col_to_index(cursor_row, new_col)
 
-    @custom_bindings.add("left", filter=editor_focus & ~has_completions_menu)
+    @custom_bindings.add("left", filter=text_focus & ~has_completions_menu)
     def _left(event) -> None:
         b = event.current_buffer
         b.selection_state = None
         if b.cursor_position > 0:
             b.cursor_position -= 1
 
-    @custom_bindings.add("right", filter=editor_focus & ~has_completions_menu)
+    @custom_bindings.add("right", filter=text_focus & ~has_completions_menu)
     def _right(event) -> None:
         b = event.current_buffer
         b.selection_state = None
         if b.cursor_position < len(b.text):
             b.cursor_position += 1
 
-    @custom_bindings.add("s-left", filter=editor_focus & ~has_completions_menu)
+    @custom_bindings.add("s-left", filter=text_focus & ~has_completions_menu)
     def _s_left(event) -> None:
         b = event.current_buffer
         _start_sel(b)
         if b.cursor_position > 0:
             b.cursor_position -= 1
 
-    @custom_bindings.add("s-right", filter=editor_focus & ~has_completions_menu)
+    @custom_bindings.add("s-right", filter=text_focus & ~has_completions_menu)
     def _s_right(event) -> None:
         b = event.current_buffer
         _start_sel(b)
