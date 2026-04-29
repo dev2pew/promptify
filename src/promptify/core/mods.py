@@ -4,8 +4,11 @@ DEFINES HOW SPECIFIC TAGS (LIKE <@FILE:...> OR <@GIT:...>) ARE PARSED AND RESOLV
 """
 
 import re
+import subprocess
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, TYPE_CHECKING
 from prompt_toolkit.completion import Completion
 from rapidfuzz import process, utils as fuzz_utils
@@ -227,7 +230,6 @@ class GitMentionQuery:
 GIT_BRANCH_PATTERN = r"\[(?:\\.|[^\]\\])+\]"
 GIT_BRANCH_PREFIX_PATTERN = rf"(?:{GIT_BRANCH_PATTERN}:)?"
 GIT_COMMAND_COMPLETIONS = ("diff>", "status>", "diff:", "log>", "log:")
-GIT_LOG_COUNT_SUGGESTIONS = (1, 2, 5, 10, 20, 50)
 
 
 def escape_git_branch_name(branch: str) -> str:
@@ -238,6 +240,24 @@ def escape_git_branch_name(branch: str) -> str:
             escaped.append("\\")
         escaped.append(char)
     return "".join(escaped)
+
+
+def unescape_git_branch_name(branch: str) -> str:
+    """DECODES A BRANCH NAME PREVIOUSLY ESCAPED FOR THE GIT MENTION GRAMMAR."""
+    decoded: list[str] = []
+    escaped = False
+    for char in branch:
+        if escaped:
+            decoded.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        decoded.append(char)
+    if escaped:
+        decoded.append("\\")
+    return "".join(decoded)
 
 
 def split_git_branch_prefix(body: str) -> tuple[str | None, str | None, str] | None:
@@ -267,6 +287,30 @@ def split_git_branch_prefix(body: str) -> tuple[str | None, str | None, str] | N
         raw_chars.append(char)
 
     return None
+
+
+def parse_incomplete_git_branch_prefix(body: str) -> str | None:
+    """RETURNS THE RAW BRANCH PARTIAL WHEN THE USER IS STILL TYPING `[branch`."""
+    if not body.startswith("["):
+        return None
+
+    raw_chars: list[str] = []
+    escaped = False
+    for char in body[1:]:
+        if escaped:
+            raw_chars.extend(["\\", char])
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char in {"]", ":"}:
+            return None
+        raw_chars.append(char)
+
+    if escaped:
+        raw_chars.append("\\")
+    return "".join(raw_chars)
 
 
 def parse_git_mention_query(body: str) -> GitMentionQuery | None:
@@ -607,6 +651,92 @@ class GitMod(MentionMod):
         r"(?:status|diff(?:[:][^>]+)?|log(?:[:]\d+)?)>"
     )
 
+    def __init__(self) -> None:
+        ttl = APP_SETTINGS.resolver.git_estimate_cache_ttl
+        self._git_cache_ttl = max(0.5, ttl)
+        self._branch_cache: dict[str, tuple[float, list[str]]] = {}
+        self._commit_count_cache: dict[tuple[str, str | None], tuple[float, int]] = {}
+
+    def _run_git_completion_command(
+        self, repo_root: Path, *args: str
+    ) -> tuple[int, str, str]:
+        """RUNS A NON-INTERACTIVE GIT COMMAND FOR COMPLETION DATA COLLECTION."""
+        try:
+            proc = subprocess.run(
+                ["git", "--no-pager", *args],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+        except OSError:
+            return 1, "", ""
+        return proc.returncode, proc.stdout, proc.stderr.strip()
+
+    def _read_git_branches(self, repo_root: Path) -> list[str]:
+        """RETURNS LOCAL BRANCH NAMES CACHED FOR A SHORT TTL."""
+        cache_key = str(repo_root.resolve())
+        cached = self._branch_cache.get(cache_key)
+        now = time.monotonic()
+        if cached is not None and now - cached[0] < self._git_cache_ttl:
+            return cached[1]
+
+        returncode, stdout, _ = self._run_git_completion_command(
+            repo_root,
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "refs/heads",
+        )
+        branches = (
+            sorted({line.strip() for line in stdout.splitlines() if line.strip()})
+            if returncode == 0
+            else []
+        )
+        self._branch_cache[cache_key] = (now, branches)
+        return branches
+
+    def _read_git_commit_count(self, repo_root: Path, branch: str | None) -> int:
+        """RETURNS THE LIVE COMMIT COUNT FOR HEAD OR THE PROVIDED BRANCH."""
+        cache_key = (str(repo_root.resolve()), branch)
+        cached = self._commit_count_cache.get(cache_key)
+        now = time.monotonic()
+        if cached is not None and now - cached[0] < self._git_cache_ttl:
+            return cached[1]
+
+        target = branch or "HEAD"
+        returncode, stdout, _ = self._run_git_completion_command(
+            repo_root, "rev-list", "--count", target
+        )
+        try:
+            count = int(stdout.strip()) if returncode == 0 else 0
+        except ValueError:
+            count = 0
+        self._commit_count_cache[cache_key] = (now, count)
+        return count
+
+    def _yield_git_branch_placeholder(self, partial: str) -> Iterable[Completion]:
+        """SUGGESTS THE BRANCH PREFIX PLACEHOLDER BEFORE ANY COMMAND IS CHOSEN."""
+        suggestion = "[branch]"
+        if suggestion.startswith(partial.lower()):
+            yield Completion("[", start_position=-len(partial), display=suggestion)
+
+    def _yield_git_branch_completions(
+        self, partial: str, indexer: "ProjectIndexer"
+    ) -> Iterable[Completion]:
+        """SUGGESTS BRANCH NAMES AFTER THE USER TYPES `<@git:[`."""
+        partial_decoded = unescape_git_branch_name(partial)
+        for branch in self._read_git_branches(indexer.target_dir):
+            if partial_decoded and partial_decoded not in branch:
+                continue
+            escaped_branch = escape_git_branch_name(branch)
+            yield Completion(
+                escaped_branch + "]:",
+                start_position=-len(partial),
+                display=f"[{branch}]",
+            )
+
     async def resolve(self, text: str, context: "ProjectContext") -> str:
         body = text.removeprefix("<@git:").removesuffix(">")
         query = parse_git_mention_query(body)
@@ -624,6 +754,14 @@ class GitMod(MentionMod):
     def get_completions(
         self, text_before_cursor: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
+        match_git_body = re.search(r"<@git:([^><]*)$", text_before_cursor)
+        git_body = match_git_body.group(1) if match_git_body else None
+        if git_body is not None:
+            branch_partial = parse_incomplete_git_branch_prefix(git_body)
+            if branch_partial is not None:
+                yield from self._yield_git_branch_completions(branch_partial, indexer)
+                return
+
         match_git_diff = re.search(
             rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}diff:([^><]*)$", text_before_cursor
         )
@@ -640,12 +778,23 @@ class GitMod(MentionMod):
             rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}log:(\d*)$", text_before_cursor
         )
         if match_git_log:
+            body = text_before_cursor.split("<@git:", 1)[1]
+            branch, _, _ = split_git_branch_prefix(body) or (None, None, body)
+            commit_count = self._read_git_commit_count(indexer.target_dir, branch)
             yield from _yield_numeric_suffix_completions(
-                GIT_LOG_COUNT_SUGGESTIONS,
+                range(1, commit_count + 1),
                 match_git_log.group(1),
                 suffix=">",
             )
             return
+
+        if git_body is not None:
+            partial = git_body.lower()
+            if (
+                ":" not in partial
+                and parse_incomplete_git_branch_prefix(git_body) is None
+            ):
+                yield from self._yield_git_branch_placeholder(partial)
 
         match_git = re.search(
             rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}([^><:]*)$", text_before_cursor

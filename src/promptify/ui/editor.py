@@ -2215,6 +2215,7 @@ class InteractiveEditor:
             layout=layout,
             key_bindings=bindings,
             style=style,
+            erase_when_done=True,
             full_screen=(
                 APP_SETTINGS.editor_layout.full_screen
                 and self.terminal_profile.supports_full_screen
