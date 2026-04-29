@@ -160,34 +160,25 @@ MENTION_SCAN_PATTERN = r"<@(?:\\.|[^>\n])+(?:>|$)|\[@[^\]\n]*(?:\]|$)"
 HELP_TOKEN_PATTERN = r"(<@(?:\\.|[^>\n])+>|\[@project\])|(\^?\[[^\]\n]+\])"
 HELP_TEXT_FALLBACK = (
     "[ general ]\n\n"
-
     "^[G] / [F1]                   : help\n"
     "^[F]                          : search\n"
     "^[S]                          : resolve\n"
     "^[Q]                          : abort\n\n"
-
     "[ search ]\n\n"
-
     "[Enter]                       : next\n"
     "^[R]                          : previous\n"
     "[Esc]                         : close\n\n"
-
     "[ issues ]\n\n"
-
     "[Enter] / ^[N]                : next\n"
     "^[R] / ^[P]                   : previous\n"
     "[Esc]                         : close\n\n"
-
     "[ autocomplete mentions ]\n\n"
-
     "<@file:path>                  : file\n"
     "<@file:path:range>            : sliced file\n\n"
-
     "            first n           : head\n"
     "            last n            : tail\n"
     "            n-m               : ranged\n"
     "            #n                : single\n\n"
-
     "<@dir:path>                   : directory\n"
     "<@tree:path>                  : tree view\n"
     "<@tree:path:level>            : set depth\n"
@@ -205,9 +196,7 @@ HELP_TEXT_FALLBACK = (
     "<@git:[branch]:log:count>     : ex.\n"
     "<@git:[branch]:history:count> : ex.\n"
     "[@project]                    : project structure\n\n"
-
     "[ editing ]\n\n"
-
     "^[A]                          : select all\n"
     "[Shift]                       : select\n"
     "^[Z/Y]                        : undo / redo\n"
@@ -218,15 +207,12 @@ HELP_TEXT_FALLBACK = (
     "^[/]                          : comment out\n"
     "^[W/Del]                      : delete previous / next\n"
     "[Enter]                       : newline / accept\n\n"
-
     "[ navigation ]\n\n"
-
     "[^/v/</>]                     : move\n"
     "^[^/v/</>]                    : next / previous\n"
     "[Home/End]                    : start / end\n"
     "^[Home/End]                   : file start / end\n"
     "^[PgUp/PgDn]                  : up / down (15x)\n\n"
-
     "press [Enter], [F1] or ^[G] to close\n"
 )
 
