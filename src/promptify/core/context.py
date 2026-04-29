@@ -432,12 +432,14 @@ class ProjectContext:
         else:
             header_name = root_rel.split("/")[-1]
 
+        header_root = "." if not root_rel else f"./{root_rel}"
+
         tree_str = [
             get_string("tree_header_1", "TREE /F"),
             get_string("tree_header_2", "Folder PATH for {name}").format(
                 name=header_name
             ),
-            get_string("tree_header_3", "C:."),
+            get_string("tree_header_3", "{root}").format(root=header_root),
         ]
 
         search_prefix = root_rel + "/" if root_rel else ""

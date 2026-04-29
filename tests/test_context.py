@@ -113,8 +113,12 @@ async def test_generate_tree(app_components):
     context, _ = app_components
     res = context.generate_tree()
     assert get_string("tree_header_1", "TREE /F") in res
+    assert get_string("tree_header_3", "{root}").format(root=".") in res
     assert "app.py" in res
     assert "src" in res
+
+    scoped = context.generate_tree("src")
+    assert get_string("tree_header_3", "{root}").format(root="./src") in scoped
 
 
 async def test_git_mentions(app_components):

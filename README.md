@@ -148,10 +148,26 @@ uv run pytest -v
 
 ```
 
+or use the repo helpers...
+
+```bash
+sh ./llt.sh
+
+```
+
+on Windows, the existing `llt.bat` helper remains available.
+
 format code...
 
 ```bash
 uv run ruff format src/ tests/
+
+```
+
+or use the repo helpers...
+
+```bash
+sh ./llf.sh
 
 ```
 
@@ -174,6 +190,15 @@ uv run promptify
 
 ```
 
+or use the repo helpers...
+
+```bash
+sh ./llr.sh
+
+```
+
+on Windows, the existing `llr.bat` helper remains available.
+
 or via the module entry point...
 
 ```bash
@@ -188,7 +213,8 @@ uv run python -m promptify
 - prevents reading files larger than `5` MB; (configurable)
 - if using `resolve_system`, the engine detects infinite loops (e.g., `A.md` calls `A.md`) and neutralizes them with an HTML warning comment;
 - limits concurrent file reads to 100 to prevent OS file descriptor exhaustion;
-- gracefully handles missing `git` installations or missing `.git` repositories.
+- gracefully handles missing `git` installations or missing `.git` repositories;
+- on Linux and macOS, clipboard copy support depends on the backend available to `pyperclip` (for example `wl-clipboard`, `xclip`, `xsel`, or `pbcopy`). if none is available, prompt generation still completes and the app logs a clipboard warning instead of failing.
 
 ## DEMO
 
