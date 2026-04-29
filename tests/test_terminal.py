@@ -29,5 +29,21 @@ def test_detect_terminal_profile_falls_back_for_legacy_cmd():
 
     assert profile.name == "legacy-cmd"
     assert not profile.supports_box_drawing
+    assert not profile.supports_full_screen
     assert profile.border.top_left == "+"
     assert profile.tree.branch == "|---"
+
+
+def test_detect_terminal_profile_uses_safe_conhost_defaults():
+    """CLASSIC WINDOWS CONSOLE HOSTS SHOULD AVOID FULL-SCREEN MODE."""
+    profile = detect_terminal_profile(
+        {
+            "COMSPEC": r"C:\Windows\System32\cmd.exe",
+        },
+        override="auto",
+    )
+
+    assert profile.name == "conhost"
+    assert profile.supports_box_drawing
+    assert not profile.supports_mouse
+    assert not profile.supports_full_screen
