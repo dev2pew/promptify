@@ -11,7 +11,8 @@
         ".txt",
         ".ipynb",
         "README.md",
-        ".bat"
+        ".bat",
+        ".sh"
     ],
     "ignores": ".caseignore",
     "system": "system.md",
