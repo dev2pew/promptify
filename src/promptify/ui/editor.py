@@ -6,6 +6,7 @@ IMPLEMENTS HIGHLIGHTING, AUTOCOMPLETION, INVALID MENTION MARKING, AND SEARCH.
 import re
 import sys
 import asyncio
+from dataclasses import dataclass
 from typing import Callable, Iterable, cast
 
 from .logger import log
@@ -161,6 +162,106 @@ class EOFNewlineProcessor(Processor):
         return Transformation(tokens)
 
 
+@dataclass(frozen=True)
+class SearchHighlightState:
+    """CACHED SEARCH SNAPSHOT FOR HIGHLIGHTING AND STATUS RENDERING."""
+
+    query: str
+    matches: tuple[int, ...]
+    active_match: int | None
+    active_ordinal: int
+
+
+class SearchMatchProcessor(Processor):
+    """HIGHLIGHTS SEARCH MATCHES WITH DISTINCT ACTIVE AND PASSIVE STYLES."""
+
+    def __init__(self, get_state: Callable[[], SearchHighlightState | None]):
+        self.get_state = get_state
+
+    def apply_transformation(self, transformation_input):
+        state = self.get_state()
+        if state is None or not state.query or not state.matches:
+            return Transformation(transformation_input.fragments)
+
+        line_text = "".join(
+            _fragment_text(fragment) for fragment in transformation_input.fragments
+        )
+        if not line_text:
+            return Transformation(transformation_input.fragments)
+
+        line_start = transformation_input.document.translate_row_col_to_index(
+            transformation_input.lineno, 0
+        )
+        line_end = line_start + len(line_text)
+        query_len = len(state.query)
+
+        ranges: list[tuple[int, int, str]] = []
+        for match_start in state.matches:
+            match_end = match_start + query_len
+            if match_end <= line_start:
+                continue
+            if match_start >= line_end:
+                break
+
+            start = max(0, match_start - line_start)
+            end = min(len(line_text), match_end - line_start)
+            style = (
+                "class:search-match-active"
+                if state.active_match == match_start
+                else "class:search-match"
+            )
+            ranges.append((start, end, style))
+
+        if not ranges:
+            return Transformation(transformation_input.fragments)
+
+        new_fragments = []
+        char_index = 0
+        for fragment in transformation_input.fragments:
+            base_style = cast(str, fragment[0])
+            text = _fragment_text(fragment)
+            if not text:
+                new_fragments.append(fragment)
+                continue
+
+            segment_start = char_index
+            segment_end = char_index + len(text)
+            cursor = segment_start
+
+            for range_start, range_end, highlight_style in ranges:
+                if range_end <= segment_start or range_start >= segment_end:
+                    continue
+
+                overlap_start = max(segment_start, range_start)
+                overlap_end = min(segment_end, range_end)
+
+                if overlap_start > cursor:
+                    new_fragments.append(
+                        (
+                            base_style,
+                            text[
+                                cursor - segment_start : overlap_start - segment_start
+                            ],
+                        )
+                    )
+                new_fragments.append(
+                    (
+                        f"{base_style} {highlight_style}".strip(),
+                        text[
+                            overlap_start - segment_start : overlap_end - segment_start
+                        ],
+                    )
+                )
+                cursor = overlap_end
+
+            if cursor < segment_end:
+                new_fragments.append((base_style, text[cursor - segment_start :]))
+
+            char_index = segment_end
+
+        return Transformation(new_fragments)
+
+
 if HAS_PYGMENTS:
 
     def tokenize_mention(text: str) -> list[tuple[str, str]]:
@@ -250,8 +351,25 @@ if HAS_PYGMENTS:
             self.indexer = indexer
             self.resolver = resolver
             self.expensive_checks_enabled = expensive_checks_enabled or (lambda: True)
-            self.mention_pattern = re.compile(r"<@[^>\n]+(?:>|$)|\[@project\]")
+            self.mention_pattern = re.compile(r"<@[^>\n]+(?:>|$)|\[@[^\]\n]*(?:\]|$)")
             self._validation_cache: dict[tuple[int, str], bool] = {}
+            self._invalid_fence_cache: dict[int, set[int]] = {}
+
+        def get_invalid_fence_lines(self, document: Document) -> set[int]:
+            """FLAGS ONLY THE LAST UNMATCHED FENCE LINE TO AVOID NOISY HIGHLIGHTING."""
+            cache_key = id(document.text)
+            cached = self._invalid_fence_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
+            fence_lines = [
+                lineno
+                for lineno, line in enumerate(document.lines)
+                if line.lstrip().startswith("```")
+            ]
+            invalid_lines = {fence_lines[-1]} if len(fence_lines) % 2 else set()
+            self._invalid_fence_cache = {cache_key: invalid_lines}
+            return invalid_lines
 
         def is_valid_mention(self, text: str) -> bool:
             """VALIDATES THE INTEGRITY OF A MENTION AND ITS EXISTENCE IN THE INDEXER."""
@@ -337,6 +455,7 @@ if HAS_PYGMENTS:
 
         def lex_document(self, document: Document):
             get_original_line = self.md_lexer.lex_document(document)
+            invalid_fence_lines = self.get_invalid_fence_lines(document)
 
             def get_line(lineno: int):
                 original_tokens = get_original_line(lineno)
@@ -344,6 +463,8 @@ if HAS_PYGMENTS:
                 matches = list(self.mention_pattern.finditer(text))
 
                 if not matches:
+                    if lineno in invalid_fence_lines:
+                        return [("class:invalid-syntax", text)]
                     return original_tokens
 
                 # FLATTEN ORIGINAL PYGMENTS TOKENS TO A CHARACTER MAP
@@ -400,6 +521,9 @@ if HAS_PYGMENTS:
                         curr_text.append(c)
                 if curr_text:
                     new_tokens.append((curr_style, "".join(curr_text)))
+
+                if lineno in invalid_fence_lines:
+                    return [("class:invalid-syntax", text)]
 
                 return new_tokens
 
@@ -755,6 +879,11 @@ class InteractiveEditor:
         self._search_last_query = ""
         self._search_last_direction = 1
         self._search_last_match = -1
+        self._search_cache_text_id = 0
+        self._search_cache_cursor = -1
+        self._search_cache_query = ""
+        self._search_cache_state: SearchHighlightState | None = None
+        self.search_buffer.on_text_changed += self._handle_search_text_changed
 
         self.search_window = VSplit(
             [
@@ -794,6 +923,7 @@ class InteractiveEditor:
             HighlightTrailingWhitespaceProcessor(),
             HighlightMatchingBracketProcessor(),
             EOFNewlineProcessor(),
+            SearchMatchProcessor(self._get_search_highlight_state),
         ]
 
         self.main_window = Window(
@@ -858,9 +988,93 @@ class InteractiveEditor:
 
     def _get_search_status_text(self) -> str:
         """RETURNS SEARCH MODE HINTS OR THE LAST SEARCH RESULT MESSAGE."""
+        state = self._get_search_highlight_state()
         if self.search_message:
             return f" {self.search_message} "
+        if state and state.query:
+            if not state.matches:
+                return " 0 of 0  [Enter] next  [Ctrl+R] prev  [Esc] close "
+            return (
+                f" {state.active_ordinal} of {len(state.matches)}"
+                "  [Enter] next  [Ctrl+R] prev  [Esc] close "
+            )
         return " [Enter] next  [Ctrl+R] prev  [Esc] close "
+
+    def _handle_search_text_changed(self, _buffer: Buffer) -> None:
+        """CLEARS STALE SEARCH NAVIGATION STATE AFTER QUERY EDITS."""
+        self.search_message = ""
+        self._search_last_query = ""
+        self._search_last_direction = 1
+        self._search_last_match = -1
+        self._search_cache_state = None
+        try:
+            get_app().invalidate()
+        except Exception:
+            pass
+
+    def _get_search_highlight_state(self) -> SearchHighlightState | None:
+        """RETURNS A CACHED SEARCH SNAPSHOT TO AVOID REPEATED FULL-SCAN WORK."""
+        if not self.search_visible:
+            return None
+
+        query = self.search_buffer.text
+        text = self.buffer.text
+        cursor = self.buffer.cursor_position
+        text_id = id(text)
+        if (
+            self._search_cache_state is not None
+            and self._search_cache_text_id == text_id
+            and self._search_cache_query == query
+            and self._search_cache_cursor == cursor
+        ):
+            return self._search_cache_state
+
+        if not query:
+            state = SearchHighlightState("", tuple(), None, 0)
+        else:
+            matches: list[int] = []
+            start = 0
+            while True:
+                match_pos = text.find(query, start)
+                if match_pos == -1:
+                    break
+                matches.append(match_pos)
+                start = match_pos + 1
+
+            active_match = None
+            active_ordinal = 0
+            if matches:
+                cursor_match = next(
+                    (
+                        match
+                        for match in matches
+                        if match <= cursor < match + len(query)
+                    ),
+                    None,
+                )
+                if cursor_match is not None:
+                    active_match = cursor_match
+                elif (
+                    self._search_last_query == query
+                    and self._search_last_match in matches
+                ):
+                    active_match = self._search_last_match
+                else:
+                    active_match = next(
+                        (match for match in matches if match >= cursor), matches[0]
+                    )
+
+                active_ordinal = matches.index(active_match) + 1
+
+            state = SearchHighlightState(
+                query, tuple(matches), active_match, active_ordinal
+            )
+
+        self._search_cache_text_id = text_id
+        self._search_cache_cursor = cursor
+        self._search_cache_query = query
+        self._search_cache_state = state
+        return state
 
     def _focus_search(self) -> None:
         """MOVES INPUT FOCUS INTO THE SEARCH FIELD IF AN APP IS ACTIVE."""
@@ -880,6 +1094,7 @@ class InteractiveEditor:
         """SHOWS THE SEARCH BAR AND PREPARES IT FOR IMMEDIATE INPUT."""
         self.search_visible = True
         self.search_message = ""
+        self._search_cache_state = None
         self.search_buffer.cursor_position = len(self.search_buffer.text)
         self._focus_search()
 
@@ -890,6 +1105,7 @@ class InteractiveEditor:
         self._search_last_query = ""
         self._search_last_direction = 1
         self._search_last_match = -1
+        self._search_cache_state = None
         self._focus_main()
 
     def open_help(self) -> None:
@@ -960,6 +1176,7 @@ class InteractiveEditor:
         self._search_last_query = query
         self._search_last_direction = direction
         self._search_last_match = match_pos
+        self._search_cache_state = None
         self.search_message = "wrapped" if wrapped else ""
         return True
 
@@ -1085,6 +1302,8 @@ class InteractiveEditor:
                 "search-label": "bg:#1f1f1f #00ffff bold",
                 "search-input": "bg:#2d2d2d #ffffff",
                 "search-status": "bg:#1f1f1f #ffff00",
+                "search-match": "bg:#6b5f00 #fff4b3",
+                "search-match-active": "bg:#005a9c #ffffff bold",
                 # GRANULAR MENTION STYLES
                 "mention-tag": "fg:#00ffff bold",  # CYAN: <@FILE, >, [@PROJECT]
                 "mention-path": "fg:#ffaa00",  # ORANGE: SRC/MAIN.PY

@@ -350,3 +350,92 @@ async def test_interactive_editor_runtime_help_returns_focus_to_search(
 
             pipe_input.send_text("\x11")  # CTRL+Q
             await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_runtime_search_selection_clears_on_navigation(
+    app_components,
+):
+    """SEARCH FIELD SELECTION SHOULD CLEAR AFTER PLAIN CURSOR MOVEMENT."""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.open_search()
+            pipe_input.send_text("alpha")
+
+            for _ in range(20):
+                if editor.search_buffer.text == "alpha":
+                    break
+                await asyncio.sleep(0.02)
+
+            pipe_input.send_text("\x01")  # CTRL+A
+            for _ in range(20):
+                if editor.search_buffer.selection_state is not None:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.search_buffer.selection_state is not None
+
+            pipe_input.send_text("\x1b[C")  # RIGHT
+            for _ in range(20):
+                if editor.search_buffer.selection_state is None:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.search_buffer.selection_state is None
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_search_status_reports_active_match_counts(
+    app_components,
+):
+    """SEARCH STATUS SHOULD REPORT THE ACTIVE MATCH ORDINAL AND TOTAL MATCHES."""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "alpha beta alpha gamma alpha", context.indexer, resolver
+    )
+    editor.search_visible = True
+    editor.search_buffer.text = "alpha"
+
+    state = editor._get_search_highlight_state()
+
+    assert state is not None
+    assert state.matches == (0, 11, 23)
+    assert state.active_ordinal == 1
+    assert "1 of 3" in editor._get_search_status_text()
+
+
+async def test_interactive_editor_lexer_flags_incomplete_project_mentions(
+    app_components,
+):
+    """INCOMPLETE PROJECT MENTIONS SHOULD BE TREATED AS INVALID SYNTAX."""
+    context, resolver = app_components
+    editor = InteractiveEditor("[@proj", context.indexer, resolver)
+    lexer = cast(Any, editor.main_window.content).lexer
+
+    if lexer is None:
+        pytest.skip("pygments lexer unavailable")
+
+    tokens = lexer.lex_document(Document("[@proj"))(0)
+    assert any("invalid-syntax" in style for style, _ in tokens)
+
+
+async def test_interactive_editor_lexer_flags_unclosed_code_fences(
+    app_components,
+):
+    """THE LAST UNMATCHED CODE FENCE SHOULD BE MARKED AS INVALID SYNTAX."""
+    context, resolver = app_components
+    editor = InteractiveEditor("```py\nprint('x')\n", context.indexer, resolver)
+    lexer = cast(Any, editor.main_window.content).lexer
+
+    if lexer is None:
+        pytest.skip("pygments lexer unavailable")
+
+    tokens = lexer.lex_document(Document("```py\nprint('x')\n"))(0)
+    assert any("invalid-syntax" in style for style, _ in tokens)
