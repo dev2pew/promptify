@@ -14,6 +14,7 @@
 - Invalid configuration values must never crash import-time startup. Fall back safely;
 - Preserve Pylance basic type-checking cleanliness;
 - Prefer shared helpers over repeated logic, especially in editor, resolver, and completion flows.
+- Preserve terminal compatibility across modern terminals and legacy `cmd.exe`; avoid assuming Unicode box-drawing support.
 
 ## TESTING RULES
 
@@ -25,8 +26,8 @@
 ## EDITING RULES
 
 - Use ASCII unless the file already requires other characters;
-- Keep comments sparse and only where they clarify non-obviou; behavior;
-- Do not hardcode configuration values across modules when a setting al;eady exists;
+- Keep comments sparse and only where they clarify non-obvious behavior;
+- Do not hardcode configuration values across modules when a setting already exists;
 - If a new customization knob is introduced, document it in `.env.example`;
 - If a change affects contributor or agent workflow, update this file.
 
@@ -35,4 +36,5 @@
 - `src/` is the application source of truth;
 - `tests/` should remain unit-focused and cover regressions;
 - `strings/en.json` centralizes user-facing strings;
-- `.env.example` documents safe, non-secret local configuration and preference toggles.
+- `.env.example` documents safe, non-secret local configuration and preference toggles;
+- `README.md` should stay aligned with user-visible capabilities, controls, and configuration.

@@ -16,7 +16,8 @@
 - strictly validates paths so reads stay inside the chosen project root;
 - supports file slices, directory trees, extension filters, symbol extraction, and `git` status / diff mentions;
 - stores all user-facing copy in `strings/en.json`;
-- exposes runtime behavior, editor tuning, logger formatting, and theme styles through `.env`.
+- exposes runtime behavior, editor tuning, logger formatting, and theme styles through `.env`;
+- detects terminal capabilities and can fall back to legacy-safe ASCII rendering for older `cmd.exe` setups.
 
 ### MODES
 
@@ -32,7 +33,7 @@ a terminal editor powered by `prompt-toolkit`.
 - custom search bar with match counts, wrap reporting, and session history;
 - issue overlays for malformed mentions and unresolved references before save;
 - syntax highlighting, trailing whitespace marking, EOF newline indicators, and active-line highlighting;
-- configurable layout, behavior, and colors through `.env`.
+- configurable layout, behavior, colors, and terminal compatibility through `.env`.
 
 ##### CONTROLS
 
@@ -109,13 +110,15 @@ the full documented surface is in [.env.example](/C:/Users/lucky/Documents/vscod
 - runtime limits like max file size and concurrent reads;
 - output behavior such as clipboard copy and raw prompt saving;
 - logger prefixes, colors, verbosity, and timestamps;
-- terminal and menu rendering fallbacks;
+- terminal and menu rendering fallbacks, including `PROMPTIFY_TERMINAL_PROFILE` for legacy `cmd.exe`, raster-font consoles, or forced modern profiles;
 - watch mode selection;
 - matching thresholds and completion tuning;
 - editor layout, search history, bulk-paste tuning, and token refresh timing;
 - full prompt-toolkit style overrides for the interactive theme.
 
 invalid values fall back safely to code defaults through [settings.py](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/core/settings.py:1).
+
+when `PROMPTIFY_TERMINAL_PROFILE=auto`, `promptify` detects common environments such as VS Code, Windows Terminal, and legacy `cmd.exe`. older `cmd.exe` sessions automatically switch to ASCII-safe borders, tree connectors, and EOF markers so UI chrome remains readable even without box-drawing glyph support.
 
 ## TESTING
 
@@ -182,6 +185,7 @@ uv run python -m promptify
 - default max file size is `5242880` bytes (`5 MiB`), configurable through `.env`;
 - default max concurrent reads is `64`, configurable through `.env`;
 - invalid env values never fail startup and instead fall back with warnings;
+- legacy terminal profiles avoid unsupported box-drawing glyphs and disable mouse support automatically where needed;
 - recursive system resolution detects loops and neutralizes them;
 - clipboard failures do not abort prompt generation;
 - missing `git` or missing `.git` repositories are handled gracefully.
