@@ -411,6 +411,64 @@ async def test_interactive_editor_search_status_reports_active_match_counts(
     assert "1 of 3" in editor._get_search_status_text()
 
 
+async def test_interactive_editor_search_reuses_session_history(app_components):
+    """REOPENING SEARCH SHOULD PREFILL AND CYCLE RECENT SESSION QUERIES."""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
+    editor.search_visible = True
+    editor.search_buffer.text = "alpha"
+
+    assert editor.search_step(1)
+
+    editor.close_search()
+    editor.search_buffer.text = ""
+    editor.open_search()
+    assert editor.search_buffer.text == "alpha"
+
+    editor.search_buffer.text = "beta"
+    assert editor.search_step(1)
+
+    editor.open_search()
+    assert editor.search_buffer.text == "alpha"
+
+
+async def test_interactive_editor_help_restores_search_cursor_and_selection(
+    app_components,
+):
+    """HELP SHOULD RESTORE THE SEARCH FIELD CURSOR AND SELECTION EXACTLY."""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
+    editor.search_visible = True
+    editor.search_buffer.document = Document("alpha", cursor_position=2)
+    editor.search_buffer.selection_state = SelectionState(original_cursor_position=0)
+
+    editor.open_help()
+    editor.search_buffer.cursor_position = 0
+    editor.search_buffer.selection_state = None
+    editor.close_help()
+
+    assert editor.search_buffer.cursor_position == 2
+    assert editor.search_buffer.selection_state is not None
+    assert editor.search_buffer.selection_state.original_cursor_position == 0
+
+
+async def test_interactive_editor_toolbar_and_token_status_follow_mode(
+    app_components,
+):
+    """THE STATUS STRIP SHOULD REFLECT SEARCH AND BUSY STATES CHEAPLY."""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha", context.indexer, resolver)
+
+    assert "resolve" in editor._get_toolbar_text()
+    assert editor._get_token_status_text().endswith("  ")
+
+    editor.search_visible = True
+    assert "next" in editor._get_toolbar_text()
+
+    editor._token_estimate_busy = True
+    assert editor._get_token_status_text().endswith("* ")
+
+
 async def test_interactive_editor_lexer_flags_incomplete_project_mentions(
     app_components,
 ):
@@ -439,3 +497,53 @@ async def test_interactive_editor_lexer_flags_unclosed_code_fences(
 
     tokens = lexer.lex_document(Document("```py\nprint('x')\n"))(0)
     assert any("invalid-syntax" in style for style, _ in tokens)
+
+
+async def test_interactive_editor_lexer_distinguishes_unresolved_references(
+    app_components,
+):
+    """MISSING FILE-LIKE REFERENCES SHOULD USE THE UNRESOLVED ISSUE STYLE."""
+    context, resolver = app_components
+    editor = InteractiveEditor("<@file:missing.py>", context.indexer, resolver)
+    lexer = cast(Any, editor.main_window.content).lexer
+
+    if lexer is None:
+        pytest.skip("pygments lexer unavailable")
+
+    tokens = lexer.lex_document(Document("<@file:missing.py>"))(0)
+    assert any("unresolved-reference" in style for style, _ in tokens)
+
+
+async def test_interactive_editor_collects_save_issues_for_missing_symbols(
+    app_components,
+):
+    """SAVE-TIME ISSUE COLLECTION SHOULD FLAG SYMBOL LOOKUPS AND JUMP TARGETS."""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "<@symbol:app.py:MissingSymbol>", context.indexer, resolver
+    )
+
+    issues = await editor.collect_save_issues()
+
+    assert len(issues) == 1
+    assert issues[0].style == "unresolved-reference"
+    assert "MissingSymbol" in issues[0].message
+
+
+async def test_interactive_editor_issue_mode_tracks_issue_navigation(
+    app_components,
+):
+    """ISSUE MODE SHOULD JUMP TO ISSUES AND EXPOSE A NAVIGABLE COUNT."""
+    context, resolver = app_components
+    editor = InteractiveEditor("[@proj\n<@file:missing.py>", context.indexer, resolver)
+    issues = await editor.collect_save_issues()
+
+    editor.activate_issue_mode(issues)
+
+    assert editor.issue_mode_active
+    assert "issue 1 of 2" in editor.error_buffer.text
+    assert editor.buffer.document.cursor_position_row == 0
+
+    assert editor.step_issue(1)
+    assert "issue 2 of 2" in editor.error_buffer.text
+    assert editor.buffer.document.cursor_position_row == 1

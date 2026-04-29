@@ -63,6 +63,7 @@ try:
         Processor,
         Transformation,
     )
+    from prompt_toolkit.selection import SelectionState
     from prompt_toolkit.layout.utils import explode_text_fragments
     from prompt_toolkit.layout.containers import ScrollOffsets
     from prompt_toolkit.layout.menus import (
@@ -172,6 +173,26 @@ class SearchHighlightState:
     active_ordinal: int
 
 
+@dataclass(frozen=True)
+class MentionValidationResult:
+    """CAPTURES WHETHER A MENTION IS VALID, MALFORMED, OR UNRESOLVED."""
+
+    style: str | None
+    message: str | None
+
+
+@dataclass(frozen=True)
+class EditorIssue:
+    """REPRESENTS A NAVIGABLE EDITOR ISSUE IN THE CURRENT DOCUMENT."""
+
+    line: int
+    column: int
+    end_column: int
+    style: str
+    message: str
+    fragment: str
+
+
 class SearchMatchProcessor(Processor):
     """HIGHLIGHTS SEARCH MATCHES WITH DISTINCT ACTIVE AND PASSIVE STYLES."""
 
@@ -260,6 +281,28 @@ class SearchMatchProcessor(Processor):
             char_index = segment_end
 
         return Transformation(new_fragments)
+
+
+class ActiveLineProcessor(Processor):
+    """HIGHLIGHTS THE ACTIVE EDITOR ROW WITHOUT ALTERING THE DOCUMENT TEXT."""
+
+    def apply_transformation(self, transformation_input):
+        if (
+            transformation_input.lineno
+            != transformation_input.document.cursor_position_row
+        ):
+            return Transformation(transformation_input.fragments)
+
+        fragments = []
+        for fragment in transformation_input.fragments:
+            style = cast(str, fragment[0])
+            fragments.append(
+                (
+                    f"class:current-line {style}".strip(),
+                    _fragment_text(fragment),
+                )
+            )
+        return Transformation(fragments)
 
 
 if HAS_PYGMENTS:
@@ -352,7 +395,7 @@ if HAS_PYGMENTS:
             self.resolver = resolver
             self.expensive_checks_enabled = expensive_checks_enabled or (lambda: True)
             self.mention_pattern = re.compile(r"<@[^>\n]+(?:>|$)|\[@[^\]\n]*(?:\]|$)")
-            self._validation_cache: dict[tuple[int, str], bool] = {}
+            self._validation_cache: dict[tuple[int, str], MentionValidationResult] = {}
             self._invalid_fence_cache: dict[int, set[int]] = {}
 
         def get_invalid_fence_lines(self, document: Document) -> set[int]:
@@ -371,32 +414,42 @@ if HAS_PYGMENTS:
             self._invalid_fence_cache = {cache_key: invalid_lines}
             return invalid_lines
 
-        def is_valid_mention(self, text: str) -> bool:
-            """VALIDATES THE INTEGRITY OF A MENTION AND ITS EXISTENCE IN THE INDEXER."""
+        def inspect_mention(self, text: str) -> MentionValidationResult:
+            """CLASSIFIES A MENTION AS VALID, MALFORMED, OR UNRESOLVED."""
             cache_key = (self.indexer.revision, text)
             cached = self._validation_cache.get(cache_key)
             if cached is not None:
                 return cached
 
             if text == "[@project]":
-                self._validation_cache[cache_key] = True
-                return True
+                result = MentionValidationResult(None, None)
+                self._validation_cache[cache_key] = result
+                return result
             if not text.endswith(">"):
-                self._validation_cache[cache_key] = False
-                return False
+                result = MentionValidationResult(
+                    "invalid-syntax", "incomplete mention syntax"
+                )
+                self._validation_cache[cache_key] = result
+                return result
 
             pattern = self.registry.pattern
             if pattern is None:
                 self.registry.build()
                 pattern = self.registry.pattern
             if pattern is None:
-                self._validation_cache[cache_key] = False
-                return False
+                result = MentionValidationResult(
+                    "invalid-syntax", "mention registry is unavailable"
+                )
+                self._validation_cache[cache_key] = result
+                return result
 
             match = pattern.fullmatch(text)
             if not match:
-                self._validation_cache[cache_key] = False
-                return False
+                result = MentionValidationResult(
+                    "invalid-syntax", "malformed mention syntax"
+                )
+                self._validation_cache[cache_key] = result
+                return result
 
             try:
                 mod, _ = self.registry.get_mod_and_text(match)
@@ -407,51 +460,91 @@ if HAS_PYGMENTS:
                     if not self.resolver.context.is_safe_query_path(
                         path
                     ) or not self.indexer.find_matches(path):
-                        self._validation_cache[cache_key] = False
-                        return False
+                        result = MentionValidationResult(
+                            "unresolved-reference",
+                            f"file '{path}' could not be resolved",
+                        )
+                        self._validation_cache[cache_key] = result
+                        return result
                 elif mod.name in ("mod_dir", "mod_tree"):
                     p = re.match(r"<@(dir|tree):([^>:]+)", text)
                     if p:
                         clean = p.group(2).replace("\\", "/").strip("/")
                         if clean == "":
-                            self._validation_cache[cache_key] = True
-                            return True
+                            result = MentionValidationResult(None, None)
+                            self._validation_cache[cache_key] = result
+                            return result
                         if not self.resolver.context.is_safe_query_path(clean):
-                            self._validation_cache[cache_key] = False
-                            return False
+                            result = MentionValidationResult(
+                                "unresolved-reference",
+                                f"path '{clean}' is outside the project",
+                            )
+                            self._validation_cache[cache_key] = result
+                            return result
                         if (
                             clean
                             and clean not in self.indexer.dirs
                             and not any(d.startswith(clean) for d in self.indexer.dirs)
                         ):
-                            self._validation_cache[cache_key] = False
-                            return False
+                            result = MentionValidationResult(
+                                "unresolved-reference",
+                                f"directory '{clean}' could not be resolved",
+                            )
+                            self._validation_cache[cache_key] = result
+                            return result
                 elif mod.name == "mod_symbol":
                     p = re.match(r"<@symbol:([^>:]+?)(?::([^>]+))?>", text)
                     if not p:
-                        self._validation_cache[cache_key] = False
-                        return False
+                        result = MentionValidationResult(
+                            "invalid-syntax", "malformed symbol mention"
+                        )
+                        self._validation_cache[cache_key] = result
+                        return result
                     path = p.group(1)
                     if not self.resolver.context.is_safe_query_path(path):
-                        self._validation_cache[cache_key] = False
-                        return False
+                        result = MentionValidationResult(
+                            "unresolved-reference",
+                            f"path '{path}' is outside the project",
+                        )
+                        self._validation_cache[cache_key] = result
+                        return result
                     if not self.indexer.find_matches(path):
-                        self._validation_cache[cache_key] = False
-                        return False
+                        result = MentionValidationResult(
+                            "unresolved-reference",
+                            f"symbol file '{path}' could not be resolved",
+                        )
+                        self._validation_cache[cache_key] = result
+                        return result
                 elif mod.name == "mod_ext":
                     p = re.match(r"<@(type|ext):([^>]+)>", text)
                     if not p:
-                        self._validation_cache[cache_key] = False
-                        return False
+                        result = MentionValidationResult(
+                            "invalid-syntax", "malformed extension mention"
+                        )
+                        self._validation_cache[cache_key] = result
+                        return result
                     exts = [e.strip().lower() for e in p.group(2).split(",")]
                     if not self.indexer.get_by_extensions(exts):
-                        self._validation_cache[cache_key] = False
-                        return False
-                self._validation_cache[cache_key] = True
-                return True
+                        result = MentionValidationResult(
+                            "unresolved-reference",
+                            f"no files found for extensions '{p.group(2)}'",
+                        )
+                        self._validation_cache[cache_key] = result
+                        return result
+
+                result = MentionValidationResult(None, None)
+                self._validation_cache[cache_key] = result
+                return result
             except Exception:
-                self._validation_cache[cache_key] = False
-                return False
+                result = MentionValidationResult(
+                    "invalid-syntax", "failed to parse mention"
+                )
+                self._validation_cache[cache_key] = result
+                return result
+
+        def is_valid_mention(self, text: str) -> bool:
+            """BACKWARD-COMPATIBILITY HELPER FOR BOOLEAN VALIDATION CALLERS."""
+            return self.inspect_mention(text).style is None
 
         def lex_document(self, document: Document):
             get_original_line = self.md_lexer.lex_document(document)
@@ -500,10 +593,12 @@ if HAS_PYGMENTS:
                     # INJECT GRANULAR MENTION TOKENS OR INVALID STYLING
                     if not self.expensive_checks_enabled():
                         new_tokens.extend(tokenize_mention(m_text))
-                    elif not self.is_valid_mention(m_text):
-                        new_tokens.append(("class:invalid-syntax", m_text))
                     else:
-                        new_tokens.extend(tokenize_mention(m_text))
+                        validation = self.inspect_mention(m_text)
+                        if validation.style is None:
+                            new_tokens.extend(tokenize_mention(m_text))
+                        else:
+                            new_tokens.append((f"class:{validation.style}", m_text))
 
                     last_idx = end
 
@@ -824,6 +919,7 @@ class InteractiveEditor:
     BULK_EDIT_SUSPEND_SECONDS = 0.35
     BULK_EDIT_SIZE_THRESHOLD = 2048
     COMPLETION_MENU_MAX_HEIGHT = 12
+    SEARCH_HISTORY_LIMIT = 8
 
     def __init__(
         self,
@@ -837,6 +933,22 @@ class InteractiveEditor:
         self.resolver = resolver
         self.token_count = 0
         self._bulk_mode_until = 0.0
+        self._token_estimate_busy = False
+        self._passive_status = ""
+        self._passive_status_transient = False
+        self._search_message_transient = False
+        self._search_history: list[str] = []
+        self._search_history_index = -1
+        self._help_restore_focus = "main"
+        self._help_restore_main_cursor = 0
+        self._help_restore_search_cursor = 0
+        self._help_restore_main_selection: SelectionState | None = None
+        self._help_restore_search_selection: SelectionState | None = None
+        self._document_issue_cache_text_id = 0
+        self._document_issue_cache_enabled = True
+        self._document_issue_cache: tuple[EditorIssue, ...] = tuple()
+        self.issue_mode_active = False
+        self.issue_index = 0
 
         self.buffer = Buffer(
             document=Document(initial_text, cursor_position=0),
@@ -847,9 +959,12 @@ class InteractiveEditor:
             ),
             complete_while_typing=Condition(self.should_complete_while_typing),
         )
+        self.buffer.on_text_changed += self._handle_buffer_text_changed
         self.result: str | None = None
 
         help_text = get_string("help_text", "")
+        self._help_search_anchor = help_text.find("[ search ]")
+        self._help_issue_anchor = help_text.find("[ issues ]")
         self.help_buffer = Buffer(document=Document(help_text), read_only=True)
 
         self.help_window = Window(
@@ -888,11 +1003,9 @@ class InteractiveEditor:
         self.search_window = VSplit(
             [
                 Window(
-                    content=FormattedTextControl(
-                        lambda: " search " if self.search_visible else ""
-                    ),
+                    content=FormattedTextControl(self._get_search_label_text),
                     style="class:search-label",
-                    width=Dimension(preferred=10),
+                    width=Dimension(preferred=18),
                 ),
                 Window(
                     content=BufferControl(buffer=self.search_buffer),
@@ -909,7 +1022,7 @@ class InteractiveEditor:
             style="class:search-bar",
         )
 
-        lexer = (
+        self.lexer = (
             CustomPromptLexer(
                 cast(ModRegistry, resolver.registry),
                 cast(ProjectIndexer, indexer),
@@ -923,15 +1036,17 @@ class InteractiveEditor:
             HighlightTrailingWhitespaceProcessor(),
             HighlightMatchingBracketProcessor(),
             EOFNewlineProcessor(),
+            ActiveLineProcessor(),
             SearchMatchProcessor(self._get_search_highlight_state),
         ]
 
         self.main_window = Window(
             content=BufferControl(
                 buffer=self.buffer,
-                lexer=lexer,
+                lexer=self.lexer,
                 input_processors=processors,
-            )
+            ),
+            cursorline=True,
         )
         self.completions_menu = ResponsiveCompletionsMenu(
             max_height=self.COMPLETION_MENU_MAX_HEIGHT,
@@ -961,6 +1076,146 @@ class InteractiveEditor:
             filter=visible_filter,
         )
 
+    def _copy_selection_state(
+        self, selection_state: SelectionState | None
+    ) -> SelectionState | None:
+        """CLONES A SELECTION SNAPSHOT SO HELP OVERLAYS CAN RESTORE IT CLEANLY."""
+        if selection_state is None:
+            return None
+        return SelectionState(
+            original_cursor_position=selection_state.original_cursor_position,
+            type=selection_state.type,
+        )
+
+    def _restore_selection_state(
+        self, buffer: Buffer, selection_state: SelectionState | None
+    ) -> None:
+        """REAPPLIES A SAVED SELECTION SNAPSHOT TO A TARGET BUFFER."""
+        buffer.selection_state = self._copy_selection_state(selection_state)
+
+    def invalidate(self) -> None:
+        """REQUESTS A REDRAW WHEN AN APPLICATION IS ACTIVE."""
+        try:
+            app = get_app()
+        except Exception:
+            return
+        if app:
+            app.invalidate()
+
+    def note_user_activity(self) -> None:
+        """CLEARS TRANSIENT STATUS MESSAGES AFTER THE NEXT USER ACTION."""
+        changed = False
+        if self._search_message_transient and self.search_message:
+            self.search_message = ""
+            self._search_message_transient = False
+            changed = True
+        if self._passive_status_transient and self._passive_status:
+            self._passive_status = ""
+            self._passive_status_transient = False
+            changed = True
+        if changed:
+            self.invalidate()
+
+    def set_passive_status(self, message: str, transient: bool = True) -> None:
+        """SHOWS A SMALL, PASSIVE STATUS MESSAGE IN THE TOP BAR."""
+        self._passive_status = message
+        self._passive_status_transient = transient and bool(message)
+        self.invalidate()
+
+    def _set_search_message(self, message: str, transient: bool = True) -> None:
+        """UPDATES THE SEARCH STATUS MESSAGE AND WHETHER IT AUTO-CLEARS."""
+        self.search_message = message
+        self._search_message_transient = transient and bool(message)
+        self.invalidate()
+
+    def _get_current_mode_name(self) -> str:
+        """RETURNS THE EDITOR MODE CURRENTLY OWNING THE USER'S ATTENTION."""
+        if self.help_visible:
+            return "help"
+        if self.issue_mode_active:
+            return "issue"
+        if self.error_visible:
+            return "error"
+        if self.search_visible:
+            return "search"
+        return "normal"
+
+    def _get_mode_text(self) -> str:
+        """RENDERS A COMPACT MODE STRIP FOR THE TOP BAR."""
+        mode = self._get_current_mode_name()
+        if mode == "search":
+            state = self._get_search_highlight_state()
+            if state and state.query:
+                return f" [search {state.active_ordinal} of {len(state.matches)}] "
+            return " [search] "
+        if mode == "issue":
+            total = len(self._document_issue_cache)
+            ordinal = min(self.issue_index + 1, total) if total else 0
+            return f" [issue {ordinal} of {total}] "
+        return f" [{mode}] "
+
+    def _get_status_text(self) -> str:
+        """SHOWS PASSIVE STATUS, ISSUE COUNTS, OR VALIDATION PAUSE FEEDBACK."""
+        if self._passive_status:
+            return f" {self._passive_status} "
+        if not self.expensive_checks_enabled():
+            return " mention checks paused "
+        issues = self.get_document_issues()
+        if issues:
+            return f" {len(issues)} issue{'s' if len(issues) != 1 else ''} "
+        return ""
+
+    def _get_token_status_text(self) -> str:
+        """RENDERS TOKEN STATUS WITH THE REQUESTED BUSY INDICATOR FORMAT."""
+        busy = self._token_estimate_busy or not self.expensive_checks_enabled()
+        suffix = "* " if busy else "  "
+        return f" ~{self.token_count} tokens{suffix}"
+
+    def _get_toolbar_text(self) -> str:
+        """SWAPS TOOLBAR HINTS TO MATCH THE CURRENT INTERACTION MODE."""
+        mode = self._get_current_mode_name()
+        if mode == "search":
+            return get_string("toolbar_text_search", "")
+        if mode == "issue":
+            return get_string("toolbar_text_issue", "")
+        if mode == "help":
+            return get_string("toolbar_text_help", "")
+        return get_string("toolbar_text_normal", "")
+
+    def _remember_search_query(self, query: str) -> None:
+        """KEEPS A SMALL IN-MEMORY SESSION HISTORY OF SEARCH QUERIES."""
+        query = query.strip()
+        if not query:
+            return
+        self._search_history = [item for item in self._search_history if item != query]
+        self._search_history.insert(0, query)
+        del self._search_history[self.SEARCH_HISTORY_LIMIT :]
+        self._search_history_index = -1
+
+    def _cycle_search_history(self) -> None:
+        """ROTATES THROUGH RECENT SEARCH QUERIES WHEN SEARCH IS ALREADY OPEN."""
+        if not self._search_history:
+            return
+        next_index = (self._search_history_index + 1) % len(self._search_history)
+        if (
+            self.search_buffer.text
+            and len(self._search_history) > 1
+            and self._search_history[next_index] == self.search_buffer.text
+        ):
+            next_index = (next_index + 1) % len(self._search_history)
+        self._search_history_index = next_index
+        query = self._search_history[self._search_history_index]
+        self.search_buffer.document = Document(query, cursor_position=len(query))
+
+    def _get_search_label_text(self) -> str:
+        """EMPHASIZES SEARCH MODE WITH AN ALWAYS-VISIBLE HEADER AND COUNT."""
+        if not self.search_visible:
+            return ""
+        state = self._get_search_highlight_state()
+        if state and state.query:
+            return f" SEARCH {state.active_ordinal}/{len(state.matches)} "
+        return " SEARCH "
+
     async def _update_tokens_loop(self):
         """ASYNCHRONOUS, DEBOUNCED TASK UTILIZING FAST PROXY METRICS FOR TOKEN SIZE."""
         last_text = None
@@ -973,18 +1228,18 @@ class InteractiveEditor:
             current_text = self.buffer.text
             if current_text != last_text:
                 last_text = current_text
+                self._token_estimate_busy = True
+                self.invalidate()
                 try:
                     new_count = await self.resolver.estimate_tokens(current_text)
-
-                    # ONLY UPDATE STATE AND TRIGGER A REDRAW IF THE COUNT CHANGED
                     if new_count != last_count:
                         self.token_count = new_count
                         last_count = new_count
-                        app = get_app()
-                        if app:
-                            app.invalidate()
                 except Exception:
                     pass
+                finally:
+                    self._token_estimate_busy = False
+                    self.invalidate()
 
     def _get_search_status_text(self) -> str:
         """RETURNS SEARCH MODE HINTS OR THE LAST SEARCH RESULT MESSAGE."""
@@ -1003,14 +1258,148 @@ class InteractiveEditor:
     def _handle_search_text_changed(self, _buffer: Buffer) -> None:
         """CLEARS STALE SEARCH NAVIGATION STATE AFTER QUERY EDITS."""
         self.search_message = ""
+        self._search_message_transient = False
         self._search_last_query = ""
         self._search_last_direction = 1
         self._search_last_match = -1
         self._search_cache_state = None
-        try:
-            get_app().invalidate()
-        except Exception:
-            pass
+        self._search_history_index = -1
+        self.invalidate()
+
+    def _handle_buffer_text_changed(self, _buffer: Buffer) -> None:
+        """INVALIDATES CACHED ISSUE STATE AND STALE ISSUE OVERLAYS AFTER EDITS."""
+        self._document_issue_cache_text_id = 0
+        self._document_issue_cache = tuple()
+        if self.issue_mode_active:
+            self.deactivate_issue_mode()
+
+    def _make_issue(
+        self,
+        line: int,
+        column: int,
+        end_column: int,
+        style: str,
+        message: str,
+        fragment: str,
+    ) -> EditorIssue:
+        """BUILDS A STABLE ISSUE RECORD FOR NAVIGATION AND RENDERING."""
+        return EditorIssue(line, column, end_column, style, message, fragment)
+
+    def get_document_issues(self) -> tuple[EditorIssue, ...]:
+        """COLLECTS LIGHTWEIGHT SYNTAX AND REFERENCE ISSUES FROM THE BUFFER."""
+        expensive_enabled = self.expensive_checks_enabled()
+        text = self.buffer.text
+        text_id = id(text)
+        if (
+            self._document_issue_cache_text_id == text_id
+            and self._document_issue_cache_enabled == expensive_enabled
+        ):
+            return self._document_issue_cache
+
+        issues: list[EditorIssue] = []
+        document = self.buffer.document
+        if self.lexer is not None:
+            invalid_fence_lines = self.lexer.get_invalid_fence_lines(document)
+            for lineno in sorted(invalid_fence_lines):
+                line_text = document.lines[lineno]
+                issues.append(
+                    self._make_issue(
+                        lineno,
+                        0,
+                        len(line_text),
+                        "invalid-syntax",
+                        "unclosed code fence",
+                        line_text,
+                    )
+                )
+
+            for lineno, line in enumerate(document.lines):
+                for match in self.lexer.mention_pattern.finditer(line):
+                    fragment = match.group(0)
+                    if expensive_enabled:
+                        validation = self.lexer.inspect_mention(fragment)
+                        if validation.style is None or validation.message is None:
+                            continue
+                        issues.append(
+                            self._make_issue(
+                                lineno,
+                                match.start(),
+                                match.end(),
+                                validation.style,
+                                validation.message,
+                                fragment,
+                            )
+                        )
+                    elif not fragment.endswith(">") and fragment != "[@project]":
+                        issues.append(
+                            self._make_issue(
+                                lineno,
+                                match.start(),
+                                match.end(),
+                                "invalid-syntax",
+                                "incomplete mention syntax",
+                                fragment,
+                            )
+                        )
+
+        self._document_issue_cache_text_id = text_id
+        self._document_issue_cache_enabled = expensive_enabled
+        self._document_issue_cache = tuple(issues)
+        return self._document_issue_cache
+
+    async def collect_save_issues(self) -> tuple[EditorIssue, ...]:
+        """RUNS SAVE-TIME ISSUE CHECKS, INCLUDING SYMBOL LOOKUPS."""
+        issues = {
+            (issue.line, issue.column, issue.end_column): issue
+            for issue in self.get_document_issues()
+        }
+        text = self.buffer.text
+        for match in re.finditer(r"<@symbol:([^>:]+):([^>]+)>", text):
+            path, symbol = match.groups()
+            file_matches = self.indexer.find_matches(path)
+            start_line, start_col = self.buffer.document.translate_index_to_position(
+                match.start()
+            )
+            end_col = start_col + (match.end() - match.start())
+            issue_key = (start_line, start_col, end_col)
+
+            if not file_matches:
+                issues[issue_key] = self._make_issue(
+                    start_line,
+                    start_col,
+                    end_col,
+                    "unresolved-reference",
+                    f"symbol file '{path}' could not be resolved",
+                    match.group(0),
+                )
+                continue
+
+            meta = file_matches[0]
+            try:
+                from ..core.extractor import SymbolExtractor
+                import aiofiles
+
+                async with aiofiles.open(
+                    meta.path, "r", encoding="utf-8", errors="replace"
+                ) as handle:
+                    content = await handle.read()
+
+                extractor = SymbolExtractor(content, meta.path.name)
+                if not extractor.extract(symbol):
+                    raise ValueError(f"symbol '{symbol}' not found")
+            except Exception as error:
+                issues[issue_key] = self._make_issue(
+                    start_line,
+                    start_col,
+                    end_col,
+                    "unresolved-reference",
+                    f"{meta.rel_path}: {error}",
+                    match.group(0),
+                )
+
+        return tuple(
+            sorted(issues.values(), key=lambda issue: (issue.line, issue.column))
+        )
 
     def _get_search_highlight_state(self) -> SearchHighlightState | None:
         """RETURNS A CACHED SEARCH SNAPSHOT TO AVOID REPEATED FULL-SCAN WORK."""
@@ -1092,9 +1481,16 @@ class InteractiveEditor:
 
     def open_search(self) -> None:
         """SHOWS THE SEARCH BAR AND PREPARES IT FOR IMMEDIATE INPUT."""
+        self.note_user_activity()
         self.search_visible = True
         self.search_message = ""
+        self._search_message_transient = False
         self._search_cache_state = None
+        if self.search_buffer.text:
+            self._cycle_search_history()
+        elif self._search_history:
+            query = self._search_history[0]
+            self.search_buffer.document = Document(query, cursor_position=len(query))
         self.search_buffer.cursor_position = len(self.search_buffer.text)
         self._focus_search()
 
@@ -1102,6 +1498,7 @@ class InteractiveEditor:
         """HIDES THE SEARCH BAR AND RETURNS FOCUS TO THE EDITOR."""
         self.search_visible = False
         self.search_message = ""
+        self._search_message_transient = False
         self._search_last_query = ""
         self._search_last_direction = 1
         self._search_last_match = -1
@@ -1110,8 +1507,28 @@ class InteractiveEditor:
 
     def open_help(self) -> None:
         """SHOWS THE HELP OVERLAY AND FOCUSES IT."""
+        self._help_restore_focus = (
+            "search"
+            if self.search_visible
+            else "error"
+            if self.error_visible
+            else "main"
+        )
+        self._help_restore_main_cursor = self.buffer.cursor_position
+        self._help_restore_search_cursor = self.search_buffer.cursor_position
+        self._help_restore_main_selection = self._copy_selection_state(
+            self.buffer.selection_state
+        )
+        self._help_restore_search_selection = self._copy_selection_state(
+            self.search_buffer.selection_state
+        )
         self.help_visible = True
-        self.help_window.content.buffer.cursor_position = 0
+        if self.search_visible and self._help_search_anchor >= 0:
+            self.help_window.content.buffer.cursor_position = self._help_search_anchor
+        elif self.issue_mode_active and self._help_issue_anchor >= 0:
+            self.help_window.content.buffer.cursor_position = self._help_issue_anchor
+        else:
+            self.help_window.content.buffer.cursor_position = 0
         try:
             get_app().layout.focus(self.help_window)
         except Exception:
@@ -1120,8 +1537,19 @@ class InteractiveEditor:
     def close_help(self) -> None:
         """HIDES THE HELP OVERLAY AND RETURNS FOCUS TO THE ACTIVE EDIT TARGET."""
         self.help_visible = False
-        if self.search_visible:
+        self.buffer.cursor_position = self._help_restore_main_cursor
+        self.search_buffer.cursor_position = self._help_restore_search_cursor
+        self._restore_selection_state(self.buffer, self._help_restore_main_selection)
+        self._restore_selection_state(
+            self.search_buffer, self._help_restore_search_selection
+        )
+        if self._help_restore_focus == "search" and self.search_visible:
             self._focus_search()
+        elif self._help_restore_focus == "error" and self.error_visible:
+            try:
+                get_app().layout.focus(self.error_window)
+            except Exception:
+                pass
         else:
             self._focus_main()
 
@@ -1153,7 +1581,7 @@ class InteractiveEditor:
         """MOVES TO THE NEXT OR PREVIOUS SEARCH MATCH WHILE KEEPING SEARCH OPEN."""
         query = self.search_buffer.text
         if not query:
-            self.search_message = "enter a query"
+            self._set_search_message("enter a query")
             return False
 
         repeated = (
@@ -1169,7 +1597,7 @@ class InteractiveEditor:
 
         match_pos, wrapped = self._find_search_match(query, start, direction)
         if match_pos is None or match_pos < 0:
-            self.search_message = "not found"
+            self._set_search_message("not found")
             return False
 
         self.buffer.cursor_position = match_pos
@@ -1177,7 +1605,73 @@ class InteractiveEditor:
         self._search_last_direction = direction
         self._search_last_match = match_pos
         self._search_cache_state = None
-        self.search_message = "wrapped" if wrapped else ""
+        self._remember_search_query(query)
+        self._set_search_message("wrapped" if wrapped else "", transient=wrapped)
+        return True
+
+    def activate_issue_mode(self, issues: tuple[EditorIssue, ...]) -> None:
+        """ENTERS ISSUE MODE, JUMPS TO THE FIRST ISSUE, AND SHOWS THE OVERLAY."""
+        self.issue_mode_active = bool(issues)
+        self._document_issue_cache = issues
+        self.issue_index = 0
+        if issues:
+            self.jump_to_issue(0)
+            self._render_issue_overlay()
+
+    def deactivate_issue_mode(self) -> None:
+        """EXITS ISSUE MODE AND DISMISSES THE OVERLAY."""
+        self.issue_mode_active = False
+        self.error_visible = False
+        self.error_message = ""
+        self._focus_main()
+        self.invalidate()
+
+    def _render_issue_overlay(self) -> None:
+        """UPDATES THE EXISTING OVERLAY WINDOW WITH THE ACTIVE ISSUE DETAILS."""
+        if not self.issue_mode_active or not self._document_issue_cache:
+            return
+        issue = self._document_issue_cache[self.issue_index]
+        total = len(self._document_issue_cache)
+        title = "syntax" if issue.style == "invalid-syntax" else "reference"
+        self.error_visible = True
+        self.error_message = issue.message
+        self.error_buffer.set_document(
+            Document(
+                (
+                    f"\n  {title} issue {self.issue_index + 1} of {total}\n"
+                    f"  line {issue.line + 1}, col {issue.column + 1}\n"
+                    f"  {issue.message}\n"
+                    f"  {issue.fragment}\n\n"
+                    "  [Enter] next  [Ctrl+R] prev  [Esc] close"
+                ),
+                cursor_position=0,
+            ),
+            bypass_readonly=True,
+        )
+        try:
+            get_app().layout.focus(self.error_window)
+        except Exception:
+            pass
+        self.invalidate()
+
+    def jump_to_issue(self, index: int) -> None:
+        """MOVES THE MAIN CURSOR TO THE TARGET ISSUE AND KEEPS IT IN VIEW."""
+        if not self._document_issue_cache:
+            return
+        self.issue_index = index % len(self._document_issue_cache)
+        issue = self._document_issue_cache[self.issue_index]
+        self.buffer.cursor_position = self.buffer.document.translate_row_col_to_index(
+            issue.line, issue.column
+        )
+        self._search_cache_state = None
+        self.invalidate()
+
+    def step_issue(self, direction: int) -> bool:
+        """MOVES TO THE NEXT OR PREVIOUS ISSUE WHILE ISSUE MODE IS ACTIVE."""
+        if not self.issue_mode_active or not self._document_issue_cache:
+            return False
+        self.jump_to_issue(self.issue_index + direction)
+        self._render_issue_overlay()
         return True
 
     async def run_async(self) -> str | None:
@@ -1188,30 +1682,40 @@ class InteractiveEditor:
 
         top_bar = VSplit(
             [
-                Window(width=Dimension(weight=1), style="class:topbar"),
+                Window(
+                    content=FormattedTextControl(self._get_mode_text),
+                    style="class:topbar-mode",
+                    width=Dimension(preferred=20),
+                ),
                 Window(
                     content=FormattedTextControl(" < promptify editor > "),
                     style="class:topbar-title",
                     align=WindowAlign.CENTER,
+                    width=Dimension(weight=1),
                 ),
                 Window(
-                    content=FormattedTextControl(
-                        lambda: f" ~{self.token_count} tokens "
-                    ),
+                    content=FormattedTextControl(self._get_status_text),
+                    style="class:topbar-status",
+                    align=WindowAlign.RIGHT,
+                    width=Dimension(preferred=24),
+                ),
+                Window(
+                    content=FormattedTextControl(self._get_token_status_text),
                     style="class:topbar-tokens",
                     align=WindowAlign.RIGHT,
-                    width=Dimension(preferred=15),
+                    width=Dimension(preferred=18),
                 ),
             ],
             height=1,
             style="class:topbar",
         )
 
-        toolbar_text = get_string("toolbar_text", "")
         bottom_toolbar = VSplit(
             [
                 Window(
-                    content=FormattedTextControl(" " + toolbar_text + " "),
+                    content=FormattedTextControl(
+                        lambda: " " + self._get_toolbar_text() + " "
+                    ),
                     style="class:toolbar",
                 ),
                 Window(
@@ -1229,10 +1733,12 @@ class InteractiveEditor:
             style="class:toolbar",
         )
 
+        editor_frame = Frame(body=self.main_window, style="class:editor-frame")
+
         body = HSplit(
             [
                 top_bar,
-                self.main_window,
+                editor_frame,
                 ConditionalContainer(
                     content=self.search_window,
                     filter=Condition(lambda: self.search_visible),
@@ -1292,18 +1798,22 @@ class InteractiveEditor:
             {
                 # UI LAYOUT
                 "topbar": "bg:#333333 #ffffff",
+                "topbar-mode": "bg:#333333 #aee6ff bold",
                 "topbar-title": "bg:#333333 #00ffff bold",
+                "topbar-status": "bg:#333333 #ffd89a",
                 "topbar-tokens": "bg:#333333 #ffff00",
                 "toolbar": "bg:#333333 #ffffff",
                 "toolbar-right": "bg:#333333 #00ff00",
                 "completion-menu": "bg:#444444 #ffffff",
-                "completion-menu.completion.current": "bg:#00aa00 #ffffff bold",
+                "completion-menu.completion.current": "bg:#1d6f62 #f5fffb bold",
+                "editor-frame.border": "fg:#4a4a4a",
                 "search-bar": "bg:#1f1f1f #ffffff",
-                "search-label": "bg:#1f1f1f #00ffff bold",
+                "search-label": "bg:#1f1f1f #9fe9ff bold",
                 "search-input": "bg:#2d2d2d #ffffff",
-                "search-status": "bg:#1f1f1f #ffff00",
-                "search-match": "bg:#6b5f00 #fff4b3",
-                "search-match-active": "bg:#005a9c #ffffff bold",
+                "search-status": "bg:#1f1f1f #ffe09c",
+                "search-match": "bg:#5d4a1d #fff0cb",
+                "search-match-active": "bg:#1f5d8e #f7fbff bold",
+                "current-line": "bg:#262a31",
                 # GRANULAR MENTION STYLES
                 "mention-tag": "fg:#00ffff bold",  # CYAN: <@FILE, >, [@PROJECT]
                 "mention-path": "fg:#ffaa00",  # ORANGE: SRC/MAIN.PY
@@ -1314,8 +1824,9 @@ class InteractiveEditor:
                 "mention-class": "fg:#00ff00 bold",  # BRIGHT GREEN: MYCLASS
                 "mention-function": "fg:#5555ff",  # BLUE: MY_FUNC
                 "mention-method": "fg:#55ffff",  # LIGHT CYAN: METHOD
-                # INVALID SYNTAX OVERRIDE (RED BG, WHITE FG)
-                "invalid-syntax": "bg:#ff0000 fg:#ffffff",
+                # ISSUE STYLES
+                "invalid-syntax": "bg:#7c1f24 #fff3f3",
+                "unresolved-reference": "bg:#6e4a1c #fff0d8",
                 # HELP MENU OVERRIDES
                 "help-header": "fg:#00ff00 bold",  # GREEN SECTION HEADERS
                 "help-key": "fg:#ffff00",  # YELLOW NAVIGATION KEYS
@@ -1371,6 +1882,7 @@ class InteractiveEditor:
         self._bulk_mode_until = max(
             self._bulk_mode_until, loop.time() + self.BULK_EDIT_SUSPEND_SECONDS
         )
+        self.invalidate()
 
         async def _refresh_after_pause():
             await asyncio.sleep(self.BULK_EDIT_SUSPEND_SECONDS)
