@@ -20,6 +20,7 @@ from .core.indexer import ProjectIndexer
 from .core.resolver import PromptResolver
 from .core.mods import ModRegistry
 from .core.cli import CLIConfig, parse_cli_args
+from .core.settings import APP_SETTINGS, consume_settings_warnings
 from .ui.editor import InteractiveEditor
 from .utils.i18n import get_string
 
@@ -34,6 +35,8 @@ class App:
         self.data_dir = self.root_dir / "data"
         self.outs_dir = self.root_dir / "outs"
         self.ensure_directories()
+        for warning in consume_settings_warnings():
+            log.warning(warning)
 
     def ensure_directories(self) -> None:
         """VERIFIES DIRECTORY TREES FOR SAFELY MAINTAINING OUTPUT STRUCTURES."""
@@ -115,20 +118,21 @@ class App:
         async with aiofiles.open(filepath, "w", encoding="utf-8") as f:
             await f.write(content)
 
-        if raw_content:
+        if raw_content and APP_SETTINGS.app_behavior.save_raw_output:
             raw_filepath = out_dir / f"{time_str}.raw"
             async with aiofiles.open(raw_filepath, "w", encoding="utf-8") as f:
                 await f.write(raw_content)
 
         log.success(get_string("saved_output", "saved output").format(path=filepath))
 
-        try:
-            await asyncio.to_thread(pyperclip.copy, content)
-            log.success(get_string("copied_clipboard", "copied to clipboard"))
-        except Exception as e:
-            log.warning(
-                get_string("clipboard_failed", "clipboard failed").format(error=e)
-            )
+        if APP_SETTINGS.app_behavior.copy_output_to_clipboard:
+            try:
+                await asyncio.to_thread(pyperclip.copy, content)
+                log.success(get_string("copied_clipboard", "copied to clipboard"))
+            except Exception as e:
+                log.warning(
+                    get_string("clipboard_failed", "clipboard failed").format(error=e)
+                )
 
     async def run(self) -> None:
         """EXECUTES THE MAIN APPLICATION LOOP."""
@@ -362,7 +366,12 @@ class App:
             async with aiofiles.open(prompt_path, "r", encoding="utf-8") as f:
                 initial_text = await f.read()
 
-        editor = InteractiveEditor(initial_text, indexer, resolver)
+        editor = InteractiveEditor(
+            initial_text,
+            indexer,
+            resolver,
+            show_help=APP_SETTINGS.editor_behavior.show_help_on_start,
+        )
         edited_text = await editor.run_async()
 
         if edited_text is None:

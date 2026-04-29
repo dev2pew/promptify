@@ -8,6 +8,7 @@ from typing import Any
 from prompt_toolkit import print_formatted_text, HTML
 from prompt_toolkit.shortcuts import PromptSession
 
+from ..core.settings import APP_SETTINGS
 from ..utils.i18n import get_string
 
 
@@ -53,7 +54,12 @@ class Logger:
 
     def normal(self, message: str, **kwargs: Any) -> None:
         """PRINTS A STANDARD OUTPUT STATEMENT LOGIC MESSAGE."""
-        self._print("[>]", "ansiblue", message, **kwargs)
+        self._print(
+            APP_SETTINGS.logger.normal_prefix,
+            APP_SETTINGS.logger.normal_color,
+            message,
+            **kwargs,
+        )
 
     async def input_async(self, message: str) -> str:
         """
@@ -70,7 +76,10 @@ class Logger:
 
         # AUTOMATICALLY APPEND ' >> ' TO ALL INPUT PROMPTS
         formatted_text = HTML(
-            f"{timestamp}<ansicyan>[&lt;]</ansicyan> {safe_message} &gt;&gt; "
+            f"{timestamp}<{APP_SETTINGS.logger.input_prefix_color}>"
+            f"{APP_SETTINGS.logger.input_prefix.replace('<', '&lt;').replace('>', '&gt;')}"
+            f"</{APP_SETTINGS.logger.input_prefix_color}> "
+            f"{safe_message} {APP_SETTINGS.logger.input_suffix.replace('<', '&lt;').replace('>', '&gt;')} "
         )
 
         if self._session is None:
@@ -85,28 +94,61 @@ class Logger:
 
     def error(self, message: str, **kwargs: Any) -> None:
         """PRINTS ERROR STATE REPRESENTATIONS DIRECTLY UTILIZING FATAL INDICATORS."""
-        self._print("[e]", "ansired", message, **kwargs)
+        self._print(
+            APP_SETTINGS.logger.error_prefix,
+            APP_SETTINGS.logger.error_color,
+            message,
+            **kwargs,
+        )
 
     def success(self, message: str, **kwargs: Any) -> None:
         """PRINTS SUCCESSFUL LOGIC CONCLUSION OUTPUTS CLEARLY MARKING PROGRESSION MARKERS MAPPING TARGETS SAFELY NATIVELY."""
-        self._print("[+]", "ansigreen", message, **kwargs)
+        self._print(
+            APP_SETTINGS.logger.success_prefix,
+            APP_SETTINGS.logger.success_color,
+            message,
+            **kwargs,
+        )
 
     def warning(self, message: str, **kwargs: Any) -> None:
         """PRINTS WARNING CONDITION EVALUATIONS PREVENTING EXECUTION FAULTS."""
-        self._print("[w]", "ansiyellow", message, **kwargs)
+        self._print(
+            APP_SETTINGS.logger.warning_prefix,
+            APP_SETTINGS.logger.warning_color,
+            message,
+            **kwargs,
+        )
 
     def info(self, message: str, **kwargs: Any) -> None:
         """PRINTS INFORMATIONAL TRACE LOGIC MAPPING DEBUG STATE EVALUATION STRINGS."""
-        self._print("[i]", "ansiblue", message, **kwargs)
+        self._print(
+            APP_SETTINGS.logger.info_prefix,
+            APP_SETTINGS.logger.info_color,
+            message,
+            **kwargs,
+        )
 
     def notice(self, message: str, **kwargs: Any) -> None:
         """PRINTS PRIORITY HIGHLIGHT REPRESENTATIONS DIRECTING WORKFLOW ACTIONS STRICTLY CORRECTLY SAFELY."""
-        self._print("[*]", "ansimagenta", message, **kwargs)
+        self._print(
+            APP_SETTINGS.logger.notice_prefix,
+            APP_SETTINGS.logger.notice_color,
+            message,
+            **kwargs,
+        )
 
     def verbose(self, message: str, level: int = 2, **kwargs: Any) -> None:
         """PRINTS HIGHLY GRANULAR LOGIC REPORTS STRICTLY ONLY TARGETING DETAILED DEBUG TRACE INSTANCES NATIVELY."""
         if self.verbosity >= level:
-            self._print("[v]", "ansigray", message, **kwargs)
+            self._print(
+                APP_SETTINGS.logger.verbose_prefix,
+                APP_SETTINGS.logger.verbose_color,
+                message,
+                **kwargs,
+            )
 
 
-log = Logger()
+log = Logger(
+    verbosity=APP_SETTINGS.logger.verbosity,
+    include_timestamp=APP_SETTINGS.logger.include_timestamp,
+)
