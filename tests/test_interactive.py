@@ -19,6 +19,7 @@ from prompt_toolkit.selection import SelectionState
 
 from promptify.ui.bindings import setup_keybindings
 from promptify.ui.editor import InteractiveEditor
+from promptify.utils.i18n import get_string
 
 pytestmark = pytest.mark.asyncio
 
@@ -319,7 +320,7 @@ async def test_interactive_editor_search_step_moves_forward_and_backward(
     editor.buffer.cursor_position = len(editor.buffer.text)
     assert editor.search_step(1)
     assert editor.buffer.cursor_position == 0
-    assert editor.search_message == "wrapped"
+    assert editor.search_message == get_string("editor_search_wrapped", "wrapped")
 
 
 async def test_interactive_editor_runtime_help_returns_focus_to_search(
@@ -408,9 +409,15 @@ async def test_interactive_editor_search_status_reports_active_match_counts(
     assert state is not None
     assert state.matches == (0, 11, 23)
     assert state.active_ordinal == 1
-    assert editor._get_search_label_text() == " SEARCH "
-    assert editor._get_mode_text() == " [ search ] "
-    assert editor._get_search_status_text().strip() == "1 of 3"
+    assert editor._get_search_label_text() == (
+        " " + get_string("editor_search_label", "SEARCH") + " "
+    )
+    assert editor._get_mode_text() == (
+        " [ " + get_string("editor_mode_search", "search") + " ] "
+    )
+    assert editor._get_search_status_text().strip() == get_string(
+        "editor_search_status_count", "{current} of {total}"
+    ).format(current=1, total=3)
 
 
 async def test_interactive_editor_search_reuses_session_history(app_components):
@@ -543,11 +550,57 @@ async def test_interactive_editor_issue_mode_tracks_issue_navigation(
     editor.activate_issue_mode(issues)
 
     assert editor.issue_mode_active
-    assert "syntax issue 1 of 2" in editor.error_buffer.text
-    assert "[Enter/N] next" in editor.error_buffer.text
+    assert (
+        get_string("editor_issue_overlay", "{title} issue {ordinal} of {total}")
+        .format(
+            title=get_string("editor_issue_title_syntax", "syntax"),
+            ordinal=1,
+            total=2,
+            line=1,
+            column=1,
+            message=get_string(
+                "issue_incomplete_mention_syntax", "incomplete mention syntax"
+            ),
+            context_label=get_string("editor_issue_context_label", "context"),
+            fragment="[@proj",
+            controls=get_string(
+                "editor_issue_controls",
+                "[Enter/N] next  ^[R/P] prev  [Esc] close",
+            ),
+        )
+        .splitlines()[0]
+        in editor.error_buffer.text
+    )
+    assert (
+        get_string("editor_issue_controls", "[Enter/N] next  ^[R/P] prev  [Esc] close")
+        in editor.error_buffer.text
+    )
     assert editor.buffer.document.cursor_position_row == 0
 
     assert editor.step_issue(1)
-    assert "reference issue 2 of 2" in editor.error_buffer.text
-    assert "[Esc] close" in editor.error_buffer.text
+    assert (
+        get_string("editor_issue_overlay", "{title} issue {ordinal} of {total}")
+        .format(
+            title=get_string("editor_issue_title_reference", "reference"),
+            ordinal=2,
+            total=2,
+            line=2,
+            column=1,
+            message=get_string(
+                "issue_file_unresolved", "file '{path}' could not be resolved"
+            ).format(path="missing.py"),
+            context_label=get_string("editor_issue_context_label", "context"),
+            fragment="<@file:missing.py>",
+            controls=get_string(
+                "editor_issue_controls",
+                "[Enter/N] next  ^[R/P] prev  [Esc] close",
+            ),
+        )
+        .splitlines()[0]
+        in editor.error_buffer.text
+    )
+    assert (
+        get_string("editor_issue_controls", "[Enter/N] next  ^[R/P] prev  [Esc] close")
+        in editor.error_buffer.text
+    )
     assert editor.buffer.document.cursor_position_row == 1
