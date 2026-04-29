@@ -99,17 +99,20 @@ async def test_git_context_commands_use_no_pager_and_expected_arguments(
     assert "```log" in log_result
 
 
-async def test_git_mod_completions_support_branch_scoped_log_and_diff(app_components):
+async def test_git_mod_completions_support_branch_scoped_log_and_diff(
+    app_components, monkeypatch
+):
     """GIT COMPLETIONS SHOULD STILL WORK AFTER A BRANCH PREFIX IS PROVIDED."""
     context, _ = app_components
     mod = GitMod()
+    monkeypatch.setattr(mod, "_read_git_commit_count", lambda _root, _branch: 3)
 
     log_completions = list(mod.get_completions("<@git:[master]:log:", context.indexer))
     diff_completions = list(
         mod.get_completions("<@git:[master]:diff:sr", context.indexer)
     )
 
-    assert [completion.text for completion in log_completions[:3]] == ["1>", "2>", "5>"]
+    assert [completion.text for completion in log_completions] == ["1>", "2>", "3>"]
     assert any(completion.text == "src" for completion in diff_completions)
 
 
@@ -122,3 +125,42 @@ async def test_help_lexer_colors_branch_scoped_git_mentions():
     assert ("class:mention-path", r"[\]hotfix\>demo]") in tokens
     assert ("class:mention-git-cmd", "log") in tokens
     assert ("class:mention-path", "2") in tokens
+
+
+async def test_git_mod_completions_offer_branch_placeholder_and_live_branches(
+    app_components, monkeypatch
+):
+    """GIT ROOT COMPLETIONS SHOULD OFFER A BRANCH PLACEHOLDER AND REAL BRANCH NAMES."""
+    context, _ = app_components
+    mod = GitMod()
+    monkeypatch.setattr(
+        mod,
+        "_read_git_branches",
+        lambda _root: ["master", "feature/demo", "]hotfix>demo"],
+    )
+
+    root_completions = list(mod.get_completions("<@git:", context.indexer))
+    branch_completions = list(mod.get_completions("<@git:[", context.indexer))
+
+    assert any(
+        completion.text == "[" and completion.display_text == "[branch]"
+        for completion in root_completions
+    )
+    assert [completion.text for completion in branch_completions] == [
+        "master]:",
+        "feature/demo]:",
+        r"\]hotfix\>demo]:",
+    ]
+
+
+async def test_git_mod_completions_do_not_offer_nested_branch_placeholders(
+    app_components, monkeypatch
+):
+    """ONCE A BRANCH PREFIX IS PRESENT, GIT SHOULD CONTINUE WITH COMMAND COMPLETIONS ONLY."""
+    context, _ = app_components
+    mod = GitMod()
+    monkeypatch.setattr(mod, "_read_git_branches", lambda _root: ["master"])
+
+    completions = list(mod.get_completions("<@git:[master]:[", context.indexer))
+
+    assert completions == []
