@@ -48,7 +48,7 @@ try:
     )
     from prompt_toolkit.formatted_text.base import OneStyleAndTextTuple
     from prompt_toolkit.styles import Style
-    from prompt_toolkit.widgets import Frame, SearchToolbar
+    from prompt_toolkit.widgets import Frame
     from prompt_toolkit.lexers import Lexer
     from prompt_toolkit.filters import (
         Condition,
@@ -746,8 +746,39 @@ class InteractiveEditor:
             width=Dimension(min=36, max=120, weight=1),
             height=Dimension(min=8, max=24, weight=1),
         )
+        self.search_visible = False
+        self.search_message = ""
+        self.search_buffer = Buffer(
+            document=Document("", cursor_position=0),
+            multiline=False,
+        )
+        self._search_last_query = ""
+        self._search_last_direction = 1
+        self._search_last_match = -1
 
-        self.search_toolbar = SearchToolbar()
+        self.search_window = VSplit(
+            [
+                Window(
+                    content=FormattedTextControl(
+                        lambda: " search < " if self.search_visible else ""
+                    ),
+                    style="class:search-label",
+                    width=Dimension(preferred=10),
+                ),
+                Window(
+                    content=BufferControl(buffer=self.search_buffer),
+                    style="class:search-input",
+                    height=1,
+                ),
+                Window(
+                    content=FormattedTextControl(self._get_search_status_text),
+                    style="class:search-status",
+                    align=WindowAlign.RIGHT,
+                ),
+            ],
+            height=1,
+            style="class:search-bar",
+        )
 
         lexer = (
             CustomPromptLexer(
@@ -770,7 +801,6 @@ class InteractiveEditor:
                 buffer=self.buffer,
                 lexer=lexer,
                 input_processors=processors,
-                search_buffer_control=self.search_toolbar.control,
             )
         )
         self.completions_menu = ResponsiveCompletionsMenu(
@@ -826,6 +856,113 @@ class InteractiveEditor:
                 except Exception:
                     pass
 
+    def _get_search_status_text(self) -> str:
+        """RETURNS SEARCH MODE HINTS OR THE LAST SEARCH RESULT MESSAGE."""
+        if self.search_message:
+            return f" {self.search_message} "
+        return " [Enter] next  [Ctrl+R] prev  [Esc] close "
+
+    def _focus_search(self) -> None:
+        """MOVES INPUT FOCUS INTO THE SEARCH FIELD IF AN APP IS ACTIVE."""
+        try:
+            get_app().layout.focus(self.search_buffer)
+        except Exception:
+            pass
+
+    def _focus_main(self) -> None:
+        """RESTORES INPUT FOCUS TO THE MAIN EDITOR BUFFER."""
+        try:
+            get_app().layout.focus(self.main_window)
+        except Exception:
+            pass
+
+    def open_search(self) -> None:
+        """SHOWS THE SEARCH BAR AND PREPARES IT FOR IMMEDIATE INPUT."""
+        self.search_visible = True
+        self.search_message = ""
+        self.search_buffer.cursor_position = len(self.search_buffer.text)
+        self._focus_search()
+
+    def close_search(self) -> None:
+        """HIDES THE SEARCH BAR AND RETURNS FOCUS TO THE EDITOR."""
+        self.search_visible = False
+        self.search_message = ""
+        self._search_last_query = ""
+        self._search_last_direction = 1
+        self._search_last_match = -1
+        self._focus_main()
+
+    def open_help(self) -> None:
+        """SHOWS THE HELP OVERLAY AND FOCUSES IT."""
+        self.help_visible = True
+        self.help_window.content.buffer.cursor_position = 0
+        try:
+            get_app().layout.focus(self.help_window)
+        except Exception:
+            pass
+
+    def close_help(self) -> None:
+        """HIDES THE HELP OVERLAY AND RETURNS FOCUS TO THE ACTIVE EDIT TARGET."""
+        self.help_visible = False
+        if self.search_visible:
+            self._focus_search()
+        else:
+            self._focus_main()
+
+    def toggle_help(self) -> None:
+        """TOGGLES HELP VISIBILITY WITHOUT LOSING THE ACTIVE SEARCH CONTEXT."""
+        if self.help_visible:
+            self.close_help()
+        else:
+            self.open_help()
+
+    def _find_search_match(
+        self, query: str, start: int, direction: int
+    ) -> tuple[int | None, bool]:
+        """SEARCHES FORWARD OR BACKWARD AND REPORTS WHETHER THE RESULT WRAPPED."""
+        text = self.buffer.text
+        if direction > 0:
+            pos = text.find(query, max(0, start))
+            if pos != -1:
+                return pos, False
+            return (text.find(query), True) if query else (None, False)
+
+        bounded_start = min(max(start, 0), len(text))
+        pos = text.rfind(query, 0, bounded_start + len(query))
+        if pos != -1:
+            return pos, False
+        return (text.rfind(query), True) if query else (None, False)
+
+    def search_step(self, direction: int) -> bool:
+        """MOVES TO THE NEXT OR PREVIOUS SEARCH MATCH WHILE KEEPING SEARCH OPEN."""
+        query = self.search_buffer.text
+        if not query:
+            self.search_message = "enter a query"
+            return False
+
+        repeated = (
+            query == self._search_last_query
+            and direction == self._search_last_direction
+            and self.buffer.cursor_position == self._search_last_match
+        )
+        start = self.buffer.cursor_position
+        if direction > 0 and repeated:
+            start += 1 if direction > 0 else -1
+        elif direction < 0:
+            start -= 1
+
+        match_pos, wrapped = self._find_search_match(query, start, direction)
+        if match_pos is None or match_pos < 0:
+            self.search_message = "not found"
+            return False
+
+        self.buffer.cursor_position = match_pos
+        self._search_last_query = query
+        self._search_last_direction = direction
+        self._search_last_match = match_pos
+        self.search_message = "wrapped" if wrapped else ""
+        return True
+
     async def run_async(self) -> str | None:
         """EXECUTES THE FULL SCREEN EDITOR."""
         default_bindings = load_key_bindings()
@@ -875,7 +1012,17 @@ class InteractiveEditor:
             style="class:toolbar",
         )
 
-        body = HSplit([top_bar, self.main_window, self.search_toolbar, bottom_toolbar])
+        body = HSplit(
+            [
+                top_bar,
+                self.main_window,
+                ConditionalContainer(
+                    content=self.search_window,
+                    filter=Condition(lambda: self.search_visible),
+                ),
+                bottom_toolbar,
+            ]
+        )
 
         help_frame = Frame(
             body=self.help_window,
@@ -934,6 +1081,10 @@ class InteractiveEditor:
                 "toolbar-right": "bg:#333333 #00ff00",
                 "completion-menu": "bg:#444444 #ffffff",
                 "completion-menu.completion.current": "bg:#00aa00 #ffffff bold",
+                "search-bar": "bg:#1f1f1f #ffffff",
+                "search-label": "bg:#1f1f1f #00ffff bold",
+                "search-input": "bg:#2d2d2d #ffffff",
+                "search-status": "bg:#1f1f1f #ffff00",
                 # GRANULAR MENTION STYLES
                 "mention-tag": "fg:#00ffff bold",  # CYAN: <@FILE, >, [@PROJECT]
                 "mention-path": "fg:#ffaa00",  # ORANGE: SRC/MAIN.PY
@@ -962,6 +1113,7 @@ class InteractiveEditor:
             full_screen=True,
             mouse_support=True,
         )
+        app.ttimeoutlen = 0.05
 
         if self.help_visible:
             app.layout.focus(self.help_window)

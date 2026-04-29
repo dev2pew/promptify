@@ -14,7 +14,6 @@ from prompt_toolkit.selection import SelectionState
 from prompt_toolkit.application import get_app
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
-from prompt_toolkit.search import start_search
 
 from ..utils.i18n import get_string
 from ..core.context import get_comment_syntax
@@ -57,7 +56,8 @@ def setup_keybindings(editor) -> KeyBindings:
         )
 
     editor_focus = has_focus(editor.buffer)
-    search_focus = has_focus(editor.search_toolbar.control)
+    search_focus = has_focus(editor.search_buffer)
+    text_focus = editor_focus | search_focus
 
     def get_home_position(document: Document) -> int:
         first_non_ws = document.get_start_of_line_position(after_whitespace=True)
@@ -89,23 +89,17 @@ def setup_keybindings(editor) -> KeyBindings:
     @custom_bindings.add("f1")
     @custom_bindings.add("c-g")
     def _toggle_help(event) -> None:
-        editor.help_visible = not editor.help_visible
-        if editor.help_visible:
-            event.app.layout.focus(editor.help_window)
-            editor.help_window.content.buffer.cursor_position = 0
-        else:
-            event.app.layout.focus(editor.main_window)
+        editor.toggle_help()
 
-    @custom_bindings.add("c-f", filter=editor_focus)
+    @custom_bindings.add("c-f", filter=editor_focus | search_focus, eager=True)
     def _search(event) -> None:
-        """ENABLES IN-EDITOR SEARCH VIA THE NATIVE PROMPT-TOOLKIT COMPONENT."""
-        start_search(editor.main_window.content)
+        """SHOWS THE CUSTOM SEARCH BAR WITHOUT ENTERING PROMPT-TOOLKIT SEARCH MODE."""
+        editor.open_search()
 
     @custom_bindings.add("escape", filter=is_help_visible)
     @custom_bindings.add("enter", filter=is_help_visible)
     def _close_help_esc(event) -> None:
-        editor.help_visible = False
-        event.app.layout.focus(editor.main_window)
+        editor.close_help()
 
     @custom_bindings.add("escape", filter=is_error_visible)
     @custom_bindings.add("enter", filter=is_error_visible)
@@ -143,20 +137,34 @@ def setup_keybindings(editor) -> KeyBindings:
     def _(event) -> None:
         event.current_buffer.cancel_completion()
 
-    @custom_bindings.add("c-a", filter=editor_focus)
+    @custom_bindings.add("escape", filter=search_focus)
+    def _close_search(event) -> None:
+        editor.close_search()
+
+    @custom_bindings.add("enter", filter=search_focus)
+    def _search_next(event) -> None:
+        editor.search_step(1)
+        event.app.invalidate()
+
+    @custom_bindings.add("c-r", filter=search_focus)
+    def _search_previous(event) -> None:
+        editor.search_step(-1)
+        event.app.invalidate()
+
+    @custom_bindings.add("c-a", filter=text_focus)
     def _select_all(event) -> None:
         b = event.app.current_buffer
         b.selection_state = SelectionState(original_cursor_position=0)
         b.cursor_position = len(b.text)
 
-    @custom_bindings.add("c-c", filter=editor_focus)
+    @custom_bindings.add("c-c", filter=text_focus)
     def _copy(event) -> None:
         b = event.app.current_buffer
         if b.selection_state:
             data = b.copy_selection()
             event.app.clipboard.set_data(data)
 
-    @custom_bindings.add("c-x", filter=editor_focus)
+    @custom_bindings.add("c-x", filter=text_focus)
     def _cut(event) -> None:
         b = event.app.current_buffer
         if b.selection_state:
@@ -164,34 +172,34 @@ def setup_keybindings(editor) -> KeyBindings:
             event.app.clipboard.set_data(data)
             b.selection_state = None
 
-    @custom_bindings.add("c-v", filter=editor_focus)
+    @custom_bindings.add("c-v", filter=text_focus)
     def _paste(event) -> None:
         b = event.app.current_buffer
         data = event.app.clipboard.get_data()
         if data and data.text:
             editor.paste_text(b, data.text)
 
-    @custom_bindings.add("s-insert", filter=editor_focus)
-    @custom_bindings.add("c-s-insert", filter=editor_focus)
+    @custom_bindings.add("s-insert", filter=text_focus)
+    @custom_bindings.add("c-s-insert", filter=text_focus)
     def _paste_system_clipboard(event) -> None:
         _schedule_system_clipboard_paste()
 
-    @custom_bindings.add("escape", "[", "2", ";", "2", "~", filter=editor_focus)
-    @custom_bindings.add("escape", "[", "2", ";", "6", "~", filter=editor_focus)
+    @custom_bindings.add("escape", "[", "2", ";", "2", "~", filter=text_focus)
+    @custom_bindings.add("escape", "[", "2", ";", "6", "~", filter=text_focus)
     def _paste_system_clipboard_xterm_insert(event) -> None:
         _schedule_system_clipboard_paste()
 
-    @custom_bindings.add(Keys.BracketedPaste, filter=editor_focus)
+    @custom_bindings.add(Keys.BracketedPaste, filter=text_focus)
     def _paste_terminal_payload(event) -> None:
         b = event.app.current_buffer
         text = event.data.replace("\r\n", "\n").replace("\r", "\n")
         editor.paste_text(b, text)
 
-    @custom_bindings.add("c-z", filter=editor_focus)
+    @custom_bindings.add("c-z", filter=text_focus)
     def _undo(event) -> None:
         event.app.current_buffer.undo()
 
-    @custom_bindings.add("c-y", filter=editor_focus, eager=True)
+    @custom_bindings.add("c-y", filter=text_focus, eager=True)
     def _redo(event) -> None:
         event.app.current_buffer.redo()
 

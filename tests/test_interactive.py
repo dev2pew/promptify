@@ -7,6 +7,7 @@ from typing import Any, cast
 
 import pytest
 from prompt_toolkit.application.current import create_app_session
+from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import CompletionState
 from prompt_toolkit.completion import CompleteEvent, Completion
 from prompt_toolkit.document import Document
@@ -35,6 +36,7 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.BracketedPaste,))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "2", "~"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "6", "~"))
+    assert bindings.get_bindings_for_keys((Keys.ControlF,))
 
 
 async def test_interactive_editor_runtime_handles_bracketed_paste(app_components):
@@ -266,3 +268,85 @@ async def test_interactive_overlay_windows_use_responsive_dimensions(app_compone
     assert error_width.min == 36
     assert error_width.max == 120
     assert error_height.weight == 1
+
+
+async def test_interactive_editor_runtime_search_opens_and_closes_cleanly(
+    app_components,
+):
+    """SEARCH SHOULD OPEN AND CLOSE WITHOUT LEAVING FOCUS OR STATE STUCK."""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.open_search()
+
+            assert editor.search_visible
+            assert get_app().current_buffer is editor.search_buffer
+
+            editor.close_search()
+
+            assert not editor.search_visible
+            assert get_app().current_buffer is editor.buffer
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_search_step_moves_forward_and_backward(
+    app_components,
+):
+    """SEARCH NAVIGATION SHOULD ADVANCE, REVERSE, AND WRAP PREDICTABLY."""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "alpha beta alpha gamma alpha", context.indexer, resolver
+    )
+    editor.search_buffer.text = "alpha"
+
+    assert editor.search_step(1)
+    assert editor.buffer.cursor_position == 0
+    assert editor.search_message == ""
+
+    assert editor.search_step(1)
+    assert editor.buffer.cursor_position == 11
+
+    assert editor.search_step(-1)
+    assert editor.buffer.cursor_position == 0
+
+    editor.buffer.cursor_position = len(editor.buffer.text)
+    assert editor.search_step(1)
+    assert editor.buffer.cursor_position == 0
+    assert editor.search_message == "wrapped"
+
+
+async def test_interactive_editor_runtime_help_returns_focus_to_search(
+    app_components,
+):
+    """HELP SHOULD BE USABLE DURING SEARCH AND RESTORE FOCUS TO THE SEARCH BAR."""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.open_search()
+
+            assert editor.search_visible
+            assert get_app().current_buffer is editor.search_buffer
+
+            editor.open_help()
+
+            assert editor.help_visible
+
+            editor.close_help()
+
+            assert not editor.help_visible
+            assert get_app().current_buffer is editor.search_buffer
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            await asyncio.wait_for(task, timeout=1.5)
