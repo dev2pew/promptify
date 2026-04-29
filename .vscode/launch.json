@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "promptify: launch package",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "promptify",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONFAULTHANDLER": "1",
+                "PYTHONUNBUFFERED": "1",
+                "PYDEVD_DISABLE_FILE_VALIDATION": "1"
+            },
+            "pythonArgs": [
+                "-X",
+                "dev",
+                "-Xfrozen_modules=off"
+            ],
+            "justMyCode": false
+        },
+        {
+            "name": "promptify: attach by process",
+            "type": "debugpy",
+            "request": "attach",
+            "processId": "${command:pickProcess}",
+            "justMyCode": false
+        },
+        {
+            "name": "promptify: attach to :5678",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": {
+                "host": "127.0.0.1",
+                "port": 5678
+            },
+            "justMyCode": false
+        }
+    ]
+}

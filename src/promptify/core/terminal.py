@@ -33,6 +33,7 @@ class TerminalProfile:
     supports_unicode: bool
     supports_box_drawing: bool
     supports_mouse: bool
+    supports_full_screen: bool
     eof_newline_present: str
     eof_newline_missing: str
     border: BorderChars
@@ -44,6 +45,7 @@ _MODERN_PROFILE = TerminalProfile(
     supports_unicode=True,
     supports_box_drawing=True,
     supports_mouse=True,
+    supports_full_screen=True,
     eof_newline_present="¶",
     eof_newline_missing="∅",
     border=BorderChars("┌", "┐", "└", "┘", "─", "│"),
@@ -55,10 +57,23 @@ _LEGACY_CMD_PROFILE = TerminalProfile(
     supports_unicode=False,
     supports_box_drawing=False,
     supports_mouse=False,
+    supports_full_screen=False,
     eof_newline_present="$",
     eof_newline_missing="!",
     border=BorderChars("+", "+", "+", "+", "-", "|"),
     tree=TreeChars("|---", "`---", "|   ", "    "),
+)
+
+_CONHOST_PROFILE = TerminalProfile(
+    name="conhost",
+    supports_unicode=True,
+    supports_box_drawing=True,
+    supports_mouse=False,
+    supports_full_screen=False,
+    eof_newline_present="¶",
+    eof_newline_missing="∅",
+    border=BorderChars("┌", "┐", "└", "┘", "─", "│"),
+    tree=TreeChars("├───", "└───", "│   ", "    "),
 )
 
 
@@ -104,11 +119,14 @@ def detect_terminal_profile(
 
     if chosen == "legacy-cmd":
         return _LEGACY_CMD_PROFILE
+    if chosen == "conhost":
+        return _CONHOST_PROFILE
     return TerminalProfile(
         name=chosen,
         supports_unicode=_MODERN_PROFILE.supports_unicode,
         supports_box_drawing=_MODERN_PROFILE.supports_box_drawing,
         supports_mouse=_MODERN_PROFILE.supports_mouse,
+        supports_full_screen=_MODERN_PROFILE.supports_full_screen,
         eof_newline_present=_MODERN_PROFILE.eof_newline_present,
         eof_newline_missing=_MODERN_PROFILE.eof_newline_missing,
         border=_MODERN_PROFILE.border,
