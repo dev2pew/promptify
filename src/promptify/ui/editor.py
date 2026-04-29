@@ -12,7 +12,12 @@ from typing import Callable, Iterable, cast
 from .logger import log
 from ..core.indexer import ProjectIndexer
 from ..core.resolver import PromptResolver
-from ..core.mods import ModRegistry, split_file_query_and_range
+from ..core.mods import (
+    ModRegistry,
+    parse_git_mention_query,
+    split_file_query_and_range,
+    split_git_branch_prefix,
+)
 from ..core.settings import APP_SETTINGS
 from ..core.terminal import APP_TERMINAL_PROFILE, TerminalProfile
 from .bindings import setup_keybindings
@@ -149,6 +154,81 @@ except ImportError:
         )
     )
     sys.exit(1)
+
+
+MENTION_SCAN_PATTERN = r"<@(?:\\.|[^>\n])+(?:>|$)|\[@[^\]\n]*(?:\]|$)"
+HELP_TOKEN_PATTERN = r"(<@(?:\\.|[^>\n])+>|\[@project\])|(\^?\[[^\]\n]+\])"
+HELP_TEXT_FALLBACK = (
+    "[ general ]\n\n"
+
+    "^[G] / [F1]                   : help\n"
+    "^[F]                          : search\n"
+    "^[S]                          : resolve\n"
+    "^[Q]                          : abort\n\n"
+
+    "[ search ]\n\n"
+
+    "[Enter]                       : next\n"
+    "^[R]                          : previous\n"
+    "[Esc]                         : close\n\n"
+
+    "[ issues ]\n\n"
+
+    "[Enter] / ^[N]                : next\n"
+    "^[R] / ^[P]                   : previous\n"
+    "[Esc]                         : close\n\n"
+
+    "[ autocomplete mentions ]\n\n"
+
+    "<@file:path>                  : file\n"
+    "<@file:path:range>            : sliced file\n\n"
+
+    "            first n           : head\n"
+    "            last n            : tail\n"
+    "            n-m               : ranged\n"
+    "            #n                : single\n\n"
+
+    "<@dir:path>                   : directory\n"
+    "<@tree:path>                  : tree view\n"
+    "<@tree:path:level>            : set depth\n"
+    "<@ext:list>                   : type\n"
+    "<@symbol:path:name>           : symbol\n"
+    "<@git:diff>                   : work tree diff\n"
+    "<@git:diff:path>              : work tree file diff\n"
+    "<@git:status>                 : work tree status\n"
+    "<@git:log>                    : recent log (20)\n"
+    "<@git:log:count>              : set length\n"
+    "<@git:history>                : recent log w/diff (5)\n"
+    "<@git:history:count>          : set length\n"
+    "<@git:[branch]:subcommand>    : set branch-scope\n"
+    "<@git:[branch]:diff:path>     : ex.\n"
+    "<@git:[branch]:log:count>     : ex.\n"
+    "<@git:[branch]:history:count> : ex.\n"
+    "[@project]                    : project structure\n\n"
+
+    "[ editing ]\n\n"
+
+    "^[A]                          : select all\n"
+    "[Shift]                       : select\n"
+    "^[Z/Y]                        : undo / redo\n"
+    "^[C/X/V]                      : copy / cut / paste\n"
+    "[Tab]                         : indent / autocomplete\n"
+    "[Shift] + [Tab]               : unindent\n"
+    "[Alt]   + [^/v]               : shift cursor\n"
+    "^[/]                          : comment out\n"
+    "^[W/Del]                      : delete previous / next\n"
+    "[Enter]                       : newline / accept\n\n"
+
+    "[ navigation ]\n\n"
+
+    "[^/v/</>]                     : move\n"
+    "^[^/v/</>]                    : next / previous\n"
+    "[Home/End]                    : start / end\n"
+    "^[Home/End]                   : file start / end\n"
+    "^[PgUp/PgDn]                  : up / down (15x)\n\n"
+
+    "press [Enter], [F1] or ^[G] to close\n"
+)
 
 
 class HighlightTrailingWhitespaceProcessor(Processor):
@@ -372,16 +452,42 @@ if HAS_PYGMENTS:
 
         # SEMANTIC PARSING BASED ON TAG TYPE
         if tag_type == "git":
-            # STRUCTURE: <@GIT:CMD:PATH>
-            if ":" in rest:
-                cmd, path = rest.split(":", 1)
+            parsed = parse_git_mention_query(rest)
+            if parsed is not None:
                 add_sep()
-                tokens.append(("class:mention-git-cmd", cmd))
-                add_sep()
-                tokens.append(("class:mention-path", path))
+                branch, raw_branch, remainder = split_git_branch_prefix(rest) or (
+                    None,
+                    None,
+                    rest,
+                )
+                if branch is not None and raw_branch is not None:
+                    tokens.append(("class:mention-path", f"[{raw_branch}]"))
+                    add_sep()
+                command = parsed.command
+                tokens.append(("class:mention-git-cmd", command))
+                if parsed.argument is not None:
+                    add_sep()
+                    argument = str(parsed.argument)
+                    argument_style = (
+                        "class:mention-path"
+                        if command == "diff"
+                        else "class:mention-range"
+                    )
+                    tokens.append((argument_style, argument))
             else:
+                branch, raw_branch, remainder = split_git_branch_prefix(rest) or (
+                    None,
+                    None,
+                    rest,
+                )
                 add_sep()
-                tokens.append(("class:mention-git-cmd", rest))
+                if branch is not None and raw_branch is not None:
+                    tokens.append(("class:mention-path", f"[{raw_branch}]"))
+                    if remainder:
+                        add_sep()
+                        tokens.append(("class:mention-git-cmd", remainder))
+                else:
+                    tokens.append(("class:mention-git-cmd", rest))
         elif tag_type in ("file", "symbol", "tree"):
             # STRUCTURE: <@TAG:PATH:ARG2>
             # USE REGEX TO SAFELY SPLIT PATH AND OPTIONAL ARGUMENT, RESPECTING WINDOWS PATHS (E.G., C:/...)
@@ -438,7 +544,7 @@ if HAS_PYGMENTS:
             self.indexer = indexer
             self.resolver = resolver
             self.expensive_checks_enabled = expensive_checks_enabled or (lambda: True)
-            self.mention_pattern = re.compile(r"<@[^>\n]+(?:>|$)|\[@[^\]\n]*(?:\]|$)")
+            self.mention_pattern = re.compile(MENTION_SCAN_PATTERN)
             self._validation_cache: dict[tuple[int, str], MentionValidationResult] = {}
             self._invalid_fence_cache: dict[int, set[int]] = {}
 
@@ -718,7 +824,7 @@ class HelpLexer(Lexer):
         self.header_re = re.compile(r"^\s*\[ .* \]\s*$")
 
         # MENTIONS OR KEYS: <@...> | [@PROJECT] | ^[X]
-        self.combined_re = re.compile(r"(<@[^>]+>|\[@project\])|(\^?\[[^\]]+\])")
+        self.combined_re = re.compile(HELP_TOKEN_PATTERN)
 
     def lex_document(self, document: Document):
         def get_line(lineno: int):
@@ -1065,7 +1171,7 @@ class InteractiveEditor:
         self.buffer.on_text_changed += self._handle_buffer_text_changed
         self.result: str | None = None
 
-        help_text = get_string("help_text", "")
+        help_text = get_string("help_text", HELP_TEXT_FALLBACK)
         self._help_search_anchor = help_text.find("[ search ]")
         self._help_issue_anchor = help_text.find("[ issues ]")
         self.help_buffer = Buffer(document=Document(help_text), read_only=True)
@@ -2183,6 +2289,7 @@ class InteractiveEditor:
             layout=layout,
             key_bindings=bindings,
             style=style,
+            erase_when_done=True,
             full_screen=(
                 APP_SETTINGS.editor_layout.full_screen
                 and self.terminal_profile.supports_full_screen

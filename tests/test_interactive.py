@@ -462,6 +462,29 @@ async def test_interactive_editor_help_restores_search_cursor_and_selection(
     assert editor.search_buffer.selection_state.original_cursor_position == 0
 
 
+async def test_interactive_editor_erases_screen_when_done(app_components, monkeypatch):
+    """THE EDITOR SHOULD ASK PROMPT-TOOLKIT TO ERASE ITS UI WHEN THE APP EXITS."""
+    context, resolver = app_components
+    editor = InteractiveEditor("", context.indexer, resolver)
+    observed: dict[str, object] = {}
+
+    class FakeApplication:
+        def __init__(self, **kwargs):
+            observed.update(kwargs)
+            self.layout = kwargs["layout"]
+            self.ttimeoutlen = 0.0
+
+        async def run_async(self):
+            return None
+
+    monkeypatch.setattr("promptify.ui.editor.Application", FakeApplication)
+
+    result = await editor.run_async()
+
+    assert result is None
+    assert observed["erase_when_done"] is True
+
+
 async def test_interactive_editor_toolbar_and_token_status_follow_mode(
     app_components,
 ):

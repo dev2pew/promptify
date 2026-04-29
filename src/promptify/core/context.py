@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from typing import cast
 
+from .mods import GIT_DEFAULT_HISTORY_LIMIT, GIT_DEFAULT_LOG_LIMIT
 from .config import CaseConfig
 from .indexer import ProjectIndexer
 from .models import FileMeta, CachedContent
@@ -61,6 +62,30 @@ class ProjectContext:
         self.cache: dict[str, CachedContent] = {}
         self.has_git = has_git
         self.terminal_profile = terminal_profile or APP_TERMINAL_PROFILE
+
+    async def _run_git_command(self, *args: str) -> tuple[int, str, str]:
+        """EXECUTES A NON-INTERACTIVE GIT COMMAND AND RETURNS DECODED OUTPUT."""
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "--no-pager",
+            *args,
+            cwd=self.target_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        returncode = proc.returncode if proc.returncode is not None else 1
+        return (
+            returncode,
+            stdout.decode(errors="replace"),
+            stderr.decode(errors="replace").strip(),
+        )
+
+    def _normalize_git_commit_limit(self, limit: int | None, default_limit: int) -> int:
+        """NORMALIZES OPTIONAL GIT COMMIT LIMITS TO A SAFE POSITIVE VALUE."""
+        if limit is None:
+            return default_limit
+        return max(1, limit)
 
     def normalize_query_path(self, query: str) -> str:
         """NORMALIZES USER-INPUTTED PATHS TO THE INTERNAL PROJECT FORMAT."""
@@ -225,12 +250,15 @@ class ProjectContext:
         except ValueError as e:
             return get_string("symbol_error", "symbol error").format(error=e)
 
-    async def get_git_diff(self, path: str | None = None) -> str:
+    async def get_git_diff(
+        self, path: str | None = None, branch: str | None = None
+    ) -> str:
         """
         RETRIEVES THE WORKING TREE DIFFERENCES FOR THE PROJECT OR SPECIFIC FILE.
 
         Args:
             path (str | None): Target path to isolate the diff.
+            branch (str | None): Optional branch or ref to diff against.
 
         Returns:
             str: Git diff output.
@@ -238,30 +266,26 @@ class ProjectContext:
         if not self.has_git:
             return ""
 
-        cmd = ["git", "diff"]
+        cmd = ["diff"]
+        if branch:
+            cmd.append(branch)
         if path:
             cmd.extend(["--", path])
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=self.target_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            return get_string("git_diff_error", "git diff error").format(
-                error=stderr.decode(errors="replace").strip()
-            )
+        returncode, stdout, stderr = await self._run_git_command(*cmd)
+        if returncode != 0:
+            return get_string("git_diff_error", "git diff error").format(error=stderr)
 
-        diff_text = stdout.decode(errors="replace")
-        if not diff_text.strip():
+        if not stdout.strip():
             return get_string("no_changes", "no changes")
-        return f"```diff\n{diff_text}\n```\n"
+        return f"```diff\n{stdout}\n```\n"
 
-    async def get_git_status(self) -> str:
+    async def get_git_status(self, branch: str | None = None) -> str:
         """
         RETRIEVES THE WORKING TREE STATUS.
+
+        WHEN A BRANCH IS PROVIDED, THIS RETURNS A NAME-STATUS COMPARISON AGAINST
+        THAT REF SINCE `git status` DOES NOT ACCEPT REVISION ARGUMENTS.
 
         Returns:
             str: Git status output.
@@ -269,24 +293,68 @@ class ProjectContext:
         if not self.has_git:
             return ""
 
-        proc = await asyncio.create_subprocess_exec(
-            "git",
-            "status",
-            "-s",
-            cwd=self.target_dir,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
+        cmd = ["status", "-s"] if branch is None else ["diff", "--name-status", branch]
+        returncode, stdout, stderr = await self._run_git_command(*cmd)
+        if returncode != 0:
             return get_string("git_status_error", "git status error").format(
-                error=stderr.decode(errors="replace").strip()
+                error=stderr
             )
 
-        status_text = stdout.decode(errors="replace")
-        if not status_text.strip():
+        if not stdout.strip():
             return get_string("working_tree_clean", "clean tree")
-        return f"```log\n{status_text}\n```\n"
+        return f"```log\n{stdout}\n```\n"
+
+    async def get_git_log(
+        self, limit: int | None = None, branch: str | None = None
+    ) -> str:
+        """RETRIEVES THE GIT LOG FOR THE CURRENT REPO OR A SPECIFIC BRANCH."""
+        if not self.has_git:
+            return ""
+
+        effective_limit = self._normalize_git_commit_limit(limit, GIT_DEFAULT_LOG_LIMIT)
+        cmd = ["log", "--no-color", "-n", str(effective_limit)]
+        if branch:
+            cmd.append(branch)
+
+        returncode, stdout, stderr = await self._run_git_command(*cmd)
+        if returncode != 0:
+            return get_string("git_log_error", "git log error").format(error=stderr)
+
+        if not stdout.strip():
+            return get_string("no_changes", "no changes")
+        return f"```log\n{stdout}\n```\n"
+
+    async def get_git_history(
+        self, limit: int | None = None, branch: str | None = None
+    ) -> str:
+        """RETRIEVES COMMIT HISTORY PLUS PATCHES FOR A SMALL NUMBER OF COMMITS."""
+        if not self.has_git:
+            return ""
+
+        effective_limit = self._normalize_git_commit_limit(
+            limit, GIT_DEFAULT_HISTORY_LIMIT
+        )
+        cmd = [
+            "log",
+            "--no-color",
+            "--pretty=fuller",
+            "--stat",
+            "--patch",
+            "-n",
+            str(effective_limit),
+        ]
+        if branch:
+            cmd.append(branch)
+
+        returncode, stdout, stderr = await self._run_git_command(*cmd)
+        if returncode != 0:
+            return get_string("git_history_error", "git history error").format(
+                error=stderr
+            )
+
+        if not stdout.strip():
+            return get_string("no_changes", "no changes")
+        return f"```diff\n{stdout}\n```\n"
 
     async def _read_and_format(self, meta: FileMeta, range_str: str | None) -> str:
         """
