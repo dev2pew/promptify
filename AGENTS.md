@@ -18,6 +18,8 @@
 
 ## TESTING RULES
 
+Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\.uv-cache'; ./llt.bat` to avoid requiring elevation.
+
 - Add or update unit tests for every behavioral change;
 - Tests should assert localized text through `get_string(...)` instead of hardcoded copies when the value comes from `strings/en.json`;
 - Keep tests deterministic and sandboxed;

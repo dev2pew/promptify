@@ -12,7 +12,12 @@ from typing import Callable, Iterable, cast
 from .logger import log
 from ..core.indexer import ProjectIndexer
 from ..core.resolver import PromptResolver
-from ..core.mods import ModRegistry, split_file_query_and_range
+from ..core.mods import (
+    ModRegistry,
+    parse_git_mention_query,
+    split_file_query_and_range,
+    split_git_branch_prefix,
+)
 from ..core.settings import APP_SETTINGS
 from ..core.terminal import APP_TERMINAL_PROFILE, TerminalProfile
 from .bindings import setup_keybindings
@@ -149,6 +154,10 @@ except ImportError:
         )
     )
     sys.exit(1)
+
+
+MENTION_SCAN_PATTERN = r"<@(?:\\.|[^>\n])+(?:>|$)|\[@[^\]\n]*(?:\]|$)"
+HELP_TOKEN_PATTERN = r"(<@(?:\\.|[^>\n])+>|\[@project\])|(\^?\[[^\]\n]+\])"
 
 
 class HighlightTrailingWhitespaceProcessor(Processor):
@@ -372,16 +381,39 @@ if HAS_PYGMENTS:
 
         # SEMANTIC PARSING BASED ON TAG TYPE
         if tag_type == "git":
-            # STRUCTURE: <@GIT:CMD:PATH>
-            if ":" in rest:
-                cmd, path = rest.split(":", 1)
+            parsed = parse_git_mention_query(rest)
+            if parsed is not None:
                 add_sep()
-                tokens.append(("class:mention-git-cmd", cmd))
-                add_sep()
-                tokens.append(("class:mention-path", path))
+                branch, raw_branch, remainder = split_git_branch_prefix(rest) or (
+                    None,
+                    None,
+                    rest,
+                )
+                if branch is not None and raw_branch is not None:
+                    tokens.append(("class:mention-path", f"[{raw_branch}]"))
+                    add_sep()
+                command = parsed.command
+                tokens.append(("class:mention-git-cmd", command))
+                if parsed.argument is not None:
+                    add_sep()
+                    argument = (
+                        parsed.argument if command == "diff" else str(parsed.argument)
+                    )
+                    tokens.append(("class:mention-path", argument))
             else:
+                branch, raw_branch, remainder = split_git_branch_prefix(rest) or (
+                    None,
+                    None,
+                    rest,
+                )
                 add_sep()
-                tokens.append(("class:mention-git-cmd", rest))
+                if branch is not None and raw_branch is not None:
+                    tokens.append(("class:mention-path", f"[{raw_branch}]"))
+                    if remainder:
+                        add_sep()
+                        tokens.append(("class:mention-git-cmd", remainder))
+                else:
+                    tokens.append(("class:mention-git-cmd", rest))
         elif tag_type in ("file", "symbol", "tree"):
             # STRUCTURE: <@TAG:PATH:ARG2>
             # USE REGEX TO SAFELY SPLIT PATH AND OPTIONAL ARGUMENT, RESPECTING WINDOWS PATHS (E.G., C:/...)
@@ -438,7 +470,7 @@ if HAS_PYGMENTS:
             self.indexer = indexer
             self.resolver = resolver
             self.expensive_checks_enabled = expensive_checks_enabled or (lambda: True)
-            self.mention_pattern = re.compile(r"<@[^>\n]+(?:>|$)|\[@[^\]\n]*(?:\]|$)")
+            self.mention_pattern = re.compile(MENTION_SCAN_PATTERN)
             self._validation_cache: dict[tuple[int, str], MentionValidationResult] = {}
             self._invalid_fence_cache: dict[int, set[int]] = {}
 
@@ -718,7 +750,7 @@ class HelpLexer(Lexer):
         self.header_re = re.compile(r"^\s*\[ .* \]\s*$")
 
         # MENTIONS OR KEYS: <@...> | [@PROJECT] | ^[X]
-        self.combined_re = re.compile(r"(<@[^>]+>|\[@project\])|(\^?\[[^\]]+\])")
+        self.combined_re = re.compile(HELP_TOKEN_PATTERN)
 
     def lex_document(self, document: Document):
         def get_line(lineno: int):
