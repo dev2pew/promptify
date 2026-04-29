@@ -2183,7 +2183,10 @@ class InteractiveEditor:
             layout=layout,
             key_bindings=bindings,
             style=style,
-            full_screen=APP_SETTINGS.editor_layout.full_screen,
+            full_screen=(
+                APP_SETTINGS.editor_layout.full_screen
+                and self.terminal_profile.supports_full_screen
+            ),
             mouse_support=(
                 APP_SETTINGS.editor_layout.mouse_support
                 and self.terminal_profile.supports_mouse
