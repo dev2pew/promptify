@@ -158,6 +158,65 @@ except ImportError:
 
 MENTION_SCAN_PATTERN = r"<@(?:\\.|[^>\n])+(?:>|$)|\[@[^\]\n]*(?:\]|$)"
 HELP_TOKEN_PATTERN = r"(<@(?:\\.|[^>\n])+>|\[@project\])|(\^?\[[^\]\n]+\])"
+HELP_TEXT_FALLBACK = (
+    "[ general ]\n\n"
+    "^[G] / [F1]         : help\n"
+    "^[F]                : search\n"
+    "^[S]                : resolve\n"
+    "^[Q]                : abort\n\n"
+    "[ search ]\n\n"
+    "[Enter]             : next match\n"
+    "^[R]                : previous match\n"
+    "[Esc]               : close\n"
+    "^[A/C/X/V]          : select / copy / cut / paste\n\n"
+    "[ issues ]\n\n"
+    "[Enter] / ^[N]      : next issue\n"
+    "^[R] / ^[P]         : previous issue\n"
+    "[Esc]               : close\n"
+    "^[G] / [F1]         : help from issues/search\n\n"
+    "[ autocomplete mentions ]\n\n"
+    "<@file:path>                : file\n"
+    "<@file:path:range>          : sliced file\n\n"
+    "                    first n : first n lines\n"
+    "                    last n  : last n lines\n"
+    "                    n-m     : from n to m lines\n"
+    "                    #n      : line n\n\n"
+    "<@dir:path>                 : directory\n"
+    "<@tree:path>                : tree view\n"
+    "<@tree:path:level>          : depth-scoped tree\n"
+    "<@ext:list>                 : files by extension\n"
+    "<@symbol:path:name>         : file symbol\n"
+    "<@git:diff>                 : working tree diff\n"
+    "<@git:diff:path>            : target work tree diff\n"
+    "<@git:status>               : work tree status\n"
+    "<@git:log>                  : recent commit log (20 commits max by default)\n"
+    "<@git:log:count>            : last count commits\n"
+    "<@git:history>              : recent commits with patches (5 commits max by default)\n"
+    "<@git:history:count>        : last count commits with diffs\n"
+    "<@git:[branch]:subcommand>  : branch-scoped git command\n"
+    "<@git:[branch]:diff:path>   : branch diff for a target path\n"
+    "<@git:[branch]:log:count>   : branch log limited to count commits\n"
+    "<@git:[branch]:history:count> : branch commit history with diffs\n"
+    "[@project]                  : project structure\n\n"
+    "[ editing ]\n\n"
+    "^[A]                : select all\n"
+    "[Shift]             : select\n"
+    "^[Z/Y]              : undo / redo\n"
+    "^[C/X/V]            : copy / cut / paste\n"
+    "[Tab]               : indent / autocomplete\n"
+    "[Shift] + [Tab]     : unindent\n"
+    "[Alt]   + [^/v]     : shift cursor\n"
+    "^[/]                : comment out\n"
+    "^[W/Del]            : delete previous / next\n"
+    "[Enter]             : newline / accept\n\n"
+    "[ navigation ]\n\n"
+    "[^/v/</>]           : move\n"
+    "^[^/v/</>]          : next / previous\n"
+    "[Home/End]          : start / end\n"
+    "^[Home/End]         : file start / end\n"
+    "^[PgUp/PgDn]        : up / down (15x)\n\n"
+    "press [Enter], [F1] or ^[G] to close"
+)
 
 
 class HighlightTrailingWhitespaceProcessor(Processor):
@@ -396,10 +455,13 @@ if HAS_PYGMENTS:
                 tokens.append(("class:mention-git-cmd", command))
                 if parsed.argument is not None:
                     add_sep()
-                    argument = (
-                        parsed.argument if command == "diff" else str(parsed.argument)
+                    argument = str(parsed.argument)
+                    argument_style = (
+                        "class:mention-path"
+                        if command == "diff"
+                        else "class:mention-range"
                     )
-                    tokens.append(("class:mention-path", argument))
+                    tokens.append((argument_style, argument))
             else:
                 branch, raw_branch, remainder = split_git_branch_prefix(rest) or (
                     None,
@@ -1097,7 +1159,7 @@ class InteractiveEditor:
         self.buffer.on_text_changed += self._handle_buffer_text_changed
         self.result: str | None = None
 
-        help_text = get_string("help_text", "")
+        help_text = get_string("help_text", HELP_TEXT_FALLBACK)
         self._help_search_anchor = help_text.find("[ search ]")
         self._help_issue_anchor = help_text.find("[ issues ]")
         self.help_buffer = Buffer(document=Document(help_text), read_only=True)

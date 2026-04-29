@@ -14,7 +14,7 @@
 - keeps an in-memory project index for fast matching and autocomplete;
 - uses `watchdog` for live updates, with configurable native, polling, or disabled watch modes;
 - strictly validates paths so reads stay inside the chosen project root;
-- supports file slices, directory trees, extension filters, symbol extraction, and `git` status / diff / log mentions, including optional branch selectors;
+- supports file slices, directory trees, extension filters, symbol extraction, and `git` status / diff / log / history mentions, including optional branch selectors;
 - stores all user-facing copy in `strings/en.json`;
 - exposes runtime behavior, editor tuning, logger formatting, and theme styles through `.env`;
 - detects terminal capabilities and adapts rendering for legacy `cmd.exe` and classic Windows console hosts.
@@ -59,11 +59,15 @@ the in-app help screen is authoritative, but the main defaults are...
 | `<@symbol:path:name>` | attach a class, method, or function   | `<@symbol:src/main.py:App.run>` |
 | `<@git:diff>`         | attach working tree diff              | `<@git:diff>`                   |
 | `<@git:diff:path>`    | attach diff for a file or directory   | `<@git:diff:src/main.py>`       |
-| `<@git:log>`          | attach full `git log` output          | `<@git:log>`                    |
+| `<@git:log>`          | attach recent `git log` output        | `<@git:log>`                    |
 | `<@git:log:n>`        | attach the latest `n` commits         | `<@git:log:2>`                  |
+| `<@git:history>`      | attach recent commits with patches    | `<@git:history>`                |
+| `<@git:history:n>`    | attach the latest `n` commit diffs    | `<@git:history:2>`              |
 | `<@git:status>`       | attach working tree status            | `<@git:status>`                 |
 | `<@git:[branch]:...>` | run a git mention against a branch    | `<@git:[master]:log:2>`         |
 | `[@project]`          | attach the project tree               | `[@project]`                    |
+
+`<@git:log>` defaults to the latest `20` commits when no count is given. `<@git:history>` defaults to `5` commits because it includes full patches and grows much faster.
 
 supported file ranges...
 

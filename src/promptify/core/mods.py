@@ -229,7 +229,17 @@ class GitMentionQuery:
 
 GIT_BRANCH_PATTERN = r"\[(?:\\.|[^\]\\])+\]"
 GIT_BRANCH_PREFIX_PATTERN = rf"(?:{GIT_BRANCH_PATTERN}:)?"
-GIT_COMMAND_COMPLETIONS = ("diff>", "status>", "diff:", "log>", "log:")
+GIT_DEFAULT_LOG_LIMIT = 20
+GIT_DEFAULT_HISTORY_LIMIT = 5
+GIT_COMMAND_COMPLETIONS = (
+    "diff>",
+    "status>",
+    "diff:",
+    "log>",
+    "log:",
+    "history>",
+    "history:",
+)
 
 
 def escape_git_branch_name(branch: str) -> str:
@@ -326,6 +336,10 @@ def parse_git_mention_query(body: str) -> GitMentionQuery | None:
         return GitMentionQuery(branch=branch, command="log", argument=None)
     if remainder.startswith("log:") and remainder[4:].isdigit():
         return GitMentionQuery(branch=branch, command="log", argument=remainder[4:])
+    if remainder == "history":
+        return GitMentionQuery(branch=branch, command="history", argument=None)
+    if remainder.startswith("history:") and remainder[8:].isdigit():
+        return GitMentionQuery(branch=branch, command="history", argument=remainder[8:])
     return None
 
 
@@ -648,7 +662,7 @@ class GitMod(MentionMod):
     name = "mod_git"
     pattern = (
         rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}"
-        r"(?:status|diff(?:[:][^>]+)?|log(?:[:]\d+)?)>"
+        r"(?:status|diff(?:[:][^>]+)?|log(?:[:]\d+)?|history(?:[:]\d+)?)>"
     )
 
     def __init__(self) -> None:
@@ -749,6 +763,9 @@ class GitMod(MentionMod):
         if query.command == "log":
             limit = int(query.argument) if query.argument is not None else None
             return await context.get_git_log(limit=limit, branch=query.branch)
+        if query.command == "history":
+            limit = int(query.argument) if query.argument is not None else None
+            return await context.get_git_history(limit=limit, branch=query.branch)
         return text
 
     def get_completions(
@@ -775,7 +792,8 @@ class GitMod(MentionMod):
             return
 
         match_git_log = re.search(
-            rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}log:(\d*)$", text_before_cursor
+            rf"<@git:{GIT_BRANCH_PREFIX_PATTERN}(log|history):(\d*)$",
+            text_before_cursor,
         )
         if match_git_log:
             body = text_before_cursor.split("<@git:", 1)[1]
@@ -783,7 +801,7 @@ class GitMod(MentionMod):
             commit_count = self._read_git_commit_count(indexer.target_dir, branch)
             yield from _yield_numeric_suffix_completions(
                 range(1, commit_count + 1),
-                match_git_log.group(1),
+                match_git_log.group(2),
                 suffix=">",
             )
             return
