@@ -104,15 +104,7 @@ class ProjectContext:
             return get_string("err_file_not_found", "file not found").format(
                 query=query
             )
-
-        async with asyncio.TaskGroup() as tg:
-            tasks = [
-                tg.create_task(self._read_and_format(meta, range_str))
-                for meta in matches
-            ]
-
-        results = [t.result() for t in tasks]
-        return "\n".join(results)
+        return await self._format_matches(matches, range_str)
 
     async def get_type_contents(self, exts_str: str) -> str:
         """
@@ -131,14 +123,7 @@ class ProjectContext:
             return get_string("err_type_not_found", "type not found").format(
                 exts=exts_str
             )
-
-        async with asyncio.TaskGroup() as tg:
-            tasks = [
-                tg.create_task(self._read_and_format(meta, None)) for meta in matches
-            ]
-
-        results = [t.result() for t in tasks]
-        return "\n".join(results)
+        return await self._format_matches(matches, None)
 
     async def get_dir_contents(self, dir_query: str) -> str:
         """
@@ -157,14 +142,7 @@ class ProjectContext:
 
         if not matches:
             return get_string("err_dir_empty", "dir empty").format(query=dir_query)
-
-        async with asyncio.TaskGroup() as tg:
-            tasks = [
-                tg.create_task(self._read_and_format(meta, None)) for meta in matches
-            ]
-
-        results = [t.result() for t in tasks]
-        return "\n".join(results)
+        return await self._format_matches(matches, None)
 
     async def get_tree_contents(
         self, dir_query: str, depth_str: str | None = None
@@ -342,6 +320,20 @@ class ProjectContext:
 
         final_content = "".join(lines)
         return f"- `{meta.rel_path}`\n\n```{meta.ext}\n{final_content}\n```\n"
+
+    async def _format_matches(
+        self,
+        matches: list[FileMeta],
+        range_str: str | None,
+    ) -> str:
+        """READS AND FORMATS A MATCH LIST THROUGH THE SHARED TASKGROUP PATH."""
+        async with asyncio.TaskGroup() as tg:
+            tasks = [
+                tg.create_task(self._read_and_format(meta, range_str))
+                for meta in matches
+            ]
+
+        return "\n".join(task.result() for task in tasks)
 
     async def _read_cached(self, meta: FileMeta) -> str:
         """

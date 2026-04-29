@@ -156,13 +156,18 @@ class App:
             matching = [d for c, d in configs if c.name == self.cli_config.case]
             if len(matching) > 1:
                 log.error(
-                    f"Multiple cases found for '{self.cli_config.case}'. "
-                    "Only normal menu mode supports duplicates. If you want to use the CLI, "
-                    "then the user needs to adjust their cases to not contain duplicate names."
+                    get_string(
+                        "duplicate_case_cli",
+                        "Multiple cases found for '{case}'. Only normal menu mode supports duplicates. If you want to use the CLI, then the user needs to adjust their cases to not contain duplicate names.",
+                    ).format(case=self.cli_config.case)
                 )
                 return
             if not matching:
-                log.error(f"Case '{self.cli_config.case}' not found.")
+                log.error(
+                    get_string("case_not_found", "Case '{case}' not found.").format(
+                        case=self.cli_config.case
+                    )
+                )
                 return
 
             selected_case_dir = matching[0]

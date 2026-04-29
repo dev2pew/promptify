@@ -105,6 +105,96 @@ def build_path_completions(
             )
 
 
+def build_file_path_completions(
+    partial: str, indexer: "ProjectIndexer"
+) -> Iterable[Completion]:
+    """YIELDS FILE PATH COMPLETIONS USING THE STANDARD DISPLAY RULES."""
+    yield from build_path_completions(
+        partial,
+        list(indexer.files_by_rel.keys()),
+        close_suffix=">",
+        exact_suffixes=(":",),
+        meta_candidates=set(indexer.files_by_rel),
+    )
+
+
+def _yield_numeric_suffix_completions(
+    values: Iterable[int],
+    partial: str,
+    *,
+    suffix: str,
+) -> Iterable[Completion]:
+    """YIELDS NUMERIC COMPLETIONS MATCHING THE CURRENT PARTIAL INPUT."""
+    for value in values:
+        text = str(value)
+        if text.startswith(partial):
+            yield Completion(
+                text + suffix,
+                start_position=-len(partial),
+                display=text + suffix,
+            )
+
+
+def build_file_range_completions(
+    partial: str,
+    *,
+    lines_count: int,
+) -> Iterable[Completion]:
+    """YIELDS RANGE-SUFFIX COMPLETIONS FOR `<@file:path:...>` QUERIES."""
+    if not partial:
+        yield Completion("first ", start_position=0, display="first [n]")
+        yield Completion("last ", start_position=0, display="last [n]")
+        yield Completion("", start_position=0, display="[n]-[m]")
+        yield Completion("#", start_position=0, display="#[n]")
+        return
+
+    if partial.startswith("first ") or partial.startswith("last "):
+        prefix = "first " if partial.startswith("first ") else "last "
+        yield from _yield_numeric_suffix_completions(
+            range(1, lines_count + 1),
+            partial[len(prefix) :],
+            suffix=">",
+        )
+        return
+
+    if partial.startswith("#"):
+        yield from _yield_numeric_suffix_completions(
+            range(1, lines_count + 1),
+            partial[1:],
+            suffix=">",
+        )
+        return
+
+    if "-" in partial:
+        start_num, _, num_part = partial.partition("-")
+        try:
+            start_idx = int(start_num)
+        except ValueError:
+            start_idx = 1
+        yield from _yield_numeric_suffix_completions(
+            range(start_idx, lines_count + 1),
+            num_part,
+            suffix=">",
+        )
+        return
+
+    if partial.isdigit():
+        yield from _yield_numeric_suffix_completions(
+            range(1, lines_count + 1),
+            partial,
+            suffix="-",
+        )
+        return
+
+    for completion, display in [("first ", "first [n]"), ("last ", "last [n]")]:
+        if completion.startswith(partial):
+            yield Completion(
+                completion,
+                start_position=-len(partial),
+                display=display,
+            )
+
+
 def split_file_query_and_range(query: str) -> tuple[str, str | None]:
     """
     SPLITS A FILE QUERY INTO ITS RELATIVE PATH AND OPTIONAL RANGE SEGMENT.
@@ -318,87 +408,12 @@ class FileMod(MentionMod):
             if lines_count == 0:
                 return
 
-            if not partial:
-                yield Completion("first ", start_position=0, display="first [n]")
-                yield Completion("last ", start_position=0, display="last [n]")
-                yield Completion("", start_position=0, display="[n]-[m]")
-                yield Completion("#", start_position=0, display="#[n]")
-                return
-
-            if partial.startswith("first ") or partial.startswith("last "):
-                prefix = "first " if partial.startswith("first ") else "last "
-                num_part = partial[len(prefix) :]
-                for i in range(1, lines_count + 1):
-                    s = str(i)
-                    if s.startswith(num_part):
-                        yield Completion(
-                            s + ">", start_position=-len(num_part), display=s + ">"
-                        )
-                return
-
-            if partial.startswith("#"):
-                num_part = partial[1:]
-                for i in range(1, lines_count + 1):
-                    s = str(i)
-                    if s.startswith(num_part):
-                        yield Completion(
-                            s + ">", start_position=-len(num_part), display=s + ">"
-                        )
-                return
-
-            if "-" in partial:
-                parts = partial.split("-")
-                if len(parts) == 2:
-                    start_num = parts[0]
-                    num_part = parts[1]
-                    try:
-                        start_idx = int(start_num)
-                    except ValueError:
-                        start_idx = 1
-
-                    for i in range(start_idx, lines_count + 1):
-                        s = str(i)
-                        if s.startswith(num_part):
-                            yield Completion(
-                                s + ">", start_position=-len(num_part), display=s + ">"
-                            )
-                return
-
-            if partial.isdigit():
-                for i in range(1, lines_count + 1):
-                    s = str(i)
-                    if s.startswith(partial):
-                        yield Completion(
-                            s + "-", start_position=-len(partial), display=s + "-"
-                        )
-                return
-
-            for c, d in [("first ", "first [n]"), ("last ", "last [n]")]:
-                if c.startswith(partial):
-                    yield Completion(c, start_position=-len(partial), display=d)
+            yield from build_file_range_completions(partial, lines_count=lines_count)
             return
 
         match_path = re.search(r"<@file:([^><]*)$", text_before_cursor)
         if match_path:
-            partial = match_path.group(1)
-
-            if not partial:
-                yield from build_path_completions(
-                    "",
-                    list(indexer.files_by_rel.keys()),
-                    close_suffix=">",
-                    exact_suffixes=(":",),
-                    meta_candidates=set(indexer.files_by_rel),
-                )
-                return
-
-            yield from build_path_completions(
-                partial,
-                list(indexer.files_by_rel.keys()),
-                close_suffix=">",
-                exact_suffixes=(":",),
-                meta_candidates=set(indexer.files_by_rel),
-            )
+            yield from build_file_path_completions(match_path.group(1), indexer)
 
 
 class DirMod(MentionMod):
