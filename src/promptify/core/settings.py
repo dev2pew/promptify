@@ -156,6 +156,11 @@ class RenderSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class TerminalSettings:
+    profile: str
+
+
+@dataclass(frozen=True, slots=True)
 class EditorLayoutSettings:
     full_screen: bool
     mouse_support: bool
@@ -213,6 +218,7 @@ class AppSettings:
     app_behavior: AppBehaviorSettings
     logger: LoggerSettings
     render: RenderSettings
+    terminal: TerminalSettings
     editor_layout: EditorLayoutSettings
     editor_behavior: EditorBehaviorSettings
     matching: MatchingSettings
@@ -531,6 +537,24 @@ def build_settings(
                 minimum=0,
             ),
         ),
+        terminal=TerminalSettings(
+            profile=_parse_choice(
+                source_env,
+                "PROMPTIFY_TERMINAL_PROFILE",
+                "auto",
+                warnings,
+                choices=frozenset(
+                    {
+                        "auto",
+                        "modern",
+                        "legacy-cmd",
+                        "vscode",
+                        "windows-terminal",
+                        "conhost",
+                    }
+                ),
+            )
+        ),
         editor_layout=EditorLayoutSettings(
             full_screen=_parse_bool(
                 source_env, "PROMPTIFY_UI_FULL_SCREEN", True, warnings
@@ -804,6 +828,7 @@ def _replace_editor_layout(
         app_behavior=settings.app_behavior,
         logger=settings.logger,
         render=settings.render,
+        terminal=settings.terminal,
         editor_layout=updated_layout,
         editor_behavior=settings.editor_behavior,
         matching=settings.matching,

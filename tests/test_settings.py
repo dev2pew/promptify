@@ -16,6 +16,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
             "PROMPTIFY_THEME_TOPBAR": "bg:#000000 #ffffff",
             "PROMPTIFY_INDEX_WATCH_MODE": "polling",
             "PROMPTIFY_LOG_COLOR_INFO": "ansigreen",
+            "PROMPTIFY_TERMINAL_PROFILE": "legacy-cmd",
         }
     )
 
@@ -27,6 +28,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
     assert settings.theme.styles["topbar"] == "bg:#000000 #ffffff"
     assert settings.indexer.watch_mode == "polling"
     assert settings.logger.info_color == "ansigreen"
+    assert settings.terminal.profile == "legacy-cmd"
 
 
 def test_build_settings_invalid_values_fall_back_and_warn():
@@ -36,6 +38,7 @@ def test_build_settings_invalid_values_fall_back_and_warn():
             "PROMPTIFY_MAX_FILE_SIZE": "oops",
             "PROMPTIFY_LOG_TIMESTAMPS": "sometimes",
             "PROMPTIFY_INDEX_WATCH_MODE": "broken",
+            "PROMPTIFY_TERMINAL_PROFILE": "ansi-art",
             "PROMPTIFY_LOG_COLOR_INFO": "orange",
             "PROMPTIFY_EDITOR_HELP_WIDTH_MIN": "200",
             "PROMPTIFY_EDITOR_HELP_WIDTH_MAX": "50",
@@ -46,6 +49,7 @@ def test_build_settings_invalid_values_fall_back_and_warn():
     assert settings.runtime.max_file_size == 5 * 1024 * 1024
     assert not settings.logger.include_timestamp
     assert settings.indexer.watch_mode == "auto"
+    assert settings.terminal.profile == "auto"
     assert settings.logger.info_color == "ansiblue"
     assert settings.editor_layout.help_width_min == 40
     assert settings.editor_layout.help_width_max == 160

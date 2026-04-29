@@ -19,6 +19,7 @@ from prompt_toolkit.selection import SelectionState
 
 from promptify.ui.bindings import setup_keybindings
 from promptify.ui.editor import InteractiveEditor
+from promptify.core.terminal import detect_terminal_profile
 from promptify.utils.i18n import get_string
 
 pytestmark = pytest.mark.asyncio
@@ -604,3 +605,31 @@ async def test_interactive_editor_issue_mode_tracks_issue_navigation(
         in editor.error_buffer.text
     )
     assert editor.buffer.document.cursor_position_row == 1
+
+
+async def test_interactive_editor_uses_ascii_eof_markers_for_legacy_cmd(
+    app_components,
+):
+    """LEGACY CMD PROFILES SHOULD AVOID UNICODE EOF INDICATORS."""
+    context, resolver = app_components
+    legacy_profile = detect_terminal_profile(
+        {
+            "COMSPEC": r"C:\Windows\System32\cmd.exe",
+            "PROMPT": "$P$G",
+        },
+        override="auto",
+    )
+    editor = InteractiveEditor(
+        "alpha",
+        context.indexer,
+        resolver,
+        terminal_profile=legacy_profile,
+    )
+    processor = next(
+        item
+        for item in cast(Any, editor.main_window.content).input_processors
+        if item.__class__.__name__ == "EOFNewlineProcessor"
+    )
+
+    assert processor.terminal_profile.eof_newline_present == "$"
+    assert processor.terminal_profile.eof_newline_missing == "!"
