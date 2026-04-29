@@ -80,7 +80,9 @@ def setup_keybindings(editor) -> KeyBindings:
             try:
                 text = await asyncio.to_thread(pyperclip.paste)
             except Exception:
-                editor.set_passive_status("clipboard unavailable")
+                editor.set_passive_status(
+                    editor.get_text("clipboard_unavailable", "clipboard unavailable")
+                )
                 return
 
             if text:

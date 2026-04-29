@@ -139,7 +139,7 @@ except ImportError:
     )
 
 try:
-    from rapidfuzz import process, fuzz  # NOQA: F401
+    from rapidfuzz import process  # NOQA: F401
 except ImportError:
     log.error(
         get_string(
@@ -470,7 +470,10 @@ if HAS_PYGMENTS:
             if not self.resolver.context.is_safe_query_path(path):
                 return MentionValidationResult(
                     "unresolved-reference",
-                    f"{label} '{path}' is outside the project",
+                    get_string(
+                        "issue_path_outside_project",
+                        "{label} '{path}' is outside the project",
+                    ).format(label=label, path=path),
                 )
             return None
 
@@ -510,7 +513,10 @@ if HAS_PYGMENTS:
                 return self._cache_validation_result(
                     cache_key,
                     "invalid-syntax",
-                    "incomplete mention syntax",
+                    get_string(
+                        "issue_incomplete_mention_syntax",
+                        "incomplete mention syntax",
+                    ),
                 )
 
             pattern = self.registry.pattern
@@ -521,7 +527,10 @@ if HAS_PYGMENTS:
                 return self._cache_validation_result(
                     cache_key,
                     "invalid-syntax",
-                    "mention registry is unavailable",
+                    get_string(
+                        "issue_mention_registry_unavailable",
+                        "mention registry is unavailable",
+                    ),
                 )
 
             match = pattern.fullmatch(text)
@@ -529,7 +538,10 @@ if HAS_PYGMENTS:
                 return self._cache_validation_result(
                     cache_key,
                     "invalid-syntax",
-                    "malformed mention syntax",
+                    get_string(
+                        "issue_malformed_mention_syntax",
+                        "malformed mention syntax",
+                    ),
                 )
 
             try:
@@ -540,8 +552,14 @@ if HAS_PYGMENTS:
                     path, _ = split_file_query_and_range(body)
                     path_issue = self._validate_indexed_path(
                         path,
-                        f"file '{path}' could not be resolved",
-                        unsafe_message=f"file '{path}' could not be resolved",
+                        get_string(
+                            "issue_file_unresolved",
+                            "file '{path}' could not be resolved",
+                        ).format(path=path),
+                        unsafe_message=get_string(
+                            "issue_file_unresolved",
+                            "file '{path}' could not be resolved",
+                        ).format(path=path),
                     )
                     if path_issue is not None:
                         return self._cache_validation_result(
@@ -570,7 +588,10 @@ if HAS_PYGMENTS:
                             return self._cache_validation_result(
                                 cache_key,
                                 "unresolved-reference",
-                                f"directory '{clean}' could not be resolved",
+                                get_string(
+                                    "issue_directory_unresolved",
+                                    "directory '{path}' could not be resolved",
+                                ).format(path=clean),
                             )
                 elif mod.name == "mod_symbol":
                     p = re.match(r"<@symbol:([^>:]+?)(?::([^>]+))?>", text)
@@ -578,12 +599,18 @@ if HAS_PYGMENTS:
                         return self._cache_validation_result(
                             cache_key,
                             "invalid-syntax",
-                            "malformed symbol mention",
+                            get_string(
+                                "issue_malformed_symbol_mention",
+                                "malformed symbol mention",
+                            ),
                         )
                     path = p.group(1)
                     path_issue = self._validate_indexed_path(
                         path,
-                        f"symbol file '{path}' could not be resolved",
+                        get_string(
+                            "issue_symbol_file_unresolved",
+                            "symbol file '{path}' could not be resolved",
+                        ).format(path=path),
                     )
                     if path_issue is not None:
                         return self._cache_validation_result(
@@ -597,14 +624,20 @@ if HAS_PYGMENTS:
                         return self._cache_validation_result(
                             cache_key,
                             "invalid-syntax",
-                            "malformed extension mention",
+                            get_string(
+                                "issue_malformed_extension_mention",
+                                "malformed extension mention",
+                            ),
                         )
                     exts = [e.strip().lower() for e in p.group(2).split(",")]
                     if not self.indexer.get_by_extensions(exts):
                         return self._cache_validation_result(
                             cache_key,
                             "unresolved-reference",
-                            f"no files found for extensions '{p.group(2)}'",
+                            get_string(
+                                "issue_extensions_unresolved",
+                                "no files found for extensions '{extensions}'",
+                            ).format(extensions=p.group(2)),
                         )
 
                 return self._cache_validation_result(cache_key, None, None)
@@ -612,7 +645,9 @@ if HAS_PYGMENTS:
                 return self._cache_validation_result(
                     cache_key,
                     "invalid-syntax",
-                    "failed to parse mention",
+                    get_string(
+                        "issue_failed_to_parse_mention", "failed to parse mention"
+                    ),
                 )
 
         def is_valid_mention(self, text: str) -> bool:
@@ -1178,6 +1213,18 @@ class InteractiveEditor:
         if app:
             app.invalidate()
 
+    def get_text(self, key: str, default: str) -> str:
+        """READS A LOCALIZED UI STRING WITH AN INLINE FALLBACK."""
+        return get_string(key, default)
+
+    def format_text(self, key: str, default: str, /, **values: object) -> str:
+        """READS AND FORMATS A LOCALIZED UI STRING WITH INLINE FALLBACKS."""
+        return self.get_text(key, default).format(**values)
+
+    def _set_help_cursor(self, position: int) -> None:
+        """MOVES THE HELP BUFFER CURSOR WITHOUT REACHING THROUGH UNTYPED CONTROLS."""
+        self.help_buffer.cursor_position = position
+
     def note_user_activity(self) -> None:
         """CLEARS TRANSIENT STATUS MESSAGES AFTER THE NEXT USER ACTION."""
         changed = False
@@ -1219,14 +1266,14 @@ class InteractiveEditor:
     def _get_current_mode_name(self) -> str:
         """RETURNS THE EDITOR MODE CURRENTLY OWNING THE USER'S ATTENTION."""
         if self.help_visible:
-            return "help"
+            return self.get_text("editor_mode_help", "help")
         if self.issue_mode_active:
-            return "issue"
+            return self.get_text("editor_mode_issue", "issue")
         if self.error_visible:
-            return "error"
+            return self.get_text("editor_mode_error", "error")
         if self.search_visible:
-            return "search"
-        return "normal"
+            return self.get_text("editor_mode_search", "search")
+        return self.get_text("editor_mode_normal", "normal")
 
     def _get_mode_text(self) -> str:
         """RENDERS A COMPACT MODE STRIP FOR THE TOP BAR."""
@@ -1234,7 +1281,16 @@ class InteractiveEditor:
         if mode == "issue":
             total = len(self._document_issue_cache)
             ordinal = min(self.issue_index + 1, total) if total else 0
-            return f" [issue {ordinal} of {total}] "
+            return (
+                " "
+                + self.format_text(
+                    "editor_mode_issue_status",
+                    "[issue {ordinal} of {total}]",
+                    ordinal=ordinal,
+                    total=total,
+                )
+                + " "
+            )
         return f" [ {mode} ] "
 
     def _get_status_text(self) -> str:
@@ -1242,10 +1298,28 @@ class InteractiveEditor:
         if self._passive_status:
             return f" {self._passive_status} "
         if not self.expensive_checks_enabled():
-            return " mention checks paused "
+            return (
+                " "
+                + self.get_text("editor_status_checks_paused", "mention checks paused")
+                + " "
+            )
         issues = self.get_document_issues()
         if issues:
-            return f" {len(issues)} issue{'s' if len(issues) != 1 else ''} "
+            return (
+                " "
+                + self.format_text(
+                    "editor_status_issue_count",
+                    "{count} {label}",
+                    count=len(issues),
+                    label=self.get_text(
+                        "editor_issue_label_plural"
+                        if len(issues) != 1
+                        else "editor_issue_label_singular",
+                        "issues" if len(issues) != 1 else "issue",
+                    ),
+                )
+                + " "
+            )
         return ""
 
     def _get_token_status_text(self) -> str:
@@ -1294,7 +1368,7 @@ class InteractiveEditor:
         """EMPHASIZES SEARCH MODE WITH AN ALWAYS-VISIBLE HEADER AND COUNT."""
         if not self.search_visible:
             return ""
-        return " SEARCH "
+        return " " + self.get_text("editor_search_label", "SEARCH") + " "
 
     async def _update_tokens_loop(self):
         """ASYNCHRONOUS, DEBOUNCED TASK UTILIZING FAST PROXY METRICS FOR TOKEN SIZE."""
@@ -1328,8 +1402,26 @@ class InteractiveEditor:
             return f" {self.search_message} "
         if state and state.query:
             if not state.matches:
-                return " 0 of 0 "
-            return f" {state.active_ordinal} of {len(state.matches)} "
+                return (
+                    " "
+                    + self.format_text(
+                        "editor_search_status_count",
+                        "{current} of {total}",
+                        current=0,
+                        total=0,
+                    )
+                    + " "
+                )
+            return (
+                " "
+                + self.format_text(
+                    "editor_search_status_count",
+                    "{current} of {total}",
+                    current=state.active_ordinal,
+                    total=len(state.matches),
+                )
+                + " "
+            )
         return ""
 
     def _handle_search_text_changed(self, _buffer: Buffer) -> None:
@@ -1418,7 +1510,10 @@ class InteractiveEditor:
                         0,
                         len(line_text),
                         "invalid-syntax",
-                        "unclosed code fence",
+                        self.get_text(
+                            "issue_unclosed_code_fence",
+                            "unclosed code fence",
+                        ),
                         line_text,
                     )
                 )
@@ -1444,7 +1539,10 @@ class InteractiveEditor:
                                 lineno,
                                 match,
                                 "invalid-syntax",
-                                "incomplete mention syntax",
+                                self.get_text(
+                                    "issue_incomplete_mention_syntax",
+                                    "incomplete mention syntax",
+                                ),
                             )
                         )
 
@@ -1466,7 +1564,11 @@ class InteractiveEditor:
             issue = self._make_buffer_match_issue(
                 match,
                 "unresolved-reference",
-                f"symbol file '{path}' could not be resolved",
+                self.format_text(
+                    "issue_symbol_file_unresolved",
+                    "symbol file '{path}' could not be resolved",
+                    path=path,
+                ),
             )
             issue_key = (issue.line, issue.column, issue.end_column)
 
@@ -1486,12 +1588,23 @@ class InteractiveEditor:
 
                 extractor = SymbolExtractor(content, meta.path.name)
                 if not extractor.extract(symbol):
-                    raise ValueError(f"symbol '{symbol}' not found")
+                    raise ValueError(
+                        self.format_text(
+                            "issue_symbol_not_found",
+                            "symbol '{symbol}' not found",
+                            symbol=symbol,
+                        )
+                    )
             except Exception as error:
                 issues[issue_key] = self._make_buffer_match_issue(
                     match,
                     issue.style,
-                    f"{meta.rel_path}: {error}",
+                    self.format_text(
+                        "issue_symbol_resolution_error",
+                        "{path}: {error}",
+                        path=meta.rel_path,
+                        error=error,
+                    ),
                 )
 
         return tuple(
@@ -1610,11 +1723,11 @@ class InteractiveEditor:
         )
         self.help_visible = True
         if self.search_visible and self._help_search_anchor >= 0:
-            self.help_window.content.buffer.cursor_position = self._help_search_anchor
+            self._set_help_cursor(self._help_search_anchor)
         elif self.issue_mode_active and self._help_issue_anchor >= 0:
-            self.help_window.content.buffer.cursor_position = self._help_issue_anchor
+            self._set_help_cursor(self._help_issue_anchor)
         else:
-            self.help_window.content.buffer.cursor_position = 0
+            self._set_help_cursor(0)
         self._focus(self.help_window)
 
     def close_help(self) -> None:
@@ -1661,7 +1774,9 @@ class InteractiveEditor:
         """MOVES TO THE NEXT OR PREVIOUS SEARCH MATCH WHILE KEEPING SEARCH OPEN."""
         query = self.search_buffer.text
         if not query:
-            self._set_search_message("enter a query")
+            self._set_search_message(
+                self.get_text("editor_search_enter_query", "enter a query")
+            )
             return False
 
         repeated = (
@@ -1677,7 +1792,9 @@ class InteractiveEditor:
 
         match_pos, wrapped = self._find_search_match(query, start, direction)
         if match_pos is None or match_pos < 0:
-            self._set_search_message("not found")
+            self._set_search_message(
+                self.get_text("editor_search_not_found", "not found")
+            )
             return False
 
         self.buffer.cursor_position = match_pos
@@ -1686,7 +1803,10 @@ class InteractiveEditor:
         self._search_last_match = match_pos
         self._search_cache_state = None
         self._remember_search_query(query)
-        self._set_search_message("wrapped" if wrapped else "", transient=wrapped)
+        self._set_search_message(
+            self.get_text("editor_search_wrapped", "wrapped") if wrapped else "",
+            transient=wrapped,
+        )
         return True
 
     def activate_issue_mode(self, issues: tuple[EditorIssue, ...]) -> None:
@@ -1712,18 +1832,33 @@ class InteractiveEditor:
             return
         issue = self._document_issue_cache[self.issue_index]
         total = len(self._document_issue_cache)
-        title = "syntax" if issue.style == "invalid-syntax" else "reference"
+        title = self.get_text(
+            "editor_issue_title_syntax"
+            if issue.style == "invalid-syntax"
+            else "editor_issue_title_reference",
+            "syntax" if issue.style == "invalid-syntax" else "reference",
+        )
         self.error_visible = True
         self.error_message = issue.message
         self.error_buffer.set_document(
             Document(
-                (
-                    f"{title} issue {self.issue_index + 1} of {total}\n"
-                    f"line {issue.line + 1}, col {issue.column + 1}\n\n"
-                    f"{issue.message}\n\n"
-                    "context\n"
-                    f"{issue.fragment}\n\n"
-                    "[Enter/N] next  ^[R/P] prev  [Esc] dismiss"
+                self.format_text(
+                    "editor_issue_overlay",
+                    "{title} issue {ordinal} of {total}\nline {line}, col {column}\n\n{message}\n\n{context_label}\n{fragment}\n\n{controls}",
+                    title=title,
+                    ordinal=self.issue_index + 1,
+                    total=total,
+                    line=issue.line + 1,
+                    column=issue.column + 1,
+                    message=issue.message,
+                    context_label=self.get_text(
+                        "editor_issue_context_label", "context"
+                    ),
+                    fragment=issue.fragment,
+                    controls=self.get_text(
+                        "editor_issue_controls",
+                        "[Enter/N] next  ^[R/P] prev  [Esc] close",
+                    ),
                 ),
                 cursor_position=0,
             ),
@@ -1749,7 +1884,16 @@ class InteractiveEditor:
         if self.issue_mode_active and self._document_issue_cache:
             total = len(self._document_issue_cache)
             ordinal = min(self.issue_index + 1, total)
-            return " < " + get_string("issues_title", "issues") + " > "
+            return (
+                " < "
+                + self.format_text(
+                    "editor_issue_title_bar",
+                    "issues {ordinal} / {total}",
+                    ordinal=ordinal,
+                    total=total,
+                )
+                + " > "
+            )
         return " < " + get_string("error_title", "error") + " > "
 
     def step_issue(self, direction: int) -> bool:
@@ -1774,7 +1918,11 @@ class InteractiveEditor:
                     width=Dimension(preferred=20),
                 ),
                 Window(
-                    content=FormattedTextControl(" < promptify > "),
+                    content=FormattedTextControl(
+                        lambda: (
+                            " < " + self.get_text("editor_title", "promptify") + " > "
+                        )
+                    ),
                     style="class:topbar-title",
                     align=WindowAlign.CENTER,
                     width=Dimension(weight=1),
