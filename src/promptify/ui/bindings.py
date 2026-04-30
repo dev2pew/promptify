@@ -109,7 +109,7 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.close_help()
 
     @custom_bindings.add("escape", filter=is_err_visible)
-    def _close_error(event) -> None:
+    def _close_err(event) -> None:
         editor.note_user_activity()
         if editor.issue_mode_active:
             editor.deactivate_issue_mode()
@@ -130,7 +130,7 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.step_issue(-1)
 
     @custom_bindings.add("enter", filter=is_err_visible & ~is_issue_mode_active)
-    def _dismiss_error(event) -> None:
+    def _dismiss_err(event) -> None:
         editor.note_user_activity()
         editor.err_visible = False
         event.app.layout.focus(editor.main_window)
