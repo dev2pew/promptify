@@ -37,6 +37,7 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "2", "~"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "6", "~"))
     assert bindings.get_bindings_for_keys((Keys.ControlF,))
+    assert bindings.get_bindings_for_keys((Keys.F10,))
 
 
 async def test_interactive_editor_runtime_handles_bracketed_paste(app_components):
@@ -61,6 +62,7 @@ async def test_interactive_editor_runtime_handles_bracketed_paste(app_components
             assert not editor.expensive_checks_enabled()
 
             pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
             result = await asyncio.wait_for(task, timeout=1.5)
 
     assert result is None
@@ -100,6 +102,7 @@ async def test_interactive_editor_runtime_paste_preserves_undo_redo_history(
             assert editor.buffer.text == payload
 
             pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
             await asyncio.wait_for(task, timeout=1.5)
 
 
@@ -119,6 +122,47 @@ async def test_interactive_editor_runtime_save_returns_live_buffer(app_component
             result = await asyncio.wait_for(task, timeout=1.5)
 
     assert result == "hello editor"
+
+
+async def test_interactive_editor_runtime_quit_confirmation_can_cancel(
+    app_components,
+):
+    """Quit should require confirmation and allow cancelling back to editing"""
+    context, resolver = app_components
+    editor = InteractiveEditor("", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.open_search()
+
+            assert editor.search_visible
+            assert get_app().current_buffer is editor.search_buffer
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            for _ in range(20):
+                if editor.quit_visible:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.quit_visible
+
+            pipe_input.send_text("n")
+            for _ in range(20):
+                if not editor.quit_visible:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert not editor.quit_visible
+            assert get_app().current_buffer is editor.search_buffer
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            result = await asyncio.wait_for(task, timeout=1.5)
+
+    assert result is None
 
 
 async def test_interactive_editor_runtime_paste_replaces_selection(app_components):
@@ -144,6 +188,7 @@ async def test_interactive_editor_runtime_paste_replaces_selection(app_component
             assert editor.buffer.selection_state is None
 
             pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
             await asyncio.wait_for(task, timeout=1.5)
 
 
@@ -178,6 +223,7 @@ async def test_interactive_editor_runtime_handles_modified_insert_sequences(
             assert editor.buffer.text == "shift insertctrl shift insert"
 
             pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
             await asyncio.wait_for(task, timeout=1.5)
 
 
@@ -293,6 +339,7 @@ async def test_interactive_editor_runtime_search_opens_and_closes_cleanly(
             assert get_app().current_buffer is editor.buffer
 
             pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
             await asyncio.wait_for(task, timeout=1.5)
 
 
@@ -349,6 +396,7 @@ async def test_interactive_editor_runtime_help_returns_focus_to_search(
             assert get_app().current_buffer is editor.search_buffer
 
             pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
             await asyncio.wait_for(task, timeout=1.5)
 
 
@@ -389,6 +437,7 @@ async def test_interactive_editor_runtime_search_selection_clears_on_navigation(
             assert editor.search_buffer.selection_state is None
 
             pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
             await asyncio.wait_for(task, timeout=1.5)
 
 
@@ -460,6 +509,33 @@ async def test_interactive_editor_help_restores_search_cursor_and_selection(
     assert editor.search_buffer.selection_state.original_cursor_position == 0
 
 
+async def test_interactive_editor_quit_confirmation_restores_help_focus(
+    app_components,
+):
+    """Cancelling quit from help should return focus to the help window"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.open_help()
+            editor.open_quit_confirm()
+
+            assert editor.quit_visible
+
+            editor.close_quit_confirm()
+
+            assert editor.help_visible
+            assert get_app().current_buffer is editor.help_buffer
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
 async def test_interactive_editor_erases_screen_when_done(app_components, monkeypatch):
     """The editor should ask prompt-toolkit to erase its UI when it exits"""
     context, resolver = app_components
@@ -495,6 +571,12 @@ async def test_interactive_editor_toolbar_and_token_status_follow_mode(
 
     editor.search_visible = True
     assert "next" in editor._get_toolbar_text()
+
+    editor.quit_visible = True
+    assert "cancel" in editor._get_toolbar_text()
+    assert editor._get_mode_text() == (
+        " [ " + get_string("editor_mode_quit", "quit") + " ] "
+    )
 
     editor._token_estimate_busy = True
     assert editor._get_token_status_text().endswith("* ")

@@ -43,6 +43,10 @@ def setup_keybindings(editor) -> KeyBindings:
         return editor.issue_mode_active and editor.err_visible
 
     @Condition
+    def is_quit_visible() -> bool:
+        return editor.quit_visible
+
+    @Condition
     def has_completions_menu() -> bool:
         b = get_app().current_buffer
         return b.complete_state is not None and len(b.complete_state.completions) > 0
@@ -100,13 +104,13 @@ def setup_keybindings(editor) -> KeyBindings:
         """Open the custom search bar without entering prompt-toolkit search mode"""
         editor.open_search()
 
-    @custom_bindings.add("escape", filter=is_help_visible)
-    @custom_bindings.add("enter", filter=is_help_visible)
+    @custom_bindings.add("escape", filter=is_help_visible & ~is_quit_visible)
+    @custom_bindings.add("enter", filter=is_help_visible & ~is_quit_visible)
     def _close_help_esc(event) -> None:
         editor.note_user_activity()
         editor.close_help()
 
-    @custom_bindings.add("escape", filter=is_err_visible)
+    @custom_bindings.add("escape", filter=is_err_visible & ~is_quit_visible)
     def _close_err(event) -> None:
         editor.note_user_activity()
         if editor.issue_mode_active:
@@ -127,11 +131,29 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.note_user_activity()
         editor.step_issue(-1)
 
-    @custom_bindings.add("enter", filter=is_err_visible & ~is_issue_mode_active)
+    @custom_bindings.add(
+        "enter",
+        filter=is_err_visible & ~is_issue_mode_active & ~is_quit_visible,
+    )
     def _dismiss_err(event) -> None:
         editor.note_user_activity()
         editor.err_visible = False
         event.app.layout.focus(editor.main_window)
+
+    @custom_bindings.add("enter", filter=is_quit_visible)
+    @custom_bindings.add("y", filter=is_quit_visible)
+    @custom_bindings.add("c-q", filter=is_quit_visible)
+    @custom_bindings.add("f10", filter=is_quit_visible)
+    def _confirm_quit(event) -> None:
+        editor.note_user_activity()
+        editor.confirm_quit()
+        event.app.exit()
+
+    @custom_bindings.add("escape", filter=is_quit_visible)
+    @custom_bindings.add("n", filter=is_quit_visible)
+    def _cancel_quit(event) -> None:
+        editor.note_user_activity()
+        editor.close_quit_confirm()
 
     @custom_bindings.add("up", filter=editor_focus & has_completions_menu)
     def _up_completion(event) -> None:
@@ -672,8 +694,8 @@ def setup_keybindings(editor) -> KeyBindings:
         asyncio.create_task(_do_save())
 
     @custom_bindings.add("c-q")
+    @custom_bindings.add("f10")
     def _quit(event) -> None:
-        editor.result = None
-        event.app.exit()
+        editor.open_quit_confirm()
 
     return custom_bindings
