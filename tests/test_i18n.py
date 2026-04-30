@@ -1,6 +1,4 @@
-"""
-UNIT TESTS FOR LOCALIZED STRING LOADING AND RESOURCE REFERENCES.
-"""
+"""Tests for localized string loading and resource references"""
 
 import json
 import shutil
@@ -9,7 +7,7 @@ from promptify.utils import i18n
 
 
 def test_load_strings_resolves_locale_resource_references(test_sandbox, monkeypatch):
-    """RESOURCE-STYLE STRING ENTRIES SHOULD LOAD THEIR TEXT FROM THE LOCALE FOLDER."""
+    """Resource-style string entries should load text from the locale folder"""
     strings_dir = test_sandbox["root"] / "i18n_strings"
     if strings_dir.exists():
         shutil.rmtree(strings_dir)

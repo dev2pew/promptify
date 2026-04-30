@@ -1,7 +1,4 @@
-"""
-MENTION MODIFIERS AND RESOLUTION ENGINE PLUGINS.
-DEFINES HOW SPECIFIC TAGS (LIKE <@FILE:...> OR <@GIT:...>) ARE PARSED AND RESOLVED.
-"""
+"""Mention modifiers and resolution plugins"""
 
 import re
 import subprocess
@@ -34,17 +31,17 @@ def fuzzy_complete(
     limit: int | None = None,
 ) -> Iterable[Completion]:
     """
-    HELPER TO PROVIDE FAST, CASE-INSENSITIVE FUZZY COMPLETIONS.
+    Provide fast, case-insensitive fuzzy completions.
 
     Args:
-        partial (str): Currently typed text to match.
-        candidates (list[str]): All available lookup targets.
-        prefix (str): Prefix formatting attached on output.
-        suffix (str): Suffix attached formatting to close out selection payload.
-        limit (int | None): Optional size limiter for rendered completion lines.
+        `partial` (str): Currently typed text to match.
+        `candidates` (list[str]): All available lookup targets.
+        `prefix` (str): Prefix formatting attached on output.
+        `suffix` (str): Suffix attached formatting to close out selection payload.
+        `limit` (int | None): Optional size limiter for rendered completion lines.
 
     Yields:
-        Completion: Processed payload prompt-toolkit completion object.
+        `Completion`: Processed payload prompt-toolkit completion object.
     """
     size_limit = len(candidates) if limit is None else limit
 
@@ -78,7 +75,7 @@ def build_path_completions(
     exact_suffixes: tuple[str, ...] = (),
     meta_candidates: set[str] | None = None,
 ) -> Iterable[Completion]:
-    """YIELDS PATH COMPLETIONS WITH COMPACT, DISAMBIGUATED DISPLAY LABELS."""
+    """Yield path completions with compact, disambiguated display labels"""
     normalized_partial = normalize_match_path(partial)
     ranked = rank_path_candidates(normalized_partial, candidates)
     display_map = build_path_display_map(ranked)
@@ -115,7 +112,7 @@ def build_path_completions(
 def build_file_path_completions(
     partial: str, indexer: "ProjectIndexer"
 ) -> Iterable[Completion]:
-    """YIELDS FILE PATH COMPLETIONS USING THE STANDARD DISPLAY RULES."""
+    """Yield file path completions using the standard display rules"""
     yield from build_path_completions(
         partial,
         list(indexer.files_by_rel.keys()),
@@ -131,7 +128,7 @@ def _yield_numeric_suffix_completions(
     *,
     suffix: str,
 ) -> Iterable[Completion]:
-    """YIELDS NUMERIC COMPLETIONS MATCHING THE CURRENT PARTIAL INPUT."""
+    """Yield numeric completions matching the current partial input"""
     for value in values:
         text = str(value)
         if text.startswith(partial):
@@ -147,7 +144,7 @@ def build_file_range_completions(
     *,
     lines_count: int,
 ) -> Iterable[Completion]:
-    """YIELDS RANGE-SUFFIX COMPLETIONS FOR `<@file:path:...>` QUERIES."""
+    """Yield range-suffix completions for `<@file:path:...>` queries"""
     if not partial:
         yield Completion("first ", start_position=0, display="first [n]")
         yield Completion("last ", start_position=0, display="last [n]")
@@ -204,9 +201,9 @@ def build_file_range_completions(
 
 def split_file_query_and_range(query: str) -> tuple[str, str | None]:
     """
-    SPLITS A FILE QUERY INTO ITS RELATIVE PATH AND OPTIONAL RANGE SEGMENT.
+    Split a file query into its relative path and optional range segment.
 
-    ABSOLUTE PATHS ARE LEFT INTACT SO CALLERS CAN REJECT THEM CONSISTENTLY.
+    Absolute paths are left intact so callers can reject them consistently.
     """
     normalized = query.replace("\\", "/")
     if re.match(r"^[a-zA-Z]:/", normalized):
@@ -220,7 +217,7 @@ def split_file_query_and_range(query: str) -> tuple[str, str | None]:
 
 @dataclass(slots=True, frozen=True)
 class GitMentionQuery:
-    """NORMALIZED REPRESENTATION OF A `<@git:...>` MENTION."""
+    """Normalized representation of a `<@git:...>` mention"""
 
     branch: str | None
     command: str
@@ -243,7 +240,7 @@ GIT_COMMAND_COMPLETIONS = (
 
 
 def escape_git_branch_name(branch: str) -> str:
-    """ESCAPES BRANCH CHARACTERS THAT WOULD BREAK THE MENTION GRAMMAR."""
+    """Escape branch characters that would break the mention grammar"""
     escaped: list[str] = []
     for char in branch:
         if char in {"\\", "]", ">"}:
@@ -253,7 +250,7 @@ def escape_git_branch_name(branch: str) -> str:
 
 
 def unescape_git_branch_name(branch: str) -> str:
-    """DECODES A BRANCH NAME PREVIOUSLY ESCAPED FOR THE GIT MENTION GRAMMAR."""
+    """Decode a branch name previously escaped for the Git mention grammar"""
     decoded: list[str] = []
     escaped = False
     for char in branch:
@@ -271,7 +268,7 @@ def unescape_git_branch_name(branch: str) -> str:
 
 
 def split_git_branch_prefix(body: str) -> tuple[str | None, str | None, str] | None:
-    """SPLITS AN OPTIONAL BRACKETED BRANCH PREFIX FROM A GIT MENTION BODY."""
+    """Split an optional bracketed branch prefix from a Git mention body"""
     if not body.startswith("["):
         return None, None, body
 
@@ -300,7 +297,7 @@ def split_git_branch_prefix(body: str) -> tuple[str | None, str | None, str] | N
 
 
 def parse_incomplete_git_branch_prefix(body: str) -> str | None:
-    """RETURNS THE RAW BRANCH PARTIAL WHEN THE USER IS STILL TYPING `[branch`."""
+    """Return the raw branch partial while the user is still typing `[branch`"""
     if not body.startswith("["):
         return None
 
@@ -324,7 +321,7 @@ def parse_incomplete_git_branch_prefix(body: str) -> str | None:
 
 
 def parse_git_mention_query(body: str) -> GitMentionQuery | None:
-    """PARSES A GIT MENTION BODY INTO OPTIONAL BRANCH, COMMAND, AND ARGUMENT."""
+    """Parse a Git mention body into branch, command, and argument parts"""
     branch, _, remainder = split_git_branch_prefix(body) or (None, None, body)
     if remainder == "status":
         return GitMentionQuery(branch=branch, command="status", argument=None)
@@ -344,7 +341,7 @@ def parse_git_mention_query(body: str) -> GitMentionQuery | None:
 
 
 class MentionMod(ABC):
-    """BASE CLASS FOR BUILDING CUSTOMIZABLE MENTION EXTENSIONS (MODS)."""
+    """Base class for customizable mention extensions"""
 
     name: str
     pattern: str
@@ -352,14 +349,14 @@ class MentionMod(ABC):
     @abstractmethod
     async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
         """
-        RESOLVES THE RAW MENTION STRING INTO ITS TARGET CONTENT.
+        Resolve a raw mention string into its target content.
 
         Args:
-            full_match_text (str): Exact regex matched token.
-            context (ProjectContext): Safe I/O reader.
+            `full_match_text` (str): Exact regex matched token.
+            `context` (ProjectContext): Safe I/O reader.
 
         Returns:
-            str: Materialized code snippet implementation formatting blocks.
+            `str`: Materialized code snippet implementation formatting blocks.
         """
         pass
 
@@ -368,20 +365,20 @@ class MentionMod(ABC):
         self, text_before_cursor: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
         """
-        ANALYZES TEXT STATE TO YIELD CONTEXT-AWARE COMPLETIONS.
+        Analyze text state and yield context-aware completions.
 
         Args:
-            text_before_cursor (str): Full line buffer snippet.
-            indexer (ProjectIndexer): Direct fuzzy path querying.
+            `text_before_cursor` (str): Full line buffer snippet.
+            `indexer` (ProjectIndexer): Direct fuzzy path querying.
 
         Yields:
-            Completion: Active drop-down item for standard menus.
+            `Completion`: Active drop-down item for standard menus.
         """
         pass
 
 
 def _must_match(pattern: str, text: str) -> re.Match[str]:
-    """ASSERTS INTERNAL MOD REGEX INVARIANTS FOR TEXT ALREADY MATCHED BY THE REGISTRY."""
+    """Assert internal regex invariants for text already matched by the registry"""
     match = re.match(pattern, text)
     if match is None:
         raise ValueError(f"pattern '{pattern}' did not match '{text}'")
@@ -389,24 +386,24 @@ def _must_match(pattern: str, text: str) -> re.Match[str]:
 
 
 class ModRegistry:
-    """CENTRAL REGISTRY MAPPING DYNAMICALLY LOADED MENTION MODS TO THE ENGINE."""
+    """Registry that maps loaded mention mods into the engine"""
 
     def __init__(self):
-        """INITIALIZES EMPTY MAPS."""
+        """Initialize empty mod and pattern storage"""
         self.mods: list[MentionMod] = []
         self.pattern: re.Pattern | None = None
 
     def register(self, mod: MentionMod) -> None:
         """
-        PUSHES A NEW CUSTOM MOD IMPLEMENTATION INTO STANDARD QUEUES.
+        Register a new mod implementation.
 
         Args:
-            mod (MentionMod): Object referencing the mod.
+            `mod` (MentionMod): Object referencing the mod.
         """
         self.mods.append(mod)
 
     def register_defaults(self) -> None:
-        """LOADS THE STANDARD SUITE OF BUILT-IN MENTIONS."""
+        """Load the standard suite of built-in mentions"""
         self.register(ProjectMod())
         self.register(FileMod())
         self.register(DirMod())
@@ -416,7 +413,7 @@ class ModRegistry:
         self.register(SymbolMod())
 
     def build(self) -> None:
-        """COMPILES AN O(N) MULTI-GROUP REGEX FOR ULTRA-FAST SINGLE PASS RESOLUTION."""
+        """Compile a multi-group regex for single-pass resolution"""
         parts = []
         for mod in self.mods:
             parts.append(f"(?P<{mod.name}>{mod.pattern})")
@@ -424,13 +421,13 @@ class ModRegistry:
 
     def get_mod_and_text(self, match: re.Match) -> tuple[MentionMod, str]:
         """
-        TRANSLATES MATCH OUTPUTS INTO ISOLATED MODULAR OPERATIONS.
+        Translate a regex match into its corresponding mod and raw text.
 
         Args:
-            match (re.Match): Regex executed context window reference.
+            `match` (re.Match): Regex executed context window reference.
 
         Returns:
-            tuple[MentionMod, str]: Bound reference for isolated mod mapping.
+            `tuple` [MentionMod, str]: Bound reference for isolated mod mapping.
         """
         for mod in self.mods:
             text = match.group(mod.name)
@@ -442,14 +439,14 @@ class ModRegistry:
         self, text_before_cursor: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
         """
-        DELEGATES COMPLETION REQUESTS TO MODS, AND HANDLES BASE TAGS.
+        Delegate completion requests to mods and handle base tags.
 
         Args:
-            text_before_cursor (str): Leftward buffer token window search target.
-            indexer (ProjectIndexer): Path provider for logic mapping.
+            `text_before_cursor` (str): Leftward buffer token window search target.
+            `indexer` (ProjectIndexer): Path provider for logic mapping.
 
         Yields:
-            Completion: Processed payload prompt-toolkit completion object.
+            `Completion`: Processed payload prompt-toolkit completion object.
         """
         for mod in self.mods:
             yield from mod.get_completions(text_before_cursor, indexer)
@@ -485,7 +482,7 @@ class ModRegistry:
 
 
 class ProjectMod(MentionMod):
-    """PARSES AND HANDLES [@PROJECT] GLOBAL DIRECTORY TREE OUTPUT INSTRUCTIONS."""
+    """Handle `[@project]` mentions"""
 
     name = "mod_project"
     pattern = r"\[@project\]"
@@ -500,7 +497,7 @@ class ProjectMod(MentionMod):
 
 
 class FileMod(MentionMod):
-    """PROCESSES <@FILE:PATH:RANGE> STRUCTURES RESOLVING STANDARD FILE REQUESTS."""
+    """Handle `<@file:path:range>` mentions"""
 
     name = "mod_file"
     pattern = r"<@file:([^>]+?)(?::([^>]+))?>"
@@ -549,7 +546,7 @@ class FileMod(MentionMod):
 
 
 class DirMod(MentionMod):
-    """ATTACHES ALL INTERNAL RECURSIVE FILE RESOURCES CONTAINED IN <@DIR:PATH>."""
+    """Handle `<@dir:path>` mentions"""
 
     name = "mod_dir"
     pattern = r"<@dir:([^>]+)>"
@@ -571,7 +568,7 @@ class DirMod(MentionMod):
 
 
 class TreeMod(MentionMod):
-    """LOCATES EXPLICIT SPECIFIC PATH MAP MAPPING TREE LOGIC INSIDE <@TREE:PATH:LEVEL>."""
+    """Handle `<@tree:path:level>` mentions"""
 
     name = "mod_tree"
     pattern = r"<@tree:([^>:]+?)(?::([^>]+))?>"
@@ -633,7 +630,7 @@ class TreeMod(MentionMod):
 
 
 class ExtMod(MentionMod):
-    """PROCESSES BULK FORMAT TARGETING OPERATIONS VIA THE <@EXT:CSV_LIST> INSTRUCTION."""
+    """Handle bulk extension queries such as `<@ext:csv_list>`"""
 
     name = "mod_ext"
     pattern = r"<@(type|ext):([^>]+)>"
@@ -657,7 +654,7 @@ class ExtMod(MentionMod):
 
 
 class GitMod(MentionMod):
-    """FETCHES REAL-TIME STATUS AND WORKING TREE MODIFICATIONS NATIVELY USING GIT."""
+    """Handle Git mentions for status, diff, log, and history views"""
 
     name = "mod_git"
     pattern = (
@@ -674,7 +671,7 @@ class GitMod(MentionMod):
     def _run_git_completion_command(
         self, repo_root: Path, *args: str
     ) -> tuple[int, str, str]:
-        """RUNS A NON-INTERACTIVE GIT COMMAND FOR COMPLETION DATA COLLECTION."""
+        """Run a non-interactive Git command for completion data"""
         try:
             proc = subprocess.run(
                 ["git", "--no-pager", *args],
@@ -690,7 +687,7 @@ class GitMod(MentionMod):
         return proc.returncode, proc.stdout, proc.stderr.strip()
 
     def _read_git_branches(self, repo_root: Path) -> list[str]:
-        """RETURNS LOCAL BRANCH NAMES CACHED FOR A SHORT TTL."""
+        """Return local branch names cached for a short TTL"""
         cache_key = str(repo_root.resolve())
         cached = self._branch_cache.get(cache_key)
         now = time.monotonic()
@@ -712,7 +709,7 @@ class GitMod(MentionMod):
         return branches
 
     def _read_git_commit_count(self, repo_root: Path, branch: str | None) -> int:
-        """RETURNS THE LIVE COMMIT COUNT FOR HEAD OR THE PROVIDED BRANCH."""
+        """Return the live commit count for `HEAD` or a provided branch"""
         cache_key = (str(repo_root.resolve()), branch)
         cached = self._commit_count_cache.get(cache_key)
         now = time.monotonic()
@@ -731,7 +728,7 @@ class GitMod(MentionMod):
         return count
 
     def _yield_git_branch_placeholder(self, partial: str) -> Iterable[Completion]:
-        """SUGGESTS THE BRANCH PREFIX PLACEHOLDER BEFORE ANY COMMAND IS CHOSEN."""
+        """Suggest the branch placeholder before any command is chosen"""
         suggestion = "[branch]"
         if suggestion.startswith(partial.lower()):
             yield Completion("[", start_position=-len(partial), display=suggestion)
@@ -739,7 +736,7 @@ class GitMod(MentionMod):
     def _yield_git_branch_completions(
         self, partial: str, indexer: "ProjectIndexer"
     ) -> Iterable[Completion]:
-        """SUGGESTS BRANCH NAMES AFTER THE USER TYPES `<@git:[`."""
+        """Suggest branch names after the user types `<@git:[`"""
         partial_decoded = unescape_git_branch_name(partial)
         for branch in self._read_git_branches(indexer.target_dir):
             if partial_decoded and partial_decoded not in branch:
@@ -825,7 +822,7 @@ class GitMod(MentionMod):
 
 
 class SymbolMod(MentionMod):
-    """INVOKES AST EXTRACTION PROCESSES PARSING NESTED REFERENCES."""
+    """Handle symbol mentions by extracting nested references"""
 
     name = "mod_symbol"
     pattern = r"<@symbol:([^>:]+?)(?::([^>]+))?>"

@@ -1,6 +1,4 @@
-"""
-UNIT TESTS COVERING PATH MATCHING AND COMPLETION PRESENTATION HELPERS.
-"""
+"""Tests for path matching and completion presentation helpers"""
 
 from pathlib import Path
 from typing import cast
@@ -12,7 +10,7 @@ from promptify.core.mods import DirMod, FileMod
 
 
 class IndexerStub:
-    """MINIMAL INDEXER SHAPE FOR COMPLETION TESTS."""
+    """Minimal indexer shape used by completion tests"""
 
     def __init__(self, files_by_rel: dict[str, FileMeta], dirs: set[str]):
         self.files_by_rel = files_by_rel
@@ -20,7 +18,7 @@ class IndexerStub:
 
 
 def test_rank_path_candidates_prioritizes_filename_hits():
-    """BASENAME AND PATH-TAIL HITS SHOULD RISE ABOVE LOOSER FUZZY CANDIDATES."""
+    """Filename and path-tail hits should outrank looser fuzzy matches"""
     ranked = rank_path_candidates(
         "main",
         [
@@ -35,7 +33,7 @@ def test_rank_path_candidates_prioritizes_filename_hits():
 
 
 def test_build_path_display_map_disambiguates_duplicate_names():
-    """DUPLICATE BASENAMES SHOULD GAIN JUST ENOUGH PARENT CONTEXT TO STAY UNIQUE."""
+    """Duplicate basenames should gain enough parent context to stay unique"""
     display_map = build_path_display_map(
         [
             "src/auth/main.py",
@@ -52,7 +50,7 @@ def test_build_path_display_map_disambiguates_duplicate_names():
 
 
 def test_file_mod_completions_support_backslash_queries_and_compact_meta():
-    """WINDOWS-STYLE PATH INPUTS SHOULD COMPLETE INTO NORMALIZED PROJECT PATHS."""
+    """Windows-style paths should complete into normalized project paths"""
     indexer = IndexerStub(
         files_by_rel={
             "src/main.py": FileMeta(
@@ -83,7 +81,7 @@ def test_file_mod_completions_support_backslash_queries_and_compact_meta():
 
 
 def test_file_mod_completions_are_not_limited_to_fifteen_items():
-    """FILE COMPLETIONS SHOULD FLOW THROUGH THE FULL RANKED RESULT SET."""
+    """File completions should include the full ranked result set"""
     files = {
         f"src/file_{idx:02d}.py": FileMeta(
             path=Path(f"src/file_{idx:02d}.py"),
@@ -104,7 +102,7 @@ def test_file_mod_completions_are_not_limited_to_fifteen_items():
 
 
 def test_file_mod_exact_match_helpers_do_not_show_path_meta():
-    """CLOSING HELPERS SHOULD STAY PLAIN INSTEAD OF REPEATING DIRECTORY META."""
+    """Exact-match helpers should not repeat directory metadata"""
     indexer = IndexerStub(
         files_by_rel={
             "src/main.py": FileMeta(
@@ -129,7 +127,7 @@ def test_file_mod_exact_match_helpers_do_not_show_path_meta():
 
 
 def test_dir_mod_completions_do_not_show_path_meta():
-    """DIRECTORY COMPLETIONS SHOULD KEEP THE MENU LIGHTWEIGHT AND LABEL-ONLY."""
+    """Directory completions should keep the menu lightweight and label-only"""
     indexer = IndexerStub(
         files_by_rel={},
         dirs={"src/features/auth", "src/features/billing"},

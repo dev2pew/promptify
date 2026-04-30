@@ -1,6 +1,4 @@
-"""
-HANDLES PROJECT CASE SETTINGS AND GITIGNORE PATH SPECIFICATION RULES.
-"""
+"""Handle case configuration and ignore-pattern rules"""
 
 import json
 import fnmatch
@@ -14,7 +12,7 @@ from ..utils.i18n import get_string
 
 
 class CaseConfig:
-    """LOADS AND VALIDATES WORKFLOW CASE DIRECTORY CONFIGURATIONS."""
+    """Load and validate a workflow case directory configuration"""
 
     def __init__(self, case_dir: Path):
         self.case_dir = case_dir
@@ -30,7 +28,7 @@ class CaseConfig:
         self.load_config()
 
     def load_config(self) -> None:
-        """ATTEMPTS TO MOUNT JSON PROPERTIES INTO INSTANCE STATE NATIVELY."""
+        """Load config values from `config.json` into the instance state"""
         if self.config_file.exists():
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
@@ -72,15 +70,15 @@ class CaseConfig:
                     legacy_file = data.get("legacy")
                     if isinstance(legacy_file, str) and legacy_file:
                         self.legacy_file = legacy_file
-            except Exception as e:
-                log.warning(
+            except Exception as err:
+                log.warn(
                     get_string("config_parse_failed", "failed to parse config").format(
-                        name=self.name, error=e
+                        name=self.name, err=err
                     )
                 )
 
     def get_ignore_spec(self, target_project_dir: Path) -> pathspec.PathSpec:
-        """MERGES STANDARD IGNORES, PROJECT GITIGNORE, AND CASEIGNORE INTO ONE PATTERN SPEC."""
+        """Merge default ignores, project `.gitignore`, and case ignores"""
         lines = list(APP_SETTINGS.runtime.default_ignores)
 
         target_ignore_path = target_project_dir / ".gitignore"
@@ -88,10 +86,10 @@ class CaseConfig:
             try:
                 with open(target_ignore_path, "r", encoding="utf-8") as f:
                     lines.extend(f.readlines())
-            except Exception as e:
-                log.warning(
+            except Exception as err:
+                log.warn(
                     get_string("gitignore_read_failed", "gitignore error").format(
-                        error=e
+                        err=err
                     )
                 )
 
@@ -100,10 +98,10 @@ class CaseConfig:
             try:
                 with open(case_ignore_path, "r", encoding="utf-8") as f:
                     lines.extend(f.readlines())
-            except Exception as e:
-                log.warning(
+            except Exception as err:
+                log.warn(
                     get_string("caseignore_read_failed", "caseignore error").format(
-                        error=e
+                        err=err
                     )
                 )
 
@@ -112,7 +110,7 @@ class CaseConfig:
     def is_file_allowed(
         self, file_path: Path, target_project_dir: Path, spec: pathspec.PathSpec
     ) -> bool:
-        """CHECKS IF A GIVEN FILE SATISFIES THE SPECIFIED EXTENSION AND IGNORE RULES."""
+        """Return whether a file passes the configured type and ignore rules"""
         rel_path = str(file_path.relative_to(target_project_dir)).replace("\\", "/")
 
         match_path = rel_path + ("/" if file_path.is_dir() else "")

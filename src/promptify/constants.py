@@ -1,6 +1,4 @@
-"""
-CONSTANTS AND STATIC MAPPINGS FOR THE PROMPTIFY APPLICATION.
-"""
+"""Constants and static mappings for the `promptify` application"""
 
 # MAPS FILE EXTENSIONS TO THEIR RESPECTIVE SINGLE-LINE COMMENT SYNTAX
 COMMENT_SYNTAX: dict[str, tuple[str, str]] = {

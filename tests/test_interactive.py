@@ -1,6 +1,4 @@
-"""
-UNIT TESTS EXERCISING THE RUNTIME INTERACTIVE EDITOR SURFACE.
-"""
+"""Tests for the interactive editor runtime surface"""
 
 import asyncio
 from typing import Any, cast
@@ -26,7 +24,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_interactive_bindings_register_supported_runtime_keys(app_components):
-    """KEYBINDINGS SHOULD BUILD CLEANLY AND EXPOSE THE RUNTIME PASTE ENTRYPOINTS."""
+    """Keybindings should build cleanly and expose the runtime paste entry points"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
 
@@ -42,7 +40,7 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
 
 
 async def test_interactive_editor_runtime_handles_bracketed_paste(app_components):
-    """THE LIVE EDITOR SHOULD ACCEPT BRACKETED PASTE INPUT WITHOUT CRASHING."""
+    """The live editor should accept bracketed paste input without crashing"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
     payload = "x" * editor.BULK_EDIT_SIZE_THRESHOLD
@@ -71,7 +69,7 @@ async def test_interactive_editor_runtime_handles_bracketed_paste(app_components
 async def test_interactive_editor_runtime_paste_preserves_undo_redo_history(
     app_components,
 ):
-    """LIVE PASTE SHOULD LEAVE THE BUFFER WITH A CORRECT UNDO/REDO HISTORY."""
+    """Live paste should preserve a correct undo and redo history"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
     payload = "x" * editor.BULK_EDIT_SIZE_THRESHOLD
@@ -106,7 +104,7 @@ async def test_interactive_editor_runtime_paste_preserves_undo_redo_history(
 
 
 async def test_interactive_editor_runtime_save_returns_live_buffer(app_components):
-    """CTRL+S SHOULD EXIT THE LIVE EDITOR AND RETURN THE CURRENT BUFFER CONTENT."""
+    """Ctrl+S should exit the live editor and return the current buffer content"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
 
@@ -124,7 +122,7 @@ async def test_interactive_editor_runtime_save_returns_live_buffer(app_component
 
 
 async def test_interactive_editor_runtime_paste_replaces_selection(app_components):
-    """LIVE BRACKETED PASTE SHOULD REPLACE THE ACTIVE SELECTION INSTEAD OF APPENDING."""
+    """Live bracketed paste should replace the active selection instead of appending"""
     context, resolver = app_components
     editor = InteractiveEditor("old text", context.indexer, resolver)
     editor.buffer.selection_state = SelectionState(original_cursor_position=0)
@@ -152,7 +150,7 @@ async def test_interactive_editor_runtime_paste_replaces_selection(app_component
 async def test_interactive_editor_runtime_handles_modified_insert_sequences(
     app_components, monkeypatch
 ):
-    """XTERM-STYLE MODIFIED INSERT ESCAPE SEQUENCES SHOULD PASTE THE SYSTEM CLIPBOARD."""
+    """Modified insert escape sequences should paste the system clipboard"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
     payloads = iter(["shift insert", "ctrl shift insert"])
@@ -186,7 +184,7 @@ async def test_interactive_editor_runtime_handles_modified_insert_sequences(
 async def test_interactive_editor_completer_surfaces_full_ranked_path_results(
     app_components,
 ):
-    """THE LIVE EDITOR COMPLETER SHOULD EXPOSE THE FULL, PRETTY PATH RESULT SET."""
+    """The live editor completer should expose the full ranked path result set"""
     context, resolver = app_components
     for idx in range(20):
         rel_path = f"src/file_{idx:02d}.py"
@@ -216,7 +214,7 @@ async def test_interactive_editor_completer_surfaces_full_ranked_path_results(
 
 
 async def test_interactive_completion_menu_respects_available_width(app_components):
-    """THE COMPLETION MENU SHOULD CLAMP ITS PREFERRED WIDTH TO THE VIEWPORT."""
+    """The completion menu should clamp its preferred width to the viewport"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
     completions = [
@@ -253,29 +251,29 @@ async def test_interactive_completion_menu_respects_available_width(app_componen
 
 
 async def test_interactive_overlay_windows_use_responsive_dimensions(app_components):
-    """HELP AND ERROR PANELS SHOULD SCALE VIA MIN/MAX BOUNDS INSTEAD OF FIXED SIZES."""
+    """Help and error panels should scale via min and max bounds"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
 
     help_width = cast(Dimension, editor.help_window.width)
     help_height = cast(Dimension, editor.help_window.height)
-    error_width = cast(Dimension, editor.error_window.width)
-    error_height = cast(Dimension, editor.error_window.height)
+    err_width = cast(Dimension, editor.err_window.width)
+    err_height = cast(Dimension, editor.err_window.height)
 
     assert help_width.weight == 1
     assert help_width.min == 40
     assert help_width.max == 160
     assert help_height.weight == 1
-    assert error_width.weight == 1
-    assert error_width.min == 28
-    assert error_width.max == 96
-    assert error_height.weight == 1
+    assert err_width.weight == 1
+    assert err_width.min == 28
+    assert err_width.max == 96
+    assert err_height.weight == 1
 
 
 async def test_interactive_editor_runtime_search_opens_and_closes_cleanly(
     app_components,
 ):
-    """SEARCH SHOULD OPEN AND CLOSE WITHOUT LEAVING FOCUS OR STATE STUCK."""
+    """Search should open and close without leaving focus or state stuck"""
     context, resolver = app_components
     editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
 
@@ -301,7 +299,7 @@ async def test_interactive_editor_runtime_search_opens_and_closes_cleanly(
 async def test_interactive_editor_search_step_moves_forward_and_backward(
     app_components,
 ):
-    """SEARCH NAVIGATION SHOULD ADVANCE, REVERSE, AND WRAP PREDICTABLY."""
+    """Search navigation should advance, reverse, and wrap predictably"""
     context, resolver = app_components
     editor = InteractiveEditor(
         "alpha beta alpha gamma alpha", context.indexer, resolver
@@ -327,7 +325,7 @@ async def test_interactive_editor_search_step_moves_forward_and_backward(
 async def test_interactive_editor_runtime_help_returns_focus_to_search(
     app_components,
 ):
-    """HELP SHOULD BE USABLE DURING SEARCH AND RESTORE FOCUS TO THE SEARCH BAR."""
+    """Help should be usable during search and restore focus to the search bar"""
     context, resolver = app_components
     editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
 
@@ -357,7 +355,7 @@ async def test_interactive_editor_runtime_help_returns_focus_to_search(
 async def test_interactive_editor_runtime_search_selection_clears_on_navigation(
     app_components,
 ):
-    """SEARCH FIELD SELECTION SHOULD CLEAR AFTER PLAIN CURSOR MOVEMENT."""
+    """Search field selection should clear after plain cursor movement"""
     context, resolver = app_components
     editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
 
@@ -397,7 +395,7 @@ async def test_interactive_editor_runtime_search_selection_clears_on_navigation(
 async def test_interactive_editor_search_status_reports_active_match_counts(
     app_components,
 ):
-    """SEARCH STATUS SHOULD REPORT THE ACTIVE MATCH ORDINAL AND TOTAL MATCHES."""
+    """Search status should report the active match ordinal and total matches"""
     context, resolver = app_components
     editor = InteractiveEditor(
         "alpha beta alpha gamma alpha", context.indexer, resolver
@@ -422,7 +420,7 @@ async def test_interactive_editor_search_status_reports_active_match_counts(
 
 
 async def test_interactive_editor_search_reuses_session_history(app_components):
-    """REOPENING SEARCH SHOULD PREFILL AND CYCLE RECENT SESSION QUERIES."""
+    """Reopening search should prefill and cycle recent session queries"""
     context, resolver = app_components
     editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
     editor.search_visible = True
@@ -445,7 +443,7 @@ async def test_interactive_editor_search_reuses_session_history(app_components):
 async def test_interactive_editor_help_restores_search_cursor_and_selection(
     app_components,
 ):
-    """HELP SHOULD RESTORE THE SEARCH FIELD CURSOR AND SELECTION EXACTLY."""
+    """Help should restore the search field cursor and selection exactly"""
     context, resolver = app_components
     editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
     editor.search_visible = True
@@ -463,7 +461,7 @@ async def test_interactive_editor_help_restores_search_cursor_and_selection(
 
 
 async def test_interactive_editor_erases_screen_when_done(app_components, monkeypatch):
-    """THE EDITOR SHOULD ASK PROMPT-TOOLKIT TO ERASE ITS UI WHEN THE APP EXITS."""
+    """The editor should ask prompt-toolkit to erase its UI when it exits"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
     observed: dict[str, object] = {}
@@ -488,7 +486,7 @@ async def test_interactive_editor_erases_screen_when_done(app_components, monkey
 async def test_interactive_editor_toolbar_and_token_status_follow_mode(
     app_components,
 ):
-    """THE STATUS STRIP SHOULD REFLECT SEARCH AND BUSY STATES CHEAPLY."""
+    """The status strip should reflect search and busy states efficiently"""
     context, resolver = app_components
     editor = InteractiveEditor("alpha", context.indexer, resolver)
 
@@ -505,7 +503,7 @@ async def test_interactive_editor_toolbar_and_token_status_follow_mode(
 async def test_interactive_editor_lexer_flags_incomplete_project_mentions(
     app_components,
 ):
-    """INCOMPLETE PROJECT MENTIONS SHOULD BE TREATED AS INVALID SYNTAX."""
+    """Incomplete project mentions should be treated as invalid syntax"""
     context, resolver = app_components
     editor = InteractiveEditor("[@proj", context.indexer, resolver)
     lexer = cast(Any, editor.main_window.content).lexer
@@ -520,7 +518,7 @@ async def test_interactive_editor_lexer_flags_incomplete_project_mentions(
 async def test_interactive_editor_lexer_flags_unclosed_code_fences(
     app_components,
 ):
-    """THE LAST UNMATCHED CODE FENCE SHOULD BE MARKED AS INVALID SYNTAX."""
+    """The last unmatched code fence should be marked as invalid syntax"""
     context, resolver = app_components
     editor = InteractiveEditor("```py\nprint('x')\n", context.indexer, resolver)
     lexer = cast(Any, editor.main_window.content).lexer
@@ -535,7 +533,7 @@ async def test_interactive_editor_lexer_flags_unclosed_code_fences(
 async def test_interactive_editor_lexer_distinguishes_unresolved_references(
     app_components,
 ):
-    """MISSING FILE-LIKE REFERENCES SHOULD USE THE UNRESOLVED ISSUE STYLE."""
+    """Missing file-like references should use the unresolved issue style"""
     context, resolver = app_components
     editor = InteractiveEditor("<@file:missing.py>", context.indexer, resolver)
     lexer = cast(Any, editor.main_window.content).lexer
@@ -550,7 +548,7 @@ async def test_interactive_editor_lexer_distinguishes_unresolved_references(
 async def test_interactive_editor_collects_save_issues_for_missing_symbols(
     app_components,
 ):
-    """SAVE-TIME ISSUE COLLECTION SHOULD FLAG SYMBOL LOOKUPS AND JUMP TARGETS."""
+    """Save-time issue collection should flag symbol lookups and jump targets"""
     context, resolver = app_components
     editor = InteractiveEditor(
         "<@symbol:app.py:MissingSymbol>", context.indexer, resolver
@@ -566,7 +564,7 @@ async def test_interactive_editor_collects_save_issues_for_missing_symbols(
 async def test_interactive_editor_issue_mode_tracks_issue_navigation(
     app_components,
 ):
-    """ISSUE MODE SHOULD JUMP TO ISSUES AND EXPOSE A NAVIGABLE COUNT."""
+    """Issue mode should jump to issues and expose a navigable count"""
     context, resolver = app_components
     editor = InteractiveEditor("[@proj\n<@file:missing.py>", context.indexer, resolver)
     issues = await editor.collect_save_issues()
@@ -593,11 +591,11 @@ async def test_interactive_editor_issue_mode_tracks_issue_navigation(
             ),
         )
         .splitlines()[0]
-        in editor.error_buffer.text
+        in editor.err_buffer.text
     )
     assert (
         get_string("editor_issue_controls", "[Enter/N] next  ^[R/P] prev  [Esc] close")
-        in editor.error_buffer.text
+        in editor.err_buffer.text
     )
     assert editor.buffer.document.cursor_position_row == 0
 
@@ -621,11 +619,11 @@ async def test_interactive_editor_issue_mode_tracks_issue_navigation(
             ),
         )
         .splitlines()[0]
-        in editor.error_buffer.text
+        in editor.err_buffer.text
     )
     assert (
         get_string("editor_issue_controls", "[Enter/N] next  ^[R/P] prev  [Esc] close")
-        in editor.error_buffer.text
+        in editor.err_buffer.text
     )
     assert editor.buffer.document.cursor_position_row == 1
 
@@ -633,7 +631,7 @@ async def test_interactive_editor_issue_mode_tracks_issue_navigation(
 async def test_interactive_editor_uses_ascii_eof_markers_for_legacy_cmd(
     app_components,
 ):
-    """LEGACY CMD PROFILES SHOULD AVOID UNICODE EOF INDICATORS."""
+    """Legacy cmd profiles should avoid Unicode EOF indicators"""
     context, resolver = app_components
     legacy_profile = detect_terminal_profile(
         {

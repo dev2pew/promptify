@@ -1,12 +1,10 @@
-"""
-UNIT TESTS FOR TERMINAL PROFILE DETECTION AND LEGACY FALLBACKS.
-"""
+"""Tests for terminal profile detection and legacy fallbacks"""
 
 from promptify.core.terminal import detect_terminal_profile
 
 
 def test_detect_terminal_profile_prefers_vscode_markers():
-    """VSCODE TERMINALS SHOULD STAY ON THE MODERN PROFILE."""
+    """VS Code terminals should stay on the modern profile"""
     profile = detect_terminal_profile(
         {"TERM_PROGRAM": "vscode", "COMSPEC": r"C:\Windows\System32\cmd.exe"},
         override="auto",
@@ -18,7 +16,7 @@ def test_detect_terminal_profile_prefers_vscode_markers():
 
 
 def test_detect_terminal_profile_falls_back_for_legacy_cmd():
-    """PLAIN CMD SESSIONS SHOULD USE ASCII-SAFE CHROME."""
+    """Plain cmd sessions should use ASCII-safe chrome"""
     profile = detect_terminal_profile(
         {
             "COMSPEC": r"C:\Windows\System32\cmd.exe",
@@ -35,7 +33,7 @@ def test_detect_terminal_profile_falls_back_for_legacy_cmd():
 
 
 def test_detect_terminal_profile_uses_safe_conhost_defaults():
-    """CLASSIC WINDOWS CONSOLE HOSTS SHOULD AVOID FULL-SCREEN MODE."""
+    """Classic Windows console hosts should avoid full-screen mode"""
     profile = detect_terminal_profile(
         {
             "COMSPEC": r"C:\Windows\System32\cmd.exe",
