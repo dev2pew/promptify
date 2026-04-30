@@ -1,7 +1,4 @@
-"""
-INTERNATIONALIZATION (I18N) AND LOCALIZATION UTILITIES.
-LOADS LANGUAGE STRINGS FROM JSON TO SUPPORT MULTIPLE REGION DEPLOYMENTS NATIVELY.
-"""
+"""Internationalization helpers for loading localized string resources"""
 
 import json
 from pathlib import Path
@@ -16,7 +13,7 @@ JsonValue: TypeAlias = (
 
 
 def _load_resource_text(locale: str, resource_name: str) -> str | None:
-    """LOADS A LOCALE-SCOPED TEXT RESOURCE, FALLING BACK TO ENGLISH IF NEEDED."""
+    """Load a locale-scoped text resource, falling back to English when needed"""
     resource_path = STRINGS_DIR / locale / resource_name
     if not resource_path.exists() and locale != "en":
         resource_path = STRINGS_DIR / "en" / resource_name
@@ -31,7 +28,7 @@ def _load_resource_text(locale: str, resource_name: str) -> str | None:
 
 
 def _resolve_json_value(locale: str, value: JsonValue) -> JsonValue:
-    """RESOLVES RESOURCE REFERENCES WITHOUT CHANGING THE PUBLIC STRING SHAPE."""
+    """Resolve resource references without changing the public JSON shape"""
     if isinstance(value, str) and value.startswith(RESOURCE_PREFIX):
         resource_name = value.removeprefix(RESOURCE_PREFIX).strip()
         if not resource_name:
@@ -51,9 +48,7 @@ def _resolve_json_value(locale: str, value: JsonValue) -> JsonValue:
 
 
 def load_strings() -> dict[str, JsonValue]:
-    """
-    LOADS JSON LOCALIZATION STRUCTURES PARSING SYSTEM ENVIRONMENTS CONFIGURATIONS.
-    """
+    """Load localized strings for the configured locale"""
     file_path = STRINGS_DIR / f"{LOCALE}.json"
 
     if not file_path.exists():
@@ -81,6 +76,6 @@ strings: dict[str, JsonValue] = load_strings()
 
 
 def get_string(key: str, default: str = "") -> str:
-    """RETURNS A LOCALIZED STRING VALUE WITH A STRICT STRING FALLBACK."""
+    """Return a localized string with a plain-string fallback"""
     value = strings.get(key, default)
     return value if isinstance(value, str) else default

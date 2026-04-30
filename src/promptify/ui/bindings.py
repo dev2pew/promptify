@@ -1,6 +1,4 @@
-"""
-KEYBINDING REGISTRY IMPLEMENTING STANDARD AND CUSTOM SHORTCUTS.
-"""
+"""Keybinding registration for standard and custom editor shortcuts"""
 
 import asyncio
 import pyperclip
@@ -18,7 +16,7 @@ from ..core.context import get_comment_syntax
 
 
 def detect_indent_style(document: Document) -> str:
-    """ADAPTIVELY DETECTS INDENTATION FORMAT BASED ON THE USER'S WORKSPACE."""
+    """Detect the indentation style used in the current document"""
     for line in document.lines:
         if line.startswith("\t"):
             return "\t"
@@ -37,12 +35,12 @@ def setup_keybindings(editor) -> KeyBindings:
         return editor.help_visible
 
     @Condition
-    def is_error_visible() -> bool:
-        return editor.error_visible
+    def is_err_visible() -> bool:
+        return editor.err_visible
 
     @Condition
     def is_issue_mode_active() -> bool:
-        return editor.issue_mode_active and editor.error_visible
+        return editor.issue_mode_active and editor.err_visible
 
     @Condition
     def has_completions_menu() -> bool:
@@ -99,7 +97,7 @@ def setup_keybindings(editor) -> KeyBindings:
 
     @custom_bindings.add("c-f", filter=editor_focus | search_focus, eager=True)
     def _search(event) -> None:
-        """SHOWS THE CUSTOM SEARCH BAR WITHOUT ENTERING PROMPT-TOOLKIT SEARCH MODE."""
+        """Open the custom search bar without entering prompt-toolkit search mode"""
         editor.open_search()
 
     @custom_bindings.add("escape", filter=is_help_visible)
@@ -108,13 +106,13 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.note_user_activity()
         editor.close_help()
 
-    @custom_bindings.add("escape", filter=is_error_visible)
-    def _close_error(event) -> None:
+    @custom_bindings.add("escape", filter=is_err_visible)
+    def _close_err(event) -> None:
         editor.note_user_activity()
         if editor.issue_mode_active:
             editor.deactivate_issue_mode()
         else:
-            editor.error_visible = False
+            editor.err_visible = False
             event.app.layout.focus(editor.main_window)
 
     @custom_bindings.add("enter", filter=is_issue_mode_active)
@@ -129,10 +127,10 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.note_user_activity()
         editor.step_issue(-1)
 
-    @custom_bindings.add("enter", filter=is_error_visible & ~is_issue_mode_active)
-    def _dismiss_error(event) -> None:
+    @custom_bindings.add("enter", filter=is_err_visible & ~is_issue_mode_active)
+    def _dismiss_err(event) -> None:
         editor.note_user_activity()
-        editor.error_visible = False
+        editor.err_visible = False
         event.app.layout.focus(editor.main_window)
 
     @custom_bindings.add("up", filter=editor_focus & has_completions_menu)

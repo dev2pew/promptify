@@ -1,7 +1,4 @@
-"""
-CLI TERMINAL TEXT EDITOR DRIVEN BY PROMPT-TOOLKIT AND PYGMENTS.
-IMPLEMENTS HIGHLIGHTING, AUTOCOMPLETION, INVALID MENTION MARKING, AND SEARCH.
-"""
+"""Terminal editor built on prompt-toolkit and Pygments"""
 
 import re
 import sys
@@ -77,7 +74,7 @@ try:
     )
     from prompt_toolkit.utils import get_cwidth
 except ImportError:
-    log.error(
+    log.err(
         get_string(
             "err_prompt_toolkit_missing",
             "'prompt_toolkit' library is missing. install it using: 'uv pip install prompt_toolkit'",
@@ -87,7 +84,7 @@ except ImportError:
 
 
 def _fragment_text(fragment: tuple[object, ...]) -> str:
-    """READS PROMPT-TOOLKIT FRAGMENTS THAT MAY OPTIONALLY CARRY A THIRD FIELD."""
+    """Read prompt-toolkit fragments that may carry an optional third field"""
     if len(fragment) < 2 or not isinstance(fragment[1], str):
         return ""
     return fragment[1]
@@ -96,7 +93,7 @@ def _fragment_text(fragment: tuple[object, ...]) -> str:
 def _flatten_fragments_to_chars(
     fragments: StyleAndTextTuples,
 ) -> list[tuple[str, str]]:
-    """FLATTENS FRAGMENTS INTO STYLE/CHARACTER PAIRS FOR RANGE-SAFE REWRITES."""
+    """Flatten fragments into style and character pairs for safe rewrites"""
     chars = []
     for fragment in fragments:
         style = cast(str, fragment[0])
@@ -111,7 +108,7 @@ def _append_original_token_range(
     start: int,
     end: int,
 ) -> None:
-    """RESTORES A STYLE-PRESERVING TOKEN SLICE FROM FLATTENED CHARACTER DATA."""
+    """Restore a style-preserving token slice from flattened character data"""
     curr_style = None
     curr_text: list[str] = []
 
@@ -137,7 +134,7 @@ try:
     HAS_PYGMENTS = True
 except ImportError:
     HAS_PYGMENTS = False
-    log.warning(
+    log.warn(
         get_string(
             "err_pygments_missing",
             "'pygments' library is missing. syntax highlighting will be disabled. install it using: 'uv pip install pygments'",
@@ -147,7 +144,7 @@ except ImportError:
 try:
     from rapidfuzz import process  # NOQA: F401
 except ImportError:
-    log.error(
+    log.err(
         get_string(
             "err_rapidfuzz_missing",
             "'rapidfuzz' library is missing. install it using: 'uv pip install rapidfuzz'",
@@ -218,7 +215,7 @@ HELP_TEXT_FALLBACK = (
 
 
 class HighlightTrailingWhitespaceProcessor(Processor):
-    """HIGHLIGHTS TRAILING SPACES AND TABS AT THE END OF EACH LINE."""
+    """Highlight trailing spaces and tabs at the end of each line"""
 
     def apply_transformation(self, transformation_input):
         fragments = transformation_input.fragments
@@ -250,7 +247,7 @@ class HighlightTrailingWhitespaceProcessor(Processor):
 
 
 class EOFNewlineProcessor(Processor):
-    """INDICATES MISSING EOF NEWLINE VISUALLY."""
+    """Visually indicate a missing EOF newline"""
 
     def __init__(self, terminal_profile: TerminalProfile):
         self.terminal_profile = terminal_profile
@@ -275,7 +272,7 @@ class EOFNewlineProcessor(Processor):
 
 @dataclass(frozen=True)
 class SearchHighlightState:
-    """CACHED SEARCH SNAPSHOT FOR HIGHLIGHTING AND STATUS RENDERING."""
+    """Cached search snapshot used for highlighting and status rendering"""
 
     query: str
     matches: tuple[int, ...]
@@ -285,7 +282,7 @@ class SearchHighlightState:
 
 @dataclass(frozen=True)
 class MentionValidationResult:
-    """CAPTURES WHETHER A MENTION IS VALID, MALFORMED, OR UNRESOLVED."""
+    """Capture whether a mention is valid, malformed, or unresolved"""
 
     style: str | None
     message: str | None
@@ -293,7 +290,7 @@ class MentionValidationResult:
 
 @dataclass(frozen=True)
 class EditorIssue:
-    """REPRESENTS A NAVIGABLE EDITOR ISSUE IN THE CURRENT DOCUMENT."""
+    """Represent a navigable editor issue in the current document"""
 
     line: int
     column: int
@@ -304,7 +301,7 @@ class EditorIssue:
 
 
 class SearchMatchProcessor(Processor):
-    """HIGHLIGHTS SEARCH MATCHES WITH DISTINCT ACTIVE AND PASSIVE STYLES."""
+    """Highlight search matches with distinct active and passive styles"""
 
     def __init__(self, get_state: Callable[[], SearchHighlightState | None]):
         self.get_state = get_state
@@ -394,7 +391,7 @@ class SearchMatchProcessor(Processor):
 
 
 class ActiveLineProcessor(Processor):
-    """HIGHLIGHTS THE ACTIVE EDITOR ROW WITHOUT ALTERING THE DOCUMENT TEXT."""
+    """Highlight the active editor row without altering the document text"""
 
     def apply_transformation(self, transformation_input):
         if (
@@ -418,7 +415,7 @@ class ActiveLineProcessor(Processor):
 if HAS_PYGMENTS:
 
     def tokenize_mention(text: str) -> list[tuple[str, str]]:
-        """GRANULAR TOKENIZATION FOR MENTIONS, SUPPORTING SEMANTIC ARGUMENT PARSING."""
+        """Tokenize mentions with semantic parsing for their arguments"""
         if text == "[@project]":
             return [("class:mention-tag", "[@project]")]
 
@@ -516,7 +513,7 @@ if HAS_PYGMENTS:
         return tokens
 
     class CustomPromptLexer(Lexer):
-        """CUSTOM LEXER TO EMBED TAG HIGHLIGHTING AND INVALID MENTION DETECTION NATIVELY."""
+        """Custom lexer for tag highlighting and invalid-mention detection"""
 
         def __init__(
             self,
@@ -535,7 +532,7 @@ if HAS_PYGMENTS:
             self._invalid_fence_cache: dict[int, set[int]] = {}
 
         def get_invalid_fence_lines(self, document: Document) -> set[int]:
-            """FLAGS ONLY THE LAST UNMATCHED FENCE LINE TO AVOID NOISY HIGHLIGHTING."""
+            """Flag only the last unmatched fence line to avoid noisy highlighting"""
             cache_key = id(document.text)
             cached = self._invalid_fence_cache.get(cache_key)
             if cached is not None:
@@ -556,7 +553,7 @@ if HAS_PYGMENTS:
             style: str | None,
             message: str | None,
         ) -> MentionValidationResult:
-            """STORES AND RETURNS A VALIDATION RESULT IN ONE STEP."""
+            """Store and return a validation result in one step"""
             result = MentionValidationResult(style, message)
             self._validation_cache[cache_key] = result
             return result
@@ -566,7 +563,7 @@ if HAS_PYGMENTS:
             path: str,
             label: str = "path",
         ) -> MentionValidationResult | None:
-            """REPORTS PATHS THAT ESCAPE THE PROJECT ROOT."""
+            """Report paths that escape the project root"""
             if not self.resolver.context.is_safe_query_path(path):
                 return MentionValidationResult(
                     "unresolved-reference",
@@ -583,7 +580,7 @@ if HAS_PYGMENTS:
             missing_message: str,
             unsafe_message: str | None = None,
         ) -> MentionValidationResult | None:
-            """VALIDATES THAT A QUERY PATH IS SAFE AND RESOLVES TO A FILE."""
+            """Validate that a query path is safe and resolves to a file"""
             path_issue = self._validate_safe_path(path)
             if path_issue is not None:
                 if unsafe_message is not None:
@@ -601,7 +598,7 @@ if HAS_PYGMENTS:
             return None
 
         def inspect_mention(self, text: str) -> MentionValidationResult:
-            """CLASSIFIES A MENTION AS VALID, MALFORMED, OR UNRESOLVED."""
+            """Classify a mention as valid, malformed, or unresolved"""
             cache_key = (self.indexer.revision, text)
             cached = self._validation_cache.get(cache_key)
             if cached is not None:
@@ -751,7 +748,7 @@ if HAS_PYGMENTS:
                 )
 
         def is_valid_mention(self, text: str) -> bool:
-            """BACKWARD-COMPATIBILITY HELPER FOR BOOLEAN VALIDATION CALLERS."""
+            """Backward-compatibility helper for boolean validation callers"""
             return self.inspect_mention(text).style is None
 
         def lex_document(self, document: Document):
@@ -802,7 +799,7 @@ if HAS_PYGMENTS:
 
 
 class HelpLexer(Lexer):
-    """ROBUST REGEX-BASED LEXER FOR THE HELP WINDOW TEXT."""
+    """Regex-based lexer for help window text"""
 
     def __init__(self):
 
@@ -846,7 +843,7 @@ class HelpLexer(Lexer):
 
 
 class MentionCompleter(Completer):
-    """ROUTES AUTOCOMPLETE GENERATION REQUESTS THROUGH THE DYNAMICALLY REGISTERED MODS."""
+    """Route autocomplete requests through the registered mods"""
 
     def __init__(
         self,
@@ -873,7 +870,7 @@ class MentionCompleter(Completer):
 
 
 class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
-    """COMPLETION MENU CONTROL THAT RESPECTS THE ACTIVE VIEWPORT WIDTH."""
+    """Completion menu control that respects the active viewport width"""
 
     MIN_LABEL_COLUMN_WIDTH = 16
     MIN_META_COLUMN_WIDTH = 12
@@ -883,13 +880,13 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
     MAX_META_WIDTH_RATIO = 0.5
 
     def _get_display_text_width(self, text: str) -> int:
-        """MEASURES PLAIN DISPLAY TEXT CONSISTENTLY WITH PROMPT-TOOLKIT CELLS."""
+        """Measure display text consistently with prompt-toolkit cell widths"""
         return get_cwidth(text)
 
     def _trim_formatted_text_left(
         self, formatted_text: StyleAndTextTuples, max_width: int
     ) -> tuple[StyleAndTextTuples, int]:
-        """TRIMS FROM THE LEFT SO LONG PATHS KEEP THEIR MOST RELEVANT TAIL."""
+        """Trim from the left so long paths keep their most relevant tail"""
         width = fragment_list_width(formatted_text)
         if width <= max_width:
             return formatted_text, width
@@ -919,7 +916,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
     def _get_label_fragments(
         self, completion: Completion, is_current_completion: bool, width: int
     ) -> StyleAndTextTuples:
-        """RENDERS THE LABEL COLUMN WITH SUFFIX-FIRST TRIMMING ON OVERFLOW."""
+        """Render the label column with suffix-first trimming on overflow"""
         if is_current_completion:
             style_str = f"class:completion-menu.completion.current {completion.style} {completion.selected_style}"
         else:
@@ -940,7 +937,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         trim_delta: int,
         padding_delta: int = 1,
     ) -> StyleAndTextTuples:
-        """TRIMS AND PADDS A SINGLE COMPLETION COLUMN CONSISTENTLY."""
+        """Trim and pad a single completion column consistently"""
         text, text_width = self._trim_formatted_text_left(content, width - trim_delta)
         padding = " " * max(0, width - padding_delta - text_width)
 
@@ -950,7 +947,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         )
 
     def _get_width_budget(self, max_available_width: int) -> int:
-        """KEEPS THE POPUP RESPONSIVE BY CAPPING IT BELOW THE FULL VIEWPORT."""
+        """Keep the popup responsive by capping it below the full viewport"""
         if max_available_width <= self.MIN_WIDTH_FOR_META:
             return max_available_width
 
@@ -971,7 +968,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         return min(width_budget, preferred)
 
     def _get_column_widths(self, width: int, complete_state) -> tuple[int, int, bool]:
-        """SPLITS AVAILABLE WIDTH BETWEEN THE LABEL AND THE PATH META COLUMN."""
+        """Split available width between the label and path metadata columns"""
         show_meta = self._show_meta(complete_state)
         natural_label_width = self._get_menu_width(width, complete_state)
         natural_meta_width = self._get_menu_meta_width(width, complete_state)
@@ -1026,7 +1023,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
     def _get_menu_item_meta_fragments(
         self, completion: Completion, is_current_completion: bool, width: int
     ) -> StyleAndTextTuples:
-        """RENDERS PATH META FROM THE RIGHT SO THE LAST SEGMENTS STAY VISIBLE."""
+        """Render path metadata from the right so the tail stays visible"""
         if is_current_completion:
             style_str = "class:completion-menu.meta.completion.current"
         else:
@@ -1040,7 +1037,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         )
 
     def create_content(self, width: int, height: int) -> UIContent:
-        """RENDERS COMPLETIONS USING A VIEWPORT-AWARE LABEL/META SPLIT."""
+        """Render completions using a viewport-aware label and metadata split"""
         complete_state = get_app().current_buffer.complete_state
         if not complete_state:
             return UIContent()
@@ -1072,7 +1069,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
 
 
 class ResponsiveCompletionsMenu(ConditionalContainer):
-    """DROPDOWN MENU THAT TRACKS THE TERMINAL SIZE INSTEAD OF A FIXED WIDTH HINT."""
+    """Dropdown menu that tracks terminal size instead of a fixed width hint"""
 
     def __init__(
         self,
@@ -1101,7 +1098,7 @@ class ResponsiveCompletionsMenu(ConditionalContainer):
 
 
 class InteractiveEditor:
-    """MANAGES THE CORE PROMPT-TOOLKIT TERMINAL EDITOR."""
+    """Manage the core prompt-toolkit terminal editor"""
 
     BULK_EDIT_SUSPEND_SECONDS = APP_SETTINGS.editor_behavior.bulk_edit_suspend_seconds
     BULK_EDIT_SIZE_THRESHOLD = APP_SETTINGS.editor_behavior.bulk_edit_size_threshold
@@ -1178,21 +1175,21 @@ class InteractiveEditor:
             ),
         )
 
-        self.error_visible = False
-        self.error_message = ""
-        self.error_buffer = Buffer(document=Document(""), read_only=True)
-        self.error_window = Window(
-            content=BufferControl(buffer=self.error_buffer),
-            style="class:error-text",
+        self.err_visible = False
+        self.err_message = ""
+        self.err_buffer = Buffer(document=Document(""), read_only=True)
+        self.err_window = Window(
+            content=BufferControl(buffer=self.err_buffer),
+            style="class:err-text",
             wrap_lines=True,
             width=Dimension(
-                min=APP_SETTINGS.editor_layout.error_width_min,
-                max=APP_SETTINGS.editor_layout.error_width_max,
+                min=APP_SETTINGS.editor_layout.err_width_min,
+                max=APP_SETTINGS.editor_layout.err_width_max,
                 weight=1,
             ),
             height=Dimension(
-                min=APP_SETTINGS.editor_layout.error_height_min,
-                max=APP_SETTINGS.editor_layout.error_height_max,
+                min=APP_SETTINGS.editor_layout.err_height_min,
+                max=APP_SETTINGS.editor_layout.err_height_max,
                 weight=1,
             ),
         )
@@ -1265,7 +1262,7 @@ class InteractiveEditor:
         )
 
     def _build_style(self) -> Style:
-        """BUILDS THE EDITOR STYLE MAP AND FALLS BACK IF CONFIG VALUES ARE INVALID."""
+        """Build the editor style map and fall back if config values are invalid"""
         try:
             return Style.from_dict(APP_SETTINGS.theme.styles)
         except Exception:
@@ -1288,10 +1285,10 @@ class InteractiveEditor:
                     "search-match": "bg:#5d4a1d #fff0cb",
                     "search-match-active": "bg:#1f5d8e #f7fbff bold",
                     "current-line": "bg:#262a31",
-                    "error-frame": "bg:#101317",
-                    "error-frame.border": "fg:#768394",
-                    "error-frame.label": "bg:#101317 #d7e6f6 bold",
-                    "error-text": "bg:#171c22 #f2f5f8",
+                    "err-frame": "bg:#101317",
+                    "err-frame.border": "fg:#768394",
+                    "err-frame.label": "bg:#101317 #d7e6f6 bold",
+                    "err-text": "bg:#171c22 #f2f5f8",
                     "mention-tag": "fg:#00ffff bold",
                     "mention-path": "fg:#ffaa00",
                     "mention-range": "fg:#ff55ff",
@@ -1313,7 +1310,7 @@ class InteractiveEditor:
     def _build_centered_overlay(
         self, container, visible_filter: Condition
     ) -> ConditionalContainer:
-        """CENTERS AN INTERACTIVE PANEL WHILE ALLOWING IT TO SCALE WITH THE VIEWPORT."""
+        """Center an interactive panel while allowing it to scale with the viewport"""
         return ConditionalContainer(
             content=HSplit(
                 [
@@ -1334,7 +1331,7 @@ class InteractiveEditor:
         )
 
     def _build_chrome(self, body, title, style: str):
-        """BUILDS RESIZE-SAFE CHROME USING ASCII OR UNICODE BORDER GLYPHS."""
+        """Build resize-safe chrome using ASCII or Unicode border glyphs"""
         border = self.terminal_profile.border
         border_style = f"{style}.border"
         label_style = f"{style}.label"
@@ -1429,7 +1426,7 @@ class InteractiveEditor:
         style: str,
         visible_filter: Condition,
     ) -> Float:
-        """BUILDS A FULL-VIEWPORT CENTERED MODAL FLOAT AROUND RESIZE-SAFE CHROME."""
+        """Build a centered modal float around resize-safe chrome"""
         frame = self._build_chrome(body, title, style)
         return Float(
             content=self._build_centered_overlay(frame, visible_filter),
@@ -1442,7 +1439,7 @@ class InteractiveEditor:
     def _copy_selection_state(
         self, selection_state: SelectionState | None
     ) -> SelectionState | None:
-        """CLONES A SELECTION SNAPSHOT SO HELP OVERLAYS CAN RESTORE IT CLEANLY."""
+        """Clone a selection snapshot so help overlays can restore it cleanly"""
         if selection_state is None:
             return None
         return SelectionState(
@@ -1453,18 +1450,18 @@ class InteractiveEditor:
     def _restore_selection_state(
         self, buffer: Buffer, selection_state: SelectionState | None
     ) -> None:
-        """REAPPLIES A SAVED SELECTION SNAPSHOT TO A TARGET BUFFER."""
+        """Reapply a saved selection snapshot to a target buffer"""
         buffer.selection_state = self._copy_selection_state(selection_state)
 
     def _focus(self, target) -> None:
-        """FOCUSES A TARGET IF AN APPLICATION IS ACTIVE."""
+        """Focus a target if an application is active"""
         try:
             get_app().layout.focus(target)
         except Exception:
             pass
 
     def invalidate(self) -> None:
-        """REQUESTS A REDRAW WHEN AN APPLICATION IS ACTIVE."""
+        """Request a redraw when an application is active"""
         try:
             app = get_app()
         except Exception:
@@ -1473,19 +1470,19 @@ class InteractiveEditor:
             app.invalidate()
 
     def get_text(self, key: str, default: str) -> str:
-        """READS A LOCALIZED UI STRING WITH AN INLINE FALLBACK."""
+        """Read a localized UI string with an inline fallback"""
         return get_string(key, default)
 
     def format_text(self, key: str, default: str, /, **values: object) -> str:
-        """READS AND FORMATS A LOCALIZED UI STRING WITH INLINE FALLBACKS."""
+        """Read and format a localized UI string with inline fallbacks"""
         return self.get_text(key, default).format(**values)
 
     def _set_help_cursor(self, position: int) -> None:
-        """MOVES THE HELP BUFFER CURSOR WITHOUT REACHING THROUGH UNTYPED CONTROLS."""
+        """Move the help buffer cursor without reaching through untyped controls"""
         self.help_buffer.cursor_position = position
 
     def note_user_activity(self) -> None:
-        """CLEARS TRANSIENT STATUS MESSAGES AFTER THE NEXT USER ACTION."""
+        """Clear transient status messages after the next user action"""
         changed = False
         if self._search_message_transient and self.search_message:
             self.search_message = ""
@@ -1499,43 +1496,43 @@ class InteractiveEditor:
             self.invalidate()
 
     def set_passive_status(self, message: str, transient: bool = True) -> None:
-        """SHOWS A SMALL, PASSIVE STATUS MESSAGE IN THE TOP BAR."""
+        """Show a small passive status message in the top bar"""
         self._passive_status = message
         self._passive_status_transient = transient and bool(message)
         self.invalidate()
 
     def _set_search_message(self, message: str, transient: bool = True) -> None:
-        """UPDATES THE SEARCH STATUS MESSAGE AND WHETHER IT AUTO-CLEARS."""
+        """Update the search status message and whether it auto-clears"""
         self.search_message = message
         self._search_message_transient = transient and bool(message)
         self.invalidate()
 
     def _clear_search_message(self) -> None:
-        """CLEARS SEARCH STATUS MESSAGES WITHOUT TOUCHING HISTORY OR FOCUS."""
+        """Clear search status messages without touching history or focus"""
         self.search_message = ""
         self._search_message_transient = False
 
     def _reset_search_navigation(self) -> None:
-        """CLEARS CACHED SEARCH NAVIGATION STATE AFTER QUERY OR MODE CHANGES."""
+        """Clear cached search navigation state after query or mode changes"""
         self._search_last_query = ""
         self._search_last_direction = 1
         self._search_last_match = -1
         self._search_cache_state = None
 
     def _get_current_mode_name(self) -> str:
-        """RETURNS THE EDITOR MODE CURRENTLY OWNING THE USER'S ATTENTION."""
+        """Return the editor mode that currently owns the user's attention"""
         if self.help_visible:
             return self.get_text("editor_mode_help", "help")
         if self.issue_mode_active:
             return self.get_text("editor_mode_issue", "issue")
-        if self.error_visible:
-            return self.get_text("editor_mode_error", "error")
+        if self.err_visible:
+            return self.get_text("editor_mode_err", "error")
         if self.search_visible:
             return self.get_text("editor_mode_search", "search")
         return self.get_text("editor_mode_normal", "normal")
 
     def _get_mode_text(self) -> str:
-        """RENDERS A COMPACT MODE STRIP FOR THE TOP BAR."""
+        """Render a compact mode strip for the top bar"""
         mode = self._get_current_mode_name()
         if mode == "issue":
             total = len(self._document_issue_cache)
@@ -1553,7 +1550,7 @@ class InteractiveEditor:
         return f" [ {mode} ] "
 
     def _get_status_text(self) -> str:
-        """SHOWS PASSIVE STATUS, ISSUE COUNTS, OR VALIDATION PAUSE FEEDBACK."""
+        """Show passive status, issue counts, or validation pause feedback"""
         if self._passive_status:
             return f" {self._passive_status} "
         if not self.expensive_checks_enabled():
@@ -1582,13 +1579,13 @@ class InteractiveEditor:
         return ""
 
     def _get_token_status_text(self) -> str:
-        """RENDERS TOKEN STATUS WITH THE REQUESTED BUSY INDICATOR FORMAT."""
+        """Render token status with the requested busy-indicator format"""
         busy = self._token_estimate_busy or not self.expensive_checks_enabled()
         suffix = "* " if busy else "  "
         return f" ~{self.token_count} tokens{suffix}"
 
     def _get_toolbar_text(self) -> str:
-        """SWAPS TOOLBAR HINTS TO MATCH THE CURRENT INTERACTION MODE."""
+        """Swap toolbar hints to match the current interaction mode"""
         mode = self._get_current_mode_name()
         if mode == "search":
             return get_string("toolbar_text_search", "")
@@ -1599,7 +1596,7 @@ class InteractiveEditor:
         return get_string("toolbar_text_normal", "")
 
     def _remember_search_query(self, query: str) -> None:
-        """KEEPS A SMALL IN-MEMORY SESSION HISTORY OF SEARCH QUERIES."""
+        """Keep a small in-memory history of search queries"""
         query = query.strip()
         if not query:
             return
@@ -1609,7 +1606,7 @@ class InteractiveEditor:
         self._search_history_index = -1
 
     def _cycle_search_history(self) -> None:
-        """ROTATES THROUGH RECENT SEARCH QUERIES WHEN SEARCH IS ALREADY OPEN."""
+        """Rotate through recent search queries when search is already open"""
         if not self._search_history:
             return
         next_index = (self._search_history_index + 1) % len(self._search_history)
@@ -1624,13 +1621,13 @@ class InteractiveEditor:
         self.search_buffer.document = Document(query, cursor_position=len(query))
 
     def _get_search_label_text(self) -> str:
-        """EMPHASIZES SEARCH MODE WITH AN ALWAYS-VISIBLE HEADER AND COUNT."""
+        """Emphasize search mode with an always-visible header and count"""
         if not self.search_visible:
             return ""
         return " " + self.get_text("editor_search_label", "SEARCH") + " "
 
     async def _update_tokens_loop(self):
-        """ASYNCHRONOUS, DEBOUNCED TASK UTILIZING FAST PROXY METRICS FOR TOKEN SIZE."""
+        """Update token counts asynchronously using debounced estimation"""
         last_text = None
         last_count = 0
         while True:
@@ -1655,7 +1652,7 @@ class InteractiveEditor:
                     self.invalidate()
 
     def _get_search_status_text(self) -> str:
-        """RETURNS SEARCH MODE HINTS OR THE LAST SEARCH RESULT MESSAGE."""
+        """Return search mode hints or the last search result message"""
         state = self._get_search_highlight_state()
         if self.search_message:
             return f" {self.search_message} "
@@ -1684,14 +1681,14 @@ class InteractiveEditor:
         return ""
 
     def _handle_search_text_changed(self, _buffer: Buffer) -> None:
-        """CLEARS STALE SEARCH NAVIGATION STATE AFTER QUERY EDITS."""
+        """Clear stale search navigation state after query edits"""
         self._clear_search_message()
         self._reset_search_navigation()
         self._search_history_index = -1
         self.invalidate()
 
     def _handle_buffer_text_changed(self, _buffer: Buffer) -> None:
-        """INVALIDATES CACHED ISSUE STATE AND STALE ISSUE OVERLAYS AFTER EDITS."""
+        """Invalidate cached issue state and stale issue overlays after edits"""
         self._document_issue_cache_text_id = 0
         self._document_issue_cache = tuple()
         if self.issue_mode_active:
@@ -1706,7 +1703,7 @@ class InteractiveEditor:
         message: str,
         fragment: str,
     ) -> EditorIssue:
-        """BUILDS A STABLE ISSUE RECORD FOR NAVIGATION AND RENDERING."""
+        """Build a stable issue record for navigation and rendering"""
         return EditorIssue(line, column, end_column, style, message, fragment)
 
     def _make_line_match_issue(
@@ -1716,7 +1713,7 @@ class InteractiveEditor:
         style: str,
         message: str,
     ) -> EditorIssue:
-        """BUILDS AN ISSUE FROM A SINGLE-LINE REGEX MATCH."""
+        """Build an issue from a single-line regex match"""
         return self._make_issue(
             lineno,
             match.start(),
@@ -1732,7 +1729,7 @@ class InteractiveEditor:
         style: str,
         message: str,
     ) -> EditorIssue:
-        """BUILDS AN ISSUE FROM A WHOLE-BUFFER REGEX MATCH."""
+        """Build an issue from a whole-buffer regex match"""
         start_line, start_col = self.buffer.document.translate_index_to_position(
             match.start()
         )
@@ -1747,7 +1744,7 @@ class InteractiveEditor:
         )
 
     def get_document_issues(self) -> tuple[EditorIssue, ...]:
-        """COLLECTS LIGHTWEIGHT SYNTAX AND REFERENCE ISSUES FROM THE BUFFER."""
+        """Collect lightweight syntax and reference issues from the buffer"""
         expensive_enabled = self.expensive_checks_enabled()
         text = self.buffer.text
         text_id = id(text)
@@ -1811,7 +1808,7 @@ class InteractiveEditor:
         return self._document_issue_cache
 
     async def collect_save_issues(self) -> tuple[EditorIssue, ...]:
-        """RUNS SAVE-TIME ISSUE CHECKS, INCLUDING SYMBOL LOOKUPS."""
+        """Run save-time issue checks, including symbol lookups"""
         issues = {
             (issue.line, issue.column, issue.end_column): issue
             for issue in self.get_document_issues()
@@ -1854,15 +1851,15 @@ class InteractiveEditor:
                             symbol=symbol,
                         )
                     )
-            except Exception as error:
+            except Exception as err:
                 issues[issue_key] = self._make_buffer_match_issue(
                     match,
                     issue.style,
                     self.format_text(
-                        "issue_symbol_resolution_error",
-                        "{path}: {error}",
+                        "issue_symbol_resolution_err",
+                        "{path}: {err}",
                         path=meta.rel_path,
-                        error=error,
+                        err=err,
                     ),
                 )
 
@@ -1871,7 +1868,7 @@ class InteractiveEditor:
         )
 
     def _get_search_highlight_state(self) -> SearchHighlightState | None:
-        """RETURNS A CACHED SEARCH SNAPSHOT TO AVOID REPEATED FULL-SCAN WORK."""
+        """Return a cached search snapshot to avoid repeated full scans"""
         if not self.search_visible:
             return None
 
@@ -1935,15 +1932,15 @@ class InteractiveEditor:
         return state
 
     def _focus_search(self) -> None:
-        """MOVES INPUT FOCUS INTO THE SEARCH FIELD IF AN APP IS ACTIVE."""
+        """Move input focus into the search field if an app is active"""
         self._focus(self.search_buffer)
 
     def _focus_main(self) -> None:
-        """RESTORES INPUT FOCUS TO THE MAIN EDITOR BUFFER."""
+        """Restore input focus to the main editor buffer"""
         self._focus(self.main_window)
 
     def open_search(self) -> None:
-        """SHOWS THE SEARCH BAR AND PREPARES IT FOR IMMEDIATE INPUT."""
+        """Show the search bar and prepare it for immediate input"""
         self.note_user_activity()
         self.search_visible = True
         self._clear_search_message()
@@ -1957,20 +1954,16 @@ class InteractiveEditor:
         self._focus_search()
 
     def close_search(self) -> None:
-        """HIDES THE SEARCH BAR AND RETURNS FOCUS TO THE EDITOR."""
+        """Hide the search bar and return focus to the editor"""
         self.search_visible = False
         self._clear_search_message()
         self._reset_search_navigation()
         self._focus_main()
 
     def open_help(self) -> None:
-        """SHOWS THE HELP OVERLAY AND FOCUSES IT."""
+        """Show the help overlay and focus it"""
         self._help_restore_focus = (
-            "search"
-            if self.search_visible
-            else "error"
-            if self.error_visible
-            else "main"
+            "search" if self.search_visible else "error" if self.err_visible else "main"
         )
         self._help_restore_main_cursor = self.buffer.cursor_position
         self._help_restore_search_cursor = self.search_buffer.cursor_position
@@ -1990,7 +1983,7 @@ class InteractiveEditor:
         self._focus(self.help_window)
 
     def close_help(self) -> None:
-        """HIDES THE HELP OVERLAY AND RETURNS FOCUS TO THE ACTIVE EDIT TARGET."""
+        """Hide the help overlay and return focus to the active edit target"""
         self.help_visible = False
         self.buffer.cursor_position = self._help_restore_main_cursor
         self.search_buffer.cursor_position = self._help_restore_search_cursor
@@ -2000,13 +1993,13 @@ class InteractiveEditor:
         )
         if self._help_restore_focus == "search" and self.search_visible:
             self._focus_search()
-        elif self._help_restore_focus == "error" and self.error_visible:
-            self._focus(self.error_window)
+        elif self._help_restore_focus == "error" and self.err_visible:
+            self._focus(self.err_window)
         else:
             self._focus_main()
 
     def toggle_help(self) -> None:
-        """TOGGLES HELP VISIBILITY WITHOUT LOSING THE ACTIVE SEARCH CONTEXT."""
+        """Toggle help visibility without losing the active search context"""
         if self.help_visible:
             self.close_help()
         else:
@@ -2015,7 +2008,7 @@ class InteractiveEditor:
     def _find_search_match(
         self, query: str, start: int, direction: int
     ) -> tuple[int | None, bool]:
-        """SEARCHES FORWARD OR BACKWARD AND REPORTS WHETHER THE RESULT WRAPPED."""
+        """Search forward or backward and report whether the result wrapped"""
         text = self.buffer.text
         if direction > 0:
             pos = text.find(query, max(0, start))
@@ -2030,7 +2023,7 @@ class InteractiveEditor:
         return (text.rfind(query), True) if query else (None, False)
 
     def search_step(self, direction: int) -> bool:
-        """MOVES TO THE NEXT OR PREVIOUS SEARCH MATCH WHILE KEEPING SEARCH OPEN."""
+        """Move to the next or previous search match while keeping search open"""
         query = self.search_buffer.text
         if not query:
             self._set_search_message(
@@ -2069,7 +2062,7 @@ class InteractiveEditor:
         return True
 
     def activate_issue_mode(self, issues: tuple[EditorIssue, ...]) -> None:
-        """ENTERS ISSUE MODE, JUMPS TO THE FIRST ISSUE, AND SHOWS THE OVERLAY."""
+        """Enter issue mode, jump to the first issue, and show the overlay"""
         self.issue_mode_active = bool(issues)
         self._document_issue_cache = issues
         self.issue_index = 0
@@ -2078,15 +2071,15 @@ class InteractiveEditor:
             self._render_issue_overlay()
 
     def deactivate_issue_mode(self) -> None:
-        """EXITS ISSUE MODE AND DISMISSES THE OVERLAY."""
+        """Exit issue mode and dismiss the overlay"""
         self.issue_mode_active = False
-        self.error_visible = False
-        self.error_message = ""
+        self.err_visible = False
+        self.err_message = ""
         self._focus_main()
         self.invalidate()
 
     def _render_issue_overlay(self) -> None:
-        """UPDATES THE EXISTING OVERLAY WINDOW WITH THE ACTIVE ISSUE DETAILS."""
+        """Update the existing overlay window with the active issue details"""
         if not self.issue_mode_active or not self._document_issue_cache:
             return
         issue = self._document_issue_cache[self.issue_index]
@@ -2097,9 +2090,9 @@ class InteractiveEditor:
             else "editor_issue_title_reference",
             "syntax" if issue.style == "invalid-syntax" else "reference",
         )
-        self.error_visible = True
-        self.error_message = issue.message
-        self.error_buffer.set_document(
+        self.err_visible = True
+        self.err_message = issue.message
+        self.err_buffer.set_document(
             Document(
                 self.format_text(
                     "editor_issue_overlay",
@@ -2110,9 +2103,7 @@ class InteractiveEditor:
                     line=issue.line + 1,
                     column=issue.column + 1,
                     message=issue.message,
-                    context_label=self.get_text(
-                        "editor_issue_context_label", "context"
-                    ),
+                    context_label=self.get_text("editor_issue_context_label", "^^^^"),
                     fragment=issue.fragment,
                     controls=self.get_text(
                         "editor_issue_controls",
@@ -2123,11 +2114,11 @@ class InteractiveEditor:
             ),
             bypass_readonly=True,
         )
-        self._focus(self.error_window)
+        self._focus(self.err_window)
         self.invalidate()
 
     def jump_to_issue(self, index: int) -> None:
-        """MOVES THE MAIN CURSOR TO THE TARGET ISSUE AND KEEPS IT IN VIEW."""
+        """Move the main cursor to the target issue and keep it in view"""
         if not self._document_issue_cache:
             return
         self.issue_index = index % len(self._document_issue_cache)
@@ -2138,8 +2129,8 @@ class InteractiveEditor:
         self._search_cache_state = None
         self.invalidate()
 
-    def _get_error_title_text(self) -> str:
-        """RETURNS A COMPACT, RESPONSIVE TITLE FOR ERROR AND ISSUE OVERLAYS."""
+    def _get_err_title_text(self) -> str:
+        """Return a compact title for error and issue overlays"""
         if self.issue_mode_active and self._document_issue_cache:
             total = len(self._document_issue_cache)
             ordinal = min(self.issue_index + 1, total)
@@ -2153,10 +2144,10 @@ class InteractiveEditor:
                 )
                 + " > "
             )
-        return " < " + get_string("error_title", "error") + " > "
+        return " < " + get_string("err_title", "error") + " > "
 
     def step_issue(self, direction: int) -> bool:
-        """MOVES TO THE NEXT OR PREVIOUS ISSUE WHILE ISSUE MODE IS ACTIVE."""
+        """Move to the next or previous issue while issue mode is active"""
         if not self.issue_mode_active or not self._document_issue_cache:
             return False
         self.jump_to_issue(self.issue_index + direction)
@@ -2164,7 +2155,7 @@ class InteractiveEditor:
         return True
 
     async def run_async(self) -> str | None:
-        """EXECUTES THE FULL SCREEN EDITOR."""
+        """Run the full-screen editor"""
         default_bindings = load_key_bindings()
         custom_bindings = setup_keybindings(self)
         bindings = merge_key_bindings([default_bindings, custom_bindings])
@@ -2247,11 +2238,11 @@ class InteractiveEditor:
             Condition(lambda: self.help_visible),
         )
 
-        error_float = self._build_modal_float(
-            self.error_window,
-            self._get_error_title_text,
-            "class:error-frame",
-            Condition(lambda: self.error_visible),
+        err_float = self._build_modal_float(
+            self.err_window,
+            self._get_err_title_text,
+            "class:err-frame",
+            Condition(lambda: self.err_visible),
         )
 
         layout = Layout(
@@ -2264,7 +2255,7 @@ class InteractiveEditor:
                         content=self.completions_menu,
                     ),
                     help_float,
-                    error_float,
+                    err_float,
                 ],
             )
         )
@@ -2297,7 +2288,7 @@ class InteractiveEditor:
         return self.result
 
     def expensive_checks_enabled(self) -> bool:
-        """SKIPS REDRAW-TIME VALIDATION WHILE A BULK EDIT IS STILL SETTLING."""
+        """Skip redraw-time validation while a bulk edit is still settling"""
         try:
             now = asyncio.get_running_loop().time()
         except RuntimeError:
@@ -2305,18 +2296,18 @@ class InteractiveEditor:
         return now >= self._bulk_mode_until
 
     def should_complete_while_typing(self) -> bool:
-        """ONLY RUNS FUZZY COMPLETION WHEN THE CURSOR IS INSIDE AN ACTIVE MENTION."""
+        """Run fuzzy completion only when the cursor is inside an active mention"""
         if not self.expensive_checks_enabled():
             return False
         return self.should_complete(self.buffer.document)
 
     def should_complete(self, document: Document) -> bool:
-        """GATES AUTOCOMPLETE SO PASTES AND NORMAL PROSE DO NOT TRIGGER FUZZY SEARCH."""
+        """Gate autocomplete so normal prose and pastes do not trigger fuzzy search"""
         tail = document.text_before_cursor[-256:]
         return bool(re.search(r"(<@[^>\n]*)|(\[@[^\]\n]*)$", tail))
 
     def start_bulk_edit(self, inserted_text: str) -> None:
-        """TEMPORARILY RELAXES COMPLETION AND VALIDATION AFTER LARGE PASTES."""
+        """Temporarily relax completion and validation after large pastes"""
         if len(inserted_text) < self.BULK_EDIT_SIZE_THRESHOLD:
             return
 
@@ -2337,7 +2328,7 @@ class InteractiveEditor:
         asyncio.create_task(_refresh_after_pause())
 
     def paste_text(self, buffer: Buffer, text: str) -> None:
-        """APPLIES PASTED TEXT THROUGH THE FAST BULK-EDIT PATH."""
+        """Apply pasted text through the fast bulk-edit path"""
         if not text:
             return
 

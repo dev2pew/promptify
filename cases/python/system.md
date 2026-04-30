@@ -15,7 +15,7 @@ from collections.abc import Iterable
 
 @runtime_checkable
 class Processor[T](Protocol):
-    """Generic protocol using modern type parameter syntax."""
+    """Generic protocol using modern type parameter syntax"""
     def process(self, item: T) -> T: ...
 
 class DataManager[T]:
@@ -24,7 +24,7 @@ class DataManager[T]:
         self.processor = processor
 
     async def run_parallel(self) -> list[T]:
-        """Utilizes TaskGroups for safe, structured concurrency."""
+        """Utilizes TaskGroups for safe, structured concurrency"""
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(self._process_item(i)) for i in self.items]
 

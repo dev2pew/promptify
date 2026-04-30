@@ -1,6 +1,4 @@
-"""
-UNIT TESTS COVERING GIT MENTION PARSING, EXECUTION, COMPLETION, AND HELP LEXING.
-"""
+"""Tests for Git mention parsing, execution, completions, and help lexing"""
 
 import pytest
 from prompt_toolkit.document import Document
@@ -12,7 +10,7 @@ pytestmark = pytest.mark.asyncio
 
 
 class _FakeProc:
-    """MINIMAL ASYNC SUBPROCESS STUB FOR GIT COMMAND TESTS."""
+    """Minimal async subprocess stub for Git command tests"""
 
     def __init__(self, stdout: str, stderr: str = "", returncode: int = 0):
         self._stdout = stdout.encode()
@@ -24,7 +22,7 @@ class _FakeProc:
 
 
 async def test_git_mention_query_parses_escaped_branch_and_log_limit():
-    """BRANCH SELECTORS SHOULD ALLOW ESCAPED GRAMMAR CHARACTERS BEFORE LOG ARGS."""
+    """Branch selectors should allow escaped grammar characters before log args"""
     query = parse_git_mention_query(r"[\]hotfix\>demo]:log:2")
 
     assert query == GitMentionQuery(
@@ -35,7 +33,7 @@ async def test_git_mention_query_parses_escaped_branch_and_log_limit():
 
 
 async def test_git_mention_query_parses_branch_scoped_history_limit():
-    """THE HISTORY COMMAND SHOULD SHARE THE SAME BRANCH PARSER AND LIMIT RULES."""
+    """The history command should share the same branch parser and limit rules"""
     query = parse_git_mention_query(r"[release/1.0]:history:3")
 
     assert query == GitMentionQuery(
@@ -48,7 +46,7 @@ async def test_git_mention_query_parses_branch_scoped_history_limit():
 async def test_git_resolver_routes_branch_scoped_log_queries(
     app_components, monkeypatch
 ):
-    """THE SHARED GIT PARSER SHOULD FEED THE RESOLVER THE DECODED BRANCH AND LIMIT."""
+    """The shared Git parser should feed the resolver the decoded branch and limit"""
     context, resolver = app_components
     observed: dict[str, int | str | None] = {}
 
@@ -70,7 +68,7 @@ async def test_git_resolver_routes_branch_scoped_log_queries(
 async def test_git_context_commands_use_no_pager_and_expected_arguments(
     app_components, monkeypatch
 ):
-    """ALL GIT INVOCATIONS SHOULD STAY NON-INTERACTIVE AND PASS THE EXPECTED ARGS."""
+    """All Git invocations should stay non-interactive and use the expected args"""
     context, _ = app_components
     context.has_git = True
     calls: list[tuple[str, ...]] = []
@@ -132,7 +130,7 @@ async def test_git_context_commands_use_no_pager_and_expected_arguments(
 async def test_git_mod_completions_support_branch_scoped_log_and_diff(
     app_components, monkeypatch
 ):
-    """GIT COMPLETIONS SHOULD STILL WORK AFTER A BRANCH PREFIX IS PROVIDED."""
+    """Git completions should still work after a branch prefix is provided"""
     context, _ = app_components
     mod = GitMod()
     monkeypatch.setattr(mod, "_read_git_commit_count", lambda _root, _branch: 3)
@@ -155,7 +153,7 @@ async def test_git_mod_completions_support_branch_scoped_log_and_diff(
 
 
 async def test_help_lexer_colors_branch_scoped_git_mentions():
-    """THE HELP LEXER SHOULD TOKENIZE BRANCHED GIT MENTIONS WITHOUT LOSING COLORS."""
+    """The help lexer should tokenize branched Git mentions without losing colors"""
     lexer = HelpLexer()
     get_line = lexer.lex_document(Document(r"<@git:[\]hotfix\>demo]:log:2>"))
     tokens = get_line(0)
@@ -168,7 +166,7 @@ async def test_help_lexer_colors_branch_scoped_git_mentions():
 async def test_git_mod_completions_offer_branch_placeholder_and_live_branches(
     app_components, monkeypatch
 ):
-    """GIT ROOT COMPLETIONS SHOULD OFFER A BRANCH PLACEHOLDER AND REAL BRANCH NAMES."""
+    """Git root completions should offer a branch placeholder and real branch names"""
     context, _ = app_components
     mod = GitMod()
     monkeypatch.setattr(
@@ -194,7 +192,7 @@ async def test_git_mod_completions_offer_branch_placeholder_and_live_branches(
 async def test_git_mod_completions_do_not_offer_nested_branch_placeholders(
     app_components, monkeypatch
 ):
-    """ONCE A BRANCH PREFIX IS PRESENT, GIT SHOULD CONTINUE WITH COMMAND COMPLETIONS ONLY."""
+    """Once a branch prefix is present, only command completions should remain"""
     context, _ = app_components
     mod = GitMod()
     monkeypatch.setattr(mod, "_read_git_branches", lambda _root: ["master"])

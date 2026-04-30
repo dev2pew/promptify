@@ -32,8 +32,8 @@ class ProjectIndexer(FileSystemEventHandler):
         BINDS THE INDEXER TRACKING TO A SPECIFIC PROJECT.
 
         Args:
-            target_dir (Path): The working root directory to scan.
-            case (CaseConfig): Ignore rules defining standard boundaries.
+            `target_dir` (Path): The working root directory to scan.
+            `case` (CaseConfig): Ignore rules defining standard boundaries.
         """
         self.target_dir = target_dir
         self.case = case
@@ -47,7 +47,7 @@ class ProjectIndexer(FileSystemEventHandler):
         self._lock = asyncio.Lock()
 
     async def build_index(self) -> None:
-        """INITIAL FAST SCAN USING NATIVE OS SCANDIR MAPPINGS."""
+        """Build the initial index using a fast directory scan"""
         log.info(
             get_string("indexing_project", "indexing project").format(
                 name=self.target_dir.name
@@ -93,7 +93,7 @@ class ProjectIndexer(FileSystemEventHandler):
         )
 
     def start_watching(self) -> None:
-        """BOOTSTRAPS WATCHDOG, FALLING BACK TO POLLING FOR NETWORK/CONTAINER MOUNTS."""
+        """Start filesystem watching, falling back to polling when needed"""
         watch_mode = APP_SETTINGS.indexer.watch_mode
         if watch_mode == "off":
             return
@@ -104,18 +104,16 @@ class ProjectIndexer(FileSystemEventHandler):
             )
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
-        except Exception as e:
+        except Exception as err:
             if watch_mode == "native":
                 raise
-            log.warning(
-                get_string("observer_fallback", "observer failed").format(error=e)
-            )
+            log.warn(get_string("observer_fallback", "observer failed").format(err=err))
             self._observer = PollingObserver()
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
 
     def stop_watching(self) -> None:
-        """GRACEFULLY JOINS AND STOPS THE WATCHDOG BACKGROUND WORKER THREAD."""
+        """Stop the watchdog observer and wait for it to exit"""
         if self._observer:
             self._observer.stop()
             self._observer.join()
@@ -125,7 +123,7 @@ class ProjectIndexer(FileSystemEventHandler):
         THREAD-SAFE STATE UPDATE TRIGGERED AUTOMATICALLY BY FILESYSTEM CHANGES.
 
         Args:
-            event (FileSystemEvent): Generated OS file operation token.
+            `event` (FileSystemEvent): Generated OS file operation token.
         """
         src_path_str = getattr(event, "src_path", None)
         if not src_path_str:
@@ -180,10 +178,10 @@ class ProjectIndexer(FileSystemEventHandler):
         SUPPORTS EXACT, GLOBBING, AND FUZZY PARTIAL PATH MATCHING.
 
         Args:
-            query (str): Searching criterion path parameter.
+            `query` (str): Searching criterion path parameter.
 
         Returns:
-            list[FileMeta]: Re-ordered array with the closest elements prioritised.
+            `list` [FileMeta]: Re-ordered array with the closest elements prioritised.
         """
         query = normalize_match_path(query)
 
@@ -205,10 +203,10 @@ class ProjectIndexer(FileSystemEventHandler):
         FETCHES ALL FILES TERMINATING IN SPECIFIC FORMATS.
 
         Args:
-            exts (list[str]): File formats mapped strictly by their extension structure.
+            `exts` (list[str]): File formats mapped strictly by their extension structure.
 
         Returns:
-            list[FileMeta]: Aggregation of valid paths.
+            `list` [FileMeta]: Aggregation of valid paths.
         """
         exts_clean = {e.strip().lstrip(".").lower() for e in exts}
         return [m for m in self.files_by_rel.values() if m.ext in exts_clean]
@@ -218,6 +216,6 @@ class ProjectIndexer(FileSystemEventHandler):
         RETURNS ALL UNIQUE EXTENSIONS CURRENTLY LOADED IN THE INDEX.
 
         Returns:
-            list[str]: Sorted extensions.
+            `list` [str]: Sorted extensions.
         """
         return sorted(list({m.ext for m in self.files_by_rel.values() if m.ext}))

@@ -1,6 +1,4 @@
-"""
-CORE APPLICATION ENTRY POINT AND COORDINATOR FOR PROMPTIFY ARCHITECTURE.
-"""
+"""Application entry point and orchestration for `promptify`"""
 
 import sys
 import datetime
@@ -20,13 +18,13 @@ from .core.indexer import ProjectIndexer
 from .core.resolver import PromptResolver
 from .core.mods import ModRegistry
 from .core.cli import CLIConfig, parse_cli_args
-from .core.settings import APP_SETTINGS, consume_settings_warnings
+from .core.settings import APP_SETTINGS, consume_settings_warns
 from .ui.editor import InteractiveEditor
 from .utils.i18n import get_string
 
 
 class App:
-    """MAIN APPLICATION ORCHESTRATOR LINKING CONTEXTS, RESOLVERS, AND UI."""
+    """Coordinate application state, context, resolver, and UI flows"""
 
     def __init__(self, cli_config: CLIConfig | None = None):
         self.cli_config = cli_config or CLIConfig()
@@ -35,16 +33,16 @@ class App:
         self.data_dir = self.root_dir / "data"
         self.outs_dir = self.root_dir / "outs"
         self.ensure_directories()
-        for warning in consume_settings_warnings():
-            log.warning(warning)
+        for warn in consume_settings_warns():
+            log.warn(warn)
 
     def ensure_directories(self) -> None:
-        """VERIFIES DIRECTORY TREES FOR SAFELY MAINTAINING OUTPUT STRUCTURES."""
+        """Ensure the application data directories exist"""
         for d in [self.cases_dir, self.data_dir, self.outs_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
     async def get_state(self) -> dict:
-        """LOADS THE JSON STATE RESUME METADATA FOR USER CONVENIENCE."""
+        """Load persisted application state from disk"""
         state_file = self.data_dir / "state.json"
         if state_file.exists():
             try:
@@ -55,19 +53,19 @@ class App:
         return {"lastcase": "", "paths": {}, "modes": {}}
 
     async def save_state(self, state: dict) -> None:
-        """PERSISTS THE JSON STATE RESUME METADATA."""
+        """Persist application state to disk"""
         state_file = self.data_dir / "state.json"
         state_file.parent.mkdir(parents=True, exist_ok=True)
         async with aiofiles.open(state_file, "w", encoding="utf-8") as f:
             await f.write(json.dumps(state, indent=4))
 
     async def get_last_path(self, case_name: str, state: dict) -> str:
-        """FETCHES THE LAST TARGET PROJECT PATH FOR A SPECIFIC CASE."""
+        """Return the last target path used for a given case"""
         paths = state.get("paths", {})
         return paths.get(case_name, "")
 
     async def save_last_path(self, case_name: str, path: str, state: dict) -> None:
-        """PERSISTS THE LAST TARGET PROJECT PATH FOR A SPECIFIC CASE."""
+        """Persist the last target path used for a given case"""
         if "paths" not in state:
             state["paths"] = {}
         state["paths"][case_name] = path
@@ -75,14 +73,14 @@ class App:
         await self.save_state(state)
 
     def get_case_state_key(self, case: CaseConfig) -> str:
-        """RETURNS A STABLE, UNIQUE CASE KEY FOR PER-CASE STATE."""
+        """Return a stable key for per-case state"""
         try:
             return str(case.case_dir.relative_to(self.cases_dir)).replace("\\", "/")
         except ValueError:
             return case.case_dir.name
 
     async def get_last_mode(self, case: CaseConfig, state: dict) -> int | None:
-        """FETCHES THE LAST SELECTED MODE FOR A SPECIFIC CASE."""
+        """Return the last selected mode for a given case"""
         modes = state.get("modes", {})
         if not isinstance(modes, dict):
             return None
@@ -91,20 +89,20 @@ class App:
         return mode if mode in (1, 2) else None
 
     async def save_last_mode(self, case: CaseConfig, mode: int, state: dict) -> None:
-        """PERSISTS THE LAST SELECTED MODE FOR A SPECIFIC CASE."""
+        """Persist the last selected mode for a given case"""
         if "modes" not in state or not isinstance(state["modes"], dict):
             state["modes"] = {}
         state["modes"][self.get_case_state_key(case)] = mode
         await self.save_state(state)
 
     def get_output_case_dir_name(self, case: CaseConfig) -> str:
-        """USES THE CASE'S FOLDER NAME FOR OUTPUT STORAGE SAFETY."""
+        """Return the output directory name for a case"""
         return case.case_dir.name
 
     async def save_output(
         self, case: CaseConfig, content: str, raw_content: str | None = None
     ) -> None:
-        """FORMATS AND SAVES THE EXECUTED PAYLOAD DIRECTLY TO DISK, COPIES TO CLIPBOARD."""
+        """Save rendered output to disk and optionally copy it to the clipboard"""
         now = datetime.datetime.now()
         out_dir = (
             self.outs_dir
@@ -129,18 +127,18 @@ class App:
             try:
                 await asyncio.to_thread(pyperclip.copy, content)
                 log.success(get_string("copied_clipboard", "copied to clipboard"))
-            except Exception as e:
-                log.warning(
-                    get_string("clipboard_failed", "clipboard failed").format(error=e)
+            except Exception as err:
+                log.warn(
+                    get_string("clipboard_failed", "clipboard failed").format(err=err)
                 )
 
     async def run(self) -> None:
-        """EXECUTES THE MAIN APPLICATION LOOP."""
+        """Run the main application flow"""
         print(get_string("welcome", "welcome to promptify"))
 
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
         if not cases:
-            log.error(get_string("no_cases", "no cases found"))
+            log.err(get_string("no_cases", "no cases found"))
             log.info(
                 get_string("root_dir_shows", "root dir").format(path=self.root_dir)
             )
@@ -159,7 +157,7 @@ class App:
         if self.cli_config.case:
             matching = [d for c, d in configs if c.name == self.cli_config.case]
             if len(matching) > 1:
-                log.error(
+                log.err(
                     get_string(
                         "duplicate_case_cli",
                         "Multiple cases found for '{case}'. Only normal menu mode supports duplicates. If you want to use the CLI, then the user needs to adjust their cases to not contain duplicate names.",
@@ -167,7 +165,7 @@ class App:
                 )
                 return
             if not matching:
-                log.error(
+                log.err(
                     get_string("case_not_found", "Case '{case}' not found.").format(
                         case=self.cli_config.case
                     )
@@ -209,9 +207,7 @@ class App:
                         d for c, d in configs if c.name == lastcase
                     )
                 elif not case_input:
-                    log.warning(
-                        get_string("operation_cancelled", "operation cancelled")
-                    )
+                    log.warn(get_string("operation_cancelled", "operation cancelled"))
                     return
                 else:
                     case_idx = int(case_input) - 1
@@ -219,7 +215,7 @@ class App:
                         raise IndexError
                     selected_case_dir = cases[case_idx]
             except (ValueError, IndexError):
-                log.error(get_string("invalid_selection", "invalid selection"))
+                log.err(get_string("invalid_selection", "invalid selection"))
                 return
 
             case = CaseConfig(selected_case_dir)
@@ -237,7 +233,7 @@ class App:
 
         target_dir = Path(target_path_str).resolve()
         if not target_dir.is_dir():
-            log.error(
+            log.err(
                 get_string("dir_not_exist", "directory not exist").format(
                     path=target_dir
                 )
@@ -250,11 +246,11 @@ class App:
         has_git = shutil.which("git") is not None
         has_git_folder = (target_dir / ".git").exists()
         if not has_git:
-            log.warning(
+            log.warn(
                 get_string("git_not_found", "git executable not found in system path.")
             )
         if not has_git_folder:
-            log.warning(
+            log.warn(
                 get_string("no_git_folder", "no .git folder found in '{path}'.").format(
                     path=target_dir
                 )
@@ -283,7 +279,7 @@ class App:
             elif m in ("i", "interactive", "a", "advanced", "e", "editor"):
                 mode = 2
             else:
-                log.error(get_string("invalid_mode", "invalid mode"))
+                log.err(get_string("invalid_mode", "invalid mode"))
                 indexer.stop_watching()
                 return
         elif self.cli_config.case and self.cli_config.path:
@@ -311,7 +307,7 @@ class App:
                 mode_input = (await log.input_async(prompt_str)).strip()
                 if not mode_input:
                     if last_mode is None:
-                        log.warning(
+                        log.warn(
                             get_string("operation_cancelled", "operation cancelled")
                         )
                         indexer.stop_watching()
@@ -320,7 +316,7 @@ class App:
                 else:
                     mode = int(mode_input)
             except ValueError:
-                log.error(get_string("invalid_selection", "invalid selection"))
+                log.err(get_string("invalid_selection", "invalid selection"))
                 indexer.stop_watching()
                 return
 
@@ -334,15 +330,15 @@ class App:
             elif mode == 2:
                 await self.run_interactive_mode(case, resolver, indexer)
             else:
-                log.error(get_string("invalid_mode", "invalid mode"))
+                log.err(get_string("invalid_mode", "invalid mode"))
         finally:
             indexer.stop_watching()
 
     async def run_legacy_mode(self, case: CaseConfig, resolver: PromptResolver) -> None:
-        """EXECUTES THE STATIC LEGACY RESOLVER MODE."""
+        """Run the legacy resolver mode"""
         legacy_path = case.case_dir / case.legacy_file
         if not legacy_path.exists():
-            log.error(
+            log.err(
                 get_string("legacy_not_found", "legacy not found").format(
                     path=legacy_path
                 )
@@ -359,7 +355,7 @@ class App:
     async def run_interactive_mode(
         self, case: CaseConfig, resolver: PromptResolver, indexer: ProjectIndexer
     ) -> None:
-        """SPAWNS THE PROMPT-TOOLKIT TERMINAL EDITOR."""
+        """Launch the interactive prompt-toolkit editor"""
         prompt_path = case.case_dir / case.prompt_file
         initial_text = ""
         if prompt_path.exists():
@@ -375,7 +371,7 @@ class App:
         edited_text = await editor.run_async()
 
         if edited_text is None:
-            log.warning(get_string("operation_cancelled", "operation cancelled"))
+            log.warn(get_string("operation_cancelled", "operation cancelled"))
             return
 
         log.normal(get_string("resolving_mentions", "resolving mentions"))
@@ -384,11 +380,11 @@ class App:
 
 
 def cli():
-    """CLI ENTRY POINT TO LAUNCH THE ASYNC ORCHESTRATION EVENT LOOP."""
+    """CLI entry point that starts the asynchronous application loop"""
     config = parse_cli_args()
     try:
         asyncio.run(App(config).run())
     except KeyboardInterrupt:
         print()
-        log.warning(get_string("exiting", "exiting"))
+        log.warn(get_string("exiting", "exiting"))
         sys.exit(0)

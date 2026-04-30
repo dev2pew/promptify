@@ -1,6 +1,4 @@
-"""
-PYTEST CONFIGURATION AND SANDBOX BOOTSTRAPPING FOR THE PROMPTIFY SUITE.
-"""
+"""Pytest configuration and sandbox bootstrapping for the `promptify` suite"""
 
 import pytest
 import shutil
@@ -21,8 +19,9 @@ from promptify.core.mods import ModRegistry
 @pytest.fixture(scope="session")
 def test_sandbox():
     """
-    CREATES A FULLY DYNAMIC, ISOLATED ENVIRONMENT FOR TESTING.
-    AUTOMATICALLY CLEANS UP AFTER TESTS ARE COMPLETED.
+    Create a fully isolated environment for testing.
+
+    The sandbox is cleaned up automatically after the tests complete.
     """
     root = Path(__file__).parent / "sandbox"
     demo_dir = root / "demo"
@@ -82,9 +81,7 @@ def test_sandbox():
 async def app_components(
     test_sandbox,
 ) -> tuple[ProjectContext, PromptResolver]:
-    """
-    BOOTSTRAPS THE CORE LOGIC COMPONENTS POINTING TO THE DYNAMIC SANDBOX.
-    """
+    """Bootstrap core logic components that point to the dynamic sandbox"""
     case = CaseConfig(test_sandbox["case"])
     indexer = ProjectIndexer(test_sandbox["demo"], case)
     await indexer.build_index()

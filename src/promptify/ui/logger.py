@@ -1,6 +1,4 @@
-"""
-CUSTOM FORMATTED LOGGER FOR CLI OUTPUT USING PROMPT-TOOLKIT'S HTML STYLING.
-"""
+"""Formatted CLI logger built on prompt-toolkit HTML styling"""
 
 import sys
 import datetime
@@ -13,35 +11,35 @@ from ..utils.i18n import get_string
 
 
 class Logger:
-    """PROVIDES CATEGORIZED CONSOLE OUTPUT WRAPPED IN HTML TAGS FOR CONSISTENT COLORS."""
+    """Provide categorized console output with consistent HTML-based styling"""
 
     def __init__(self, verbosity: int = 1, include_timestamp: bool = False):
         """
-        INITIALIZES CUSTOM PRINTING OUTPUT CONSTRAINTS.
+        Initialize the logger.
 
         Args:
-            verbosity (int): Sets reporting noise limits based on configurations.
-            include_timestamp (bool): Appends execution timelines ahead of responses.
+            `verbosity` (int): Sets reporting noise limits based on configurations.
+            `include_timestamp` (bool): Appends execution timelines ahead of responses.
         """
         self.verbosity = verbosity
         self.include_timestamp = include_timestamp
         self._session: PromptSession[str] | None = None
 
     def _get_timestamp(self) -> str:
-        """RETURNS THE FORMATTED CURRENT TIME STRUCTURE STRING IF REQUESTED NATIVELY."""
+        """Return the formatted current time when timestamps are enabled"""
         if self.include_timestamp:
             return f"[{datetime.datetime.now().strftime('%H:%M:%S')}] "
         return ""
 
     def _print(self, prefix: str, color: str, message: str, **kwargs: Any) -> None:
         """
-        GENERIC RENDERING ROUTINE FOR TRANSLATING RAW COMPONENTS TO HTML STRUCTURES.
+        Render a formatted message using the configured prefix and color.
 
         Args:
-            prefix (str): Indicator tag shown pre-message sequence structure.
-            color (str): Output string mapped reference code identifier HTML target.
-            message (str): Final execution state reporting print object.
-            **kwargs: Extra formatting logic passed internally toward stdout mechanisms.
+            `prefix` (str): Indicator tag shown pre-message sequence structure.
+            `color` (str): Output string mapped reference code identifier HTML target.
+            `message` (str): Final execution state reporting print object.
+            `**kwargs`: Extra formatting logic passed internally toward stdout mechanisms.
         """
         timestamp = self._get_timestamp()
         safe_message = str(message).replace("<", "&lt;").replace(">", "&gt;")
@@ -53,7 +51,7 @@ class Logger:
             print(f"{timestamp}{prefix} {message}", **kwargs)
 
     def normal(self, message: str, **kwargs: Any) -> None:
-        """PRINTS A STANDARD OUTPUT STATEMENT LOGIC MESSAGE."""
+        """Print a standard log message"""
         self._print(
             APP_SETTINGS.logger.normal_prefix,
             APP_SETTINGS.logger.normal_color,
@@ -63,13 +61,13 @@ class Logger:
 
     async def input_async(self, message: str) -> str:
         """
-        HANDLES INTERACTIVE DATA CONSUMPTION OPERATIONS ASYNCHRONOUSLY WITHOUT BLOCKING EVENT LOOPS.
+        Prompt for input asynchronously without blocking the event loop.
 
         Args:
-            message (str): Instruction context outputting for prompting operation inputs.
+            `message` (str): Instruction context outputting for prompting operation inputs.
 
         Returns:
-            str: Supplied responses processed natively from keyboard inputs directly mapping UI interaction states.
+            `str`: Supplied responses processed natively from keyboard inputs directly mapping UI interaction states.
         """
         timestamp = self._get_timestamp()
         safe_message = str(message).replace("<", "&lt;").replace(">", "&gt;")
@@ -89,20 +87,20 @@ class Logger:
             return await self._session.prompt_async(formatted_text)
         except (EOFError, KeyboardInterrupt):
             print()
-            self.warning(get_string("operation_cancelled", "operation cancelled"))
+            self.warn(get_string("operation_cancelled", "operation cancelled"))
             sys.exit(0)
 
-    def error(self, message: str, **kwargs: Any) -> None:
-        """PRINTS ERROR STATE REPRESENTATIONS DIRECTLY UTILIZING FATAL INDICATORS."""
+    def err(self, message: str, **kwargs: Any) -> None:
+        """Print an error message"""
         self._print(
-            APP_SETTINGS.logger.error_prefix,
-            APP_SETTINGS.logger.error_color,
+            APP_SETTINGS.logger.err_prefix,
+            APP_SETTINGS.logger.err_color,
             message,
             **kwargs,
         )
 
     def success(self, message: str, **kwargs: Any) -> None:
-        """PRINTS SUCCESSFUL LOGIC CONCLUSION OUTPUTS CLEARLY MARKING PROGRESSION MARKERS MAPPING TARGETS SAFELY NATIVELY."""
+        """Print a success message"""
         self._print(
             APP_SETTINGS.logger.success_prefix,
             APP_SETTINGS.logger.success_color,
@@ -110,17 +108,17 @@ class Logger:
             **kwargs,
         )
 
-    def warning(self, message: str, **kwargs: Any) -> None:
-        """PRINTS WARNING CONDITION EVALUATIONS PREVENTING EXECUTION FAULTS."""
+    def warn(self, message: str, **kwargs: Any) -> None:
+        """Print a warning message"""
         self._print(
-            APP_SETTINGS.logger.warning_prefix,
-            APP_SETTINGS.logger.warning_color,
+            APP_SETTINGS.logger.warn_prefix,
+            APP_SETTINGS.logger.warn_color,
             message,
             **kwargs,
         )
 
     def info(self, message: str, **kwargs: Any) -> None:
-        """PRINTS INFORMATIONAL TRACE LOGIC MAPPING DEBUG STATE EVALUATION STRINGS."""
+        """Print an informational message"""
         self._print(
             APP_SETTINGS.logger.info_prefix,
             APP_SETTINGS.logger.info_color,
@@ -129,7 +127,7 @@ class Logger:
         )
 
     def notice(self, message: str, **kwargs: Any) -> None:
-        """PRINTS PRIORITY HIGHLIGHT REPRESENTATIONS DIRECTING WORKFLOW ACTIONS STRICTLY CORRECTLY SAFELY."""
+        """Print a high-visibility notice message"""
         self._print(
             APP_SETTINGS.logger.notice_prefix,
             APP_SETTINGS.logger.notice_color,
@@ -138,7 +136,7 @@ class Logger:
         )
 
     def verbose(self, message: str, level: int = 2, **kwargs: Any) -> None:
-        """PRINTS HIGHLY GRANULAR LOGIC REPORTS STRICTLY ONLY TARGETING DETAILED DEBUG TRACE INSTANCES NATIVELY."""
+        """Print a verbose message when the configured level allows it"""
         if self.verbosity >= level:
             self._print(
                 APP_SETTINGS.logger.verbose_prefix,

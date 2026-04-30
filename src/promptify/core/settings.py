@@ -1,6 +1,4 @@
-"""
-TYPED SETTINGS AND ENVIRONMENT VARIABLE PARSING FOR PROMPTIFY.
-"""
+"""Typed settings and environment-variable parsing for `promptify`"""
 
 from dataclasses import dataclass
 import os
@@ -50,10 +48,10 @@ _DEFAULT_THEME_STYLES = {
     "search-match": "bg:#5d4a1d #fff0cb",
     "search-match-active": "bg:#1f5d8e #f7fbff bold",
     "current-line": "bg:#262a31",
-    "error-frame": "bg:#101317",
-    "error-frame.border": "fg:#768394",
-    "error-frame.label": "bg:#101317 #d7e6f6 bold",
-    "error-text": "bg:#171c22 #f2f5f8",
+    "err-frame": "bg:#101317",
+    "err-frame.border": "fg:#768394",
+    "err-frame.label": "bg:#101317 #d7e6f6 bold",
+    "err-text": "bg:#171c22 #f2f5f8",
     "mention-tag": "fg:#00ffff bold",
     "mention-path": "fg:#ffaa00",
     "mention-range": "fg:#ff55ff",
@@ -89,10 +87,10 @@ _THEME_ENV_MAP = {
     "PROMPTIFY_THEME_SEARCH_MATCH": "search-match",
     "PROMPTIFY_THEME_SEARCH_MATCH_ACTIVE": "search-match-active",
     "PROMPTIFY_THEME_CURRENT_LINE": "current-line",
-    "PROMPTIFY_THEME_ERROR_FRAME": "error-frame",
-    "PROMPTIFY_THEME_ERROR_FRAME_BORDER": "error-frame.border",
-    "PROMPTIFY_THEME_ERROR_FRAME_LABEL": "error-frame.label",
-    "PROMPTIFY_THEME_ERROR_TEXT": "error-text",
+    "PROMPTIFY_THEME_ERROR_FRAME": "err-frame",
+    "PROMPTIFY_THEME_ERROR_FRAME_BORDER": "err-frame.border",
+    "PROMPTIFY_THEME_ERROR_FRAME_LABEL": "err-frame.label",
+    "PROMPTIFY_THEME_ERROR_TEXT": "err-text",
     "PROMPTIFY_THEME_MENTION_TAG": "mention-tag",
     "PROMPTIFY_THEME_MENTION_PATH": "mention-path",
     "PROMPTIFY_THEME_MENTION_RANGE": "mention-range",
@@ -131,12 +129,12 @@ class LoggerSettings:
     include_timestamp: bool
     normal_prefix: str
     normal_color: str
-    error_prefix: str
-    error_color: str
+    err_prefix: str
+    err_color: str
     success_prefix: str
     success_color: str
-    warning_prefix: str
-    warning_color: str
+    warn_prefix: str
+    warn_color: str
     info_prefix: str
     info_color: str
     notice_prefix: str
@@ -171,10 +169,10 @@ class EditorLayoutSettings:
     help_width_max: int
     help_height_min: int
     help_height_max: int
-    error_width_min: int
-    error_width_max: int
-    error_height_min: int
-    error_height_max: int
+    err_width_min: int
+    err_width_max: int
+    err_height_min: int
+    err_height_max: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,7 +242,7 @@ def _parse_int(
     env: Mapping[str, str | None],
     key: str,
     default: int,
-    warnings: list[str],
+    warns: list[str],
     *,
     minimum: int | None = None,
     maximum: int | None = None,
@@ -255,14 +253,14 @@ def _parse_int(
     try:
         parsed = int(value)
     except ValueError:
-        warnings.append(f"{key} must be an integer, using {default}.")
+        warns.append(f"{key} must be an integer, using {default}")
         return default
 
     if minimum is not None and parsed < minimum:
-        warnings.append(f"{key} must be >= {minimum}, using {default}.")
+        warns.append(f"{key} must be >= {minimum}, using {default}")
         return default
     if maximum is not None and parsed > maximum:
-        warnings.append(f"{key} must be <= {maximum}, using {default}.")
+        warns.append(f"{key} must be <= {maximum}, using {default}")
         return default
     return parsed
 
@@ -271,7 +269,7 @@ def _parse_float(
     env: Mapping[str, str | None],
     key: str,
     default: float,
-    warnings: list[str],
+    warns: list[str],
     *,
     minimum: float | None = None,
     maximum: float | None = None,
@@ -282,14 +280,14 @@ def _parse_float(
     try:
         parsed = float(value)
     except ValueError:
-        warnings.append(f"{key} must be a number, using {default}.")
+        warns.append(f"{key} must be a number, using {default}")
         return default
 
     if minimum is not None and parsed < minimum:
-        warnings.append(f"{key} must be >= {minimum}, using {default}.")
+        warns.append(f"{key} must be >= {minimum}, using {default}")
         return default
     if maximum is not None and parsed > maximum:
-        warnings.append(f"{key} must be <= {maximum}, using {default}.")
+        warns.append(f"{key} must be <= {maximum}, using {default}")
         return default
     return parsed
 
@@ -298,7 +296,7 @@ def _parse_bool(
     env: Mapping[str, str | None],
     key: str,
     default: bool,
-    warnings: list[str],
+    warns: list[str],
 ) -> bool:
     value = _get_env(env, key)
     if value in (None, ""):
@@ -308,7 +306,7 @@ def _parse_bool(
         return True
     if lowered in {"0", "false", "no", "off"}:
         return False
-    warnings.append(f"{key} must be a boolean, using {default}.")
+    warns.append(f"{key} must be a boolean, using {default}")
     return default
 
 
@@ -316,7 +314,7 @@ def _parse_choice(
     env: Mapping[str, str | None],
     key: str,
     default: str,
-    warnings: list[str],
+    warns: list[str],
     *,
     choices: frozenset[str],
 ) -> str:
@@ -325,9 +323,7 @@ def _parse_choice(
         return default
     if value in choices:
         return value
-    warnings.append(
-        f"{key} must be one of {', '.join(sorted(choices))}, using {default}."
-    )
+    warns.append(f"{key} must be one of {', '.join(sorted(choices))}, using {default}")
     return default
 
 
@@ -335,13 +331,13 @@ def _parse_string(
     env: Mapping[str, str | None],
     key: str,
     default: str,
-    warnings: list[str],
+    warns: list[str],
 ) -> str:
     value = _get_env(env, key)
     if value is None:
         return default
     if value == "":
-        warnings.append(f"{key} cannot be empty, using {default}.")
+        warns.append(f"{key} cannot be empty, using {default}")
         return default
     return value
 
@@ -350,21 +346,21 @@ def _parse_csv(
     env: Mapping[str, str | None],
     key: str,
     default: tuple[str, ...],
-    warnings: list[str],
+    warns: list[str],
 ) -> tuple[str, ...]:
     value = _get_env(env, key)
     if value is None:
         return default
     items = tuple(item.strip() for item in value.split(",") if item.strip())
     if not items:
-        warnings.append(f"{key} must contain at least one value, using defaults.")
+        warns.append(f"{key} must contain at least one value, using defaults")
         return default
     return items
 
 
 def _build_theme_styles(
     env: Mapping[str, str | None],
-    warnings: list[str],
+    warns: list[str],
 ) -> dict[str, str]:
     styles = dict(_DEFAULT_THEME_STYLES)
     for env_key, style_key in _THEME_ENV_MAP.items():
@@ -372,7 +368,7 @@ def _build_theme_styles(
         if value is None:
             continue
         if value == "":
-            warnings.append(f"{env_key} cannot be empty, using theme default.")
+            warns.append(f"{env_key} cannot be empty, using theme default")
             continue
         styles[style_key] = value
     return styles
@@ -381,9 +377,9 @@ def _build_theme_styles(
 def build_settings(
     env: Mapping[str, str | None] | None = None,
 ) -> tuple[AppSettings, list[str]]:
-    """BUILDS TYPED SETTINGS FROM AN ENVIRONMENT MAPPING."""
+    """Build typed settings from an environment mapping"""
     source_env = os.environ if env is None else env
-    warnings: list[str] = []
+    warns: list[str] = []
 
     settings = AppSettings(
         runtime=RuntimeSettings(
@@ -391,22 +387,22 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_MAX_FILE_SIZE",
                 5 * 1024 * 1024,
-                warnings,
+                warns,
                 minimum=1,
             ),
             max_concurrent_reads=_parse_int(
                 source_env,
                 "PROMPTIFY_MAX_CONCURRENT_READS",
                 64,
-                warnings,
+                warns,
                 minimum=1,
             ),
-            locale=_parse_string(source_env, "PROMPTIFY_LOCALE", "en", warnings),
+            locale=_parse_string(source_env, "PROMPTIFY_LOCALE", "en", warns),
             default_ignores=_parse_csv(
                 source_env,
                 "PROMPTIFY_DEFAULT_IGNORES",
                 (".git/", ".svn/", "__pycache__/", ".venv/", "node_modules/"),
-                warnings,
+                warns,
             ),
         ),
         app_behavior=AppBehaviorSettings(
@@ -414,104 +410,104 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_COPY_OUTPUT_TO_CLIPBOARD",
                 True,
-                warnings,
+                warns,
             ),
             save_raw_output=_parse_bool(
                 source_env,
                 "PROMPTIFY_SAVE_RAW_OUTPUT",
                 True,
-                warnings,
+                warns,
             ),
         ),
         logger=LoggerSettings(
             verbosity=_parse_int(
-                source_env, "PROMPTIFY_LOG_VERBOSITY", 1, warnings, minimum=0
+                source_env, "PROMPTIFY_LOG_VERBOSITY", 1, warns, minimum=0
             ),
             include_timestamp=_parse_bool(
-                source_env, "PROMPTIFY_LOG_TIMESTAMPS", False, warnings
+                source_env, "PROMPTIFY_LOG_TIMESTAMPS", False, warns
             ),
             normal_prefix=_parse_string(
-                source_env, "PROMPTIFY_LOG_PREFIX_NORMAL", "[>]", warnings
+                source_env, "PROMPTIFY_LOG_PREFIX_NORMAL", "[>]", warns
             ),
             normal_color=_parse_choice(
                 source_env,
                 "PROMPTIFY_LOG_COLOR_NORMAL",
                 "ansiblue",
-                warnings,
+                warns,
                 choices=_LOG_COLOR_CHOICES,
             ),
-            error_prefix=_parse_string(
-                source_env, "PROMPTIFY_LOG_PREFIX_ERROR", "[e]", warnings
+            err_prefix=_parse_string(
+                source_env, "PROMPTIFY_LOG_PREFIX_ERROR", "[e]", warns
             ),
-            error_color=_parse_choice(
+            err_color=_parse_choice(
                 source_env,
                 "PROMPTIFY_LOG_COLOR_ERROR",
                 "ansired",
-                warnings,
+                warns,
                 choices=_LOG_COLOR_CHOICES,
             ),
             success_prefix=_parse_string(
-                source_env, "PROMPTIFY_LOG_PREFIX_SUCCESS", "[+]", warnings
+                source_env, "PROMPTIFY_LOG_PREFIX_SUCCESS", "[+]", warns
             ),
             success_color=_parse_choice(
                 source_env,
                 "PROMPTIFY_LOG_COLOR_SUCCESS",
                 "ansigreen",
-                warnings,
+                warns,
                 choices=_LOG_COLOR_CHOICES,
             ),
-            warning_prefix=_parse_string(
-                source_env, "PROMPTIFY_LOG_PREFIX_WARNING", "[w]", warnings
+            warn_prefix=_parse_string(
+                source_env, "PROMPTIFY_LOG_PREFIX_WARNING", "[w]", warns
             ),
-            warning_color=_parse_choice(
+            warn_color=_parse_choice(
                 source_env,
                 "PROMPTIFY_LOG_COLOR_WARNING",
                 "ansiyellow",
-                warnings,
+                warns,
                 choices=_LOG_COLOR_CHOICES,
             ),
             info_prefix=_parse_string(
-                source_env, "PROMPTIFY_LOG_PREFIX_INFO", "[i]", warnings
+                source_env, "PROMPTIFY_LOG_PREFIX_INFO", "[i]", warns
             ),
             info_color=_parse_choice(
                 source_env,
                 "PROMPTIFY_LOG_COLOR_INFO",
                 "ansiblue",
-                warnings,
+                warns,
                 choices=_LOG_COLOR_CHOICES,
             ),
             notice_prefix=_parse_string(
-                source_env, "PROMPTIFY_LOG_PREFIX_NOTICE", "[*]", warnings
+                source_env, "PROMPTIFY_LOG_PREFIX_NOTICE", "[*]", warns
             ),
             notice_color=_parse_choice(
                 source_env,
                 "PROMPTIFY_LOG_COLOR_NOTICE",
                 "ansimagenta",
-                warnings,
+                warns,
                 choices=_LOG_COLOR_CHOICES,
             ),
             verbose_prefix=_parse_string(
-                source_env, "PROMPTIFY_LOG_PREFIX_VERBOSE", "[v]", warnings
+                source_env, "PROMPTIFY_LOG_PREFIX_VERBOSE", "[v]", warns
             ),
             verbose_color=_parse_choice(
                 source_env,
                 "PROMPTIFY_LOG_COLOR_VERBOSE",
                 "ansigray",
-                warnings,
+                warns,
                 choices=_LOG_COLOR_CHOICES,
             ),
             input_prefix=_parse_string(
-                source_env, "PROMPTIFY_LOG_INPUT_PREFIX", "[<]", warnings
+                source_env, "PROMPTIFY_LOG_INPUT_PREFIX", "[<]", warns
             ),
             input_prefix_color=_parse_choice(
                 source_env,
                 "PROMPTIFY_LOG_INPUT_PREFIX_COLOR",
                 "ansicyan",
-                warnings,
+                warns,
                 choices=_LOG_COLOR_CHOICES,
             ),
             input_suffix=_parse_string(
-                source_env, "PROMPTIFY_LOG_INPUT_SUFFIX", ">>", warnings
+                source_env, "PROMPTIFY_LOG_INPUT_SUFFIX", ">>", warns
             ),
         ),
         render=RenderSettings(
@@ -519,21 +515,21 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_UI_TERM_FALLBACK_WIDTH",
                 80,
-                warnings,
+                warns,
                 minimum=20,
             ),
             terminal_fallback_height=_parse_int(
                 source_env,
                 "PROMPTIFY_UI_TERM_FALLBACK_HEIGHT",
                 20,
-                warnings,
+                warns,
                 minimum=5,
             ),
             column_padding=_parse_int(
                 source_env,
                 "PROMPTIFY_UI_COLUMN_PADDING",
                 4,
-                warnings,
+                warns,
                 minimum=0,
             ),
         ),
@@ -542,7 +538,7 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_TERMINAL_PROFILE",
                 "auto",
-                warnings,
+                warns,
                 choices=frozenset(
                     {
                         "auto",
@@ -557,86 +553,86 @@ def build_settings(
         ),
         editor_layout=EditorLayoutSettings(
             full_screen=_parse_bool(
-                source_env, "PROMPTIFY_UI_FULL_SCREEN", True, warnings
+                source_env, "PROMPTIFY_UI_FULL_SCREEN", True, warns
             ),
             mouse_support=_parse_bool(
-                source_env, "PROMPTIFY_UI_MOUSE_SUPPORT", True, warnings
+                source_env, "PROMPTIFY_UI_MOUSE_SUPPORT", True, warns
             ),
             ttimeoutlen=_parse_float(
                 source_env,
                 "PROMPTIFY_UI_TTIMEOUTLEN",
                 0.05,
-                warnings,
+                warns,
                 minimum=0.0,
             ),
             completion_menu_max_height=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_COMPLETION_MENU_MAX_HEIGHT",
                 12,
-                warnings,
+                warns,
                 minimum=1,
             ),
             completion_menu_scroll_offset=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_COMPLETION_MENU_SCROLL_OFFSET",
                 1,
-                warnings,
+                warns,
                 minimum=0,
             ),
             help_width_min=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_HELP_WIDTH_MIN",
                 40,
-                warnings,
+                warns,
                 minimum=1,
             ),
             help_width_max=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_HELP_WIDTH_MAX",
                 160,
-                warnings,
+                warns,
                 minimum=1,
             ),
             help_height_min=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_HELP_HEIGHT_MIN",
                 12,
-                warnings,
+                warns,
                 minimum=1,
             ),
             help_height_max=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_HELP_HEIGHT_MAX",
                 40,
-                warnings,
+                warns,
                 minimum=1,
             ),
-            error_width_min=_parse_int(
+            err_width_min=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_ERROR_WIDTH_MIN",
                 28,
-                warnings,
+                warns,
                 minimum=1,
             ),
-            error_width_max=_parse_int(
+            err_width_max=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_ERROR_WIDTH_MAX",
                 96,
-                warnings,
+                warns,
                 minimum=1,
             ),
-            error_height_min=_parse_int(
+            err_height_min=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_ERROR_HEIGHT_MIN",
                 6,
-                warnings,
+                warns,
                 minimum=1,
             ),
-            error_height_max=_parse_int(
+            err_height_max=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_ERROR_HEIGHT_MAX",
                 20,
-                warnings,
+                warns,
                 minimum=1,
             ),
         ),
@@ -645,35 +641,35 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_EDITOR_BULK_EDIT_SUSPEND_SECONDS",
                 0.35,
-                warnings,
+                warns,
                 minimum=0.0,
             ),
             bulk_edit_size_threshold=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_BULK_EDIT_SIZE_THRESHOLD",
                 2048,
-                warnings,
+                warns,
                 minimum=1,
             ),
             search_history_limit=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_SEARCH_HISTORY_LIMIT",
                 8,
-                warnings,
+                warns,
                 minimum=1,
             ),
             token_update_interval=_parse_float(
                 source_env,
                 "PROMPTIFY_EDITOR_TOKEN_UPDATE_INTERVAL",
                 0.5,
-                warnings,
+                warns,
                 minimum=0.05,
             ),
             show_help_on_start=_parse_bool(
                 source_env,
                 "PROMPTIFY_EDITOR_SHOW_HELP_ON_START",
                 False,
-                warnings,
+                warns,
             ),
         ),
         matching=MatchingSettings(
@@ -681,14 +677,14 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_MATCH_DISPLAY_META_TAIL_SEGMENTS",
                 3,
-                warnings,
+                warns,
                 minimum=1,
             ),
             completion_fuzzy_score_cutoff=_parse_int(
                 source_env,
                 "PROMPTIFY_COMPLETION_FUZZY_SCORE_CUTOFF",
                 40,
-                warnings,
+                warns,
                 minimum=0,
                 maximum=100,
             ),
@@ -696,14 +692,14 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_MATCH_QUERY_LENGTH_SWITCH",
                 6,
-                warnings,
+                warns,
                 minimum=1,
             ),
             path_threshold_short=_parse_int(
                 source_env,
                 "PROMPTIFY_MATCH_PATH_THRESHOLD_SHORT",
                 78,
-                warnings,
+                warns,
                 minimum=0,
                 maximum=100,
             ),
@@ -711,7 +707,7 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_MATCH_PATH_THRESHOLD_LONG",
                 86,
-                warnings,
+                warns,
                 minimum=0,
                 maximum=100,
             ),
@@ -719,7 +715,7 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_MATCH_LEAF_THRESHOLD_SHORT",
                 84,
-                warnings,
+                warns,
                 minimum=0,
                 maximum=100,
             ),
@@ -727,7 +723,7 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_MATCH_LEAF_THRESHOLD_LONG",
                 90,
-                warnings,
+                warns,
                 minimum=0,
                 maximum=100,
             ),
@@ -737,7 +733,7 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_INDEX_WATCH_MODE",
                 "auto",
-                warnings,
+                warns,
                 choices=frozenset({"auto", "native", "polling", "off"}),
             )
         ),
@@ -746,16 +742,16 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_GIT_ESTIMATE_CACHE_TTL",
                 5.0,
-                warnings,
+                warns,
                 minimum=0.0,
             )
         ),
-        theme=ThemeSettings(styles=_build_theme_styles(source_env, warnings)),
+        theme=ThemeSettings(styles=_build_theme_styles(source_env, warns)),
     )
 
     if settings.editor_layout.help_width_min > settings.editor_layout.help_width_max:
-        warnings.append(
-            "PROMPTIFY_EDITOR_HELP_WIDTH_MIN cannot exceed PROMPTIFY_EDITOR_HELP_WIDTH_MAX, using defaults."
+        warns.append(
+            "PROMPTIFY_EDITOR_HELP_WIDTH_MIN cannot exceed PROMPTIFY_EDITOR_HELP_WIDTH_MAX, using defaults"
         )
         settings = _replace_editor_layout(
             settings,
@@ -764,8 +760,8 @@ def build_settings(
         )
 
     if settings.editor_layout.help_height_min > settings.editor_layout.help_height_max:
-        warnings.append(
-            "PROMPTIFY_EDITOR_HELP_HEIGHT_MIN cannot exceed PROMPTIFY_EDITOR_HELP_HEIGHT_MAX, using defaults."
+        warns.append(
+            "PROMPTIFY_EDITOR_HELP_HEIGHT_MIN cannot exceed PROMPTIFY_EDITOR_HELP_HEIGHT_MAX, using defaults"
         )
         settings = _replace_editor_layout(
             settings,
@@ -773,30 +769,27 @@ def build_settings(
             help_height_max=40,
         )
 
-    if settings.editor_layout.error_width_min > settings.editor_layout.error_width_max:
-        warnings.append(
-            "PROMPTIFY_EDITOR_ERROR_WIDTH_MIN cannot exceed PROMPTIFY_EDITOR_ERROR_WIDTH_MAX, using defaults."
+    if settings.editor_layout.err_width_min > settings.editor_layout.err_width_max:
+        warns.append(
+            "PROMPTIFY_EDITOR_ERROR_WIDTH_MIN cannot exceed PROMPTIFY_EDITOR_ERROR_WIDTH_MAX, using defaults"
         )
         settings = _replace_editor_layout(
             settings,
-            error_width_min=28,
-            error_width_max=96,
+            err_width_min=28,
+            err_width_max=96,
         )
 
-    if (
-        settings.editor_layout.error_height_min
-        > settings.editor_layout.error_height_max
-    ):
-        warnings.append(
-            "PROMPTIFY_EDITOR_ERROR_HEIGHT_MIN cannot exceed PROMPTIFY_EDITOR_ERROR_HEIGHT_MAX, using defaults."
+    if settings.editor_layout.err_height_min > settings.editor_layout.err_height_max:
+        warns.append(
+            "PROMPTIFY_EDITOR_ERROR_HEIGHT_MIN cannot exceed PROMPTIFY_EDITOR_ERROR_HEIGHT_MAX, using defaults"
         )
         settings = _replace_editor_layout(
             settings,
-            error_height_min=6,
-            error_height_max=20,
+            err_height_min=6,
+            err_height_max=20,
         )
 
-    return settings, warnings
+    return settings, warns
 
 
 def _replace_editor_layout(
@@ -814,14 +807,10 @@ def _replace_editor_layout(
         help_width_max=int(overrides.get("help_width_max", layout.help_width_max)),
         help_height_min=int(overrides.get("help_height_min", layout.help_height_min)),
         help_height_max=int(overrides.get("help_height_max", layout.help_height_max)),
-        error_width_min=int(overrides.get("error_width_min", layout.error_width_min)),
-        error_width_max=int(overrides.get("error_width_max", layout.error_width_max)),
-        error_height_min=int(
-            overrides.get("error_height_min", layout.error_height_min)
-        ),
-        error_height_max=int(
-            overrides.get("error_height_max", layout.error_height_max)
-        ),
+        err_width_min=int(overrides.get("err_width_min", layout.err_width_min)),
+        err_width_max=int(overrides.get("err_width_max", layout.err_width_max)),
+        err_height_min=int(overrides.get("err_height_min", layout.err_height_min)),
+        err_height_max=int(overrides.get("err_height_max", layout.err_height_max)),
     )
     return AppSettings(
         runtime=settings.runtime,
@@ -845,8 +834,8 @@ MAX_CONCURRENT_READS = APP_SETTINGS.runtime.max_concurrent_reads
 LOCALE = APP_SETTINGS.runtime.locale
 
 
-def consume_settings_warnings() -> list[str]:
-    """RETURNS CURRENT SETTINGS WARNINGS AND CLEARS THEM FOR ONE-TIME LOGGING."""
-    warnings = list(SETTINGS_WARNINGS)
+def consume_settings_warns() -> list[str]:
+    """Return current settings warnings and clear them for one-time logging"""
+    warns = list(SETTINGS_WARNINGS)
     SETTINGS_WARNINGS.clear()
-    return warnings
+    return warns
