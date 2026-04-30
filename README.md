@@ -42,7 +42,7 @@ the in-app help screen is authoritative, but the main defaults are...
 - `Ctrl+G` / `F1`: help
 - `Ctrl+F`: search
 - `Ctrl+S`: resolve and save
-- `Ctrl+Q`: abort
+- `Ctrl+Q` / `F10`: abort with confirmation
 - `Enter` / `Ctrl+N`: next issue while issue mode is open
 - `Ctrl+R` / `Ctrl+P`: previous search result or issue, depending on mode
 
