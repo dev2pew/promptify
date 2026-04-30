@@ -116,8 +116,8 @@ def setup_keybindings(editor) -> KeyBindings:
         if editor.issue_mode_active:
             editor.deactivate_issue_mode()
         else:
-            editor.err_visible = False
-            event.app.layout.focus(editor.main_window)
+            editor._hide_overlay("error")
+            event.app.invalidate()
 
     @custom_bindings.add("enter", filter=is_issue_mode_active)
     @custom_bindings.add("c-n", filter=is_issue_mode_active)
@@ -137,8 +137,8 @@ def setup_keybindings(editor) -> KeyBindings:
     )
     def _dismiss_err(event) -> None:
         editor.note_user_activity()
-        editor.err_visible = False
-        event.app.layout.focus(editor.main_window)
+        editor._hide_overlay("error")
+        event.app.invalidate()
 
     @custom_bindings.add("enter", filter=is_quit_visible)
     @custom_bindings.add("y", filter=is_quit_visible)

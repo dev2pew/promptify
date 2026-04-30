@@ -543,6 +543,92 @@ async def test_interactive_editor_quit_confirmation_restores_help_focus(
             await asyncio.wait_for(task, timeout=1.5)
 
 
+async def test_interactive_editor_help_suspends_quit_modal_cleanly(
+    app_components,
+):
+    """Help opened from quit confirmation should hide quit until help closes"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
+    editor.buffer.cursor_position = len(editor.buffer.text)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.open_quit_confirm()
+
+            assert editor.quit_visible
+            assert not editor.help_visible
+            assert get_app().current_buffer is editor.quit_buffer
+
+            editor.open_help()
+
+            assert editor.help_visible
+            assert not editor.quit_visible
+            assert get_app().current_buffer is editor.help_buffer
+            assert editor.buffer.cursor_position == len(editor.buffer.text)
+
+            editor.close_help()
+
+            assert not editor.help_visible
+            assert editor.quit_visible
+            assert get_app().current_buffer is editor.quit_buffer
+            assert editor.buffer.cursor_position == len(editor.buffer.text)
+
+            pipe_input.send_text("n")
+            for _ in range(20):
+                if not editor.quit_visible:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert not editor.quit_visible
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_help_suspends_error_modal_cleanly(
+    app_components,
+):
+    """Help opened from an error overlay should resume the same error overlay on close"""
+    context, resolver = app_components
+    editor = InteractiveEditor("[@proj\n<@file:missing.py>", context.indexer, resolver)
+    issues = await editor.collect_save_issues()
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.activate_issue_mode(issues)
+
+            assert editor.err_visible
+            assert not editor.help_visible
+            assert get_app().current_buffer is editor.err_buffer
+
+            editor.open_help()
+
+            assert editor.help_visible
+            assert not editor.err_visible
+            assert get_app().current_buffer is editor.help_buffer
+
+            editor.close_help()
+
+            assert not editor.help_visible
+            assert editor.err_visible
+            assert get_app().current_buffer is editor.err_buffer
+            assert editor.issue_mode_active
+
+            editor.deactivate_issue_mode()
+            assert not editor.err_visible
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
 async def test_interactive_editor_erases_screen_when_done(app_components, monkeypatch):
     """The editor should ask prompt-toolkit to erase its UI when it exits"""
     context, resolver = app_components

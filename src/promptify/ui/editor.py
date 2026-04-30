@@ -4,7 +4,7 @@ import re
 import sys
 import asyncio
 from dataclasses import dataclass
-from typing import Callable, Iterable, cast
+from typing import Callable, Iterable, Literal, cast
 
 from .logger import log
 from ..core.indexer import ProjectIndexer
@@ -298,6 +298,21 @@ class EditorIssue:
     style: str
     message: str
     fragment: str
+
+
+FocusTarget = Literal["main", "search", "help", "error", "quit"]
+OverlayName = Literal["none", "help", "error", "quit"]
+
+
+@dataclass(frozen=True)
+class EditorViewState:
+    """Capture editor and search state so overlays can restore it predictably"""
+
+    focus: FocusTarget
+    main_cursor: int
+    search_cursor: int
+    main_selection: SelectionState | None
+    search_selection: SelectionState | None
 
 
 class SearchMatchProcessor(Processor):
@@ -1119,6 +1134,26 @@ class InteractiveEditor:
     ):
         if show_help is None:
             show_help = APP_SETTINGS.editor_behavior.show_help_on_start
+        self._overlay_visibility: dict[OverlayName, bool] = {
+            "help": False,
+            "error": False,
+            "quit": False,
+        }
+        self._overlay_restore_focus: dict[OverlayName, FocusTarget] = {
+            "help": "main",
+            "error": "main",
+            "quit": "main",
+        }
+        self._overlay_suspended: dict[OverlayName, OverlayName] = {
+            "help": "none",
+            "error": "none",
+            "quit": "none",
+        }
+        self._overlay_view_state: dict[OverlayName, EditorViewState | None] = {
+            "help": None,
+            "error": None,
+            "quit": None,
+        }
         self.help_visible = show_help
         self.terminal_profile = terminal_profile or APP_TERMINAL_PROFILE
         self.indexer = indexer
@@ -1131,11 +1166,6 @@ class InteractiveEditor:
         self._search_message_transient = False
         self._search_history: list[str] = []
         self._search_history_index = -1
-        self._help_restore_focus = "main"
-        self._help_restore_main_cursor = 0
-        self._help_restore_search_cursor = 0
-        self._help_restore_main_selection: SelectionState | None = None
-        self._help_restore_search_selection: SelectionState | None = None
         self._document_issue_cache_text_id = 0
         self._document_issue_cache_enabled = True
         self._document_issue_cache: tuple[EditorIssue, ...] = tuple()
@@ -1194,7 +1224,6 @@ class InteractiveEditor:
             ),
         )
         self.quit_visible = False
-        self._quit_restore_focus = "main"
         self.quit_buffer = Buffer(
             document=Document(
                 self.get_text(
@@ -1479,6 +1508,131 @@ class InteractiveEditor:
         """Reapply a saved selection snapshot to a target buffer"""
         buffer.selection_state = self._copy_selection_state(selection_state)
 
+    @property
+    def help_visible(self) -> bool:
+        """Expose help visibility while storing overlay state centrally"""
+        return self._overlay_visibility["help"]
+
+    @help_visible.setter
+    def help_visible(self, value: bool) -> None:
+        self._overlay_visibility["help"] = value
+
+    @property
+    def err_visible(self) -> bool:
+        """Expose error visibility while storing overlay state centrally"""
+        return self._overlay_visibility["error"]
+
+    @err_visible.setter
+    def err_visible(self, value: bool) -> None:
+        self._overlay_visibility["error"] = value
+
+    @property
+    def quit_visible(self) -> bool:
+        """Expose quit visibility while storing overlay state centrally"""
+        return self._overlay_visibility["quit"]
+
+    @quit_visible.setter
+    def quit_visible(self, value: bool) -> None:
+        self._overlay_visibility["quit"] = value
+
+    def _set_overlay_visible(self, overlay: OverlayName, visible: bool) -> None:
+        """Update overlay visibility through the shared registry"""
+        if overlay == "none":
+            return
+        self._overlay_visibility[overlay] = visible
+
+    def _get_visible_overlay(self) -> OverlayName:
+        """Return the currently visible modal overlay, if any"""
+        for overlay in ("help", "quit", "error"):
+            if self._overlay_visibility[cast(OverlayName, overlay)]:
+                return cast(OverlayName, overlay)
+        return "none"
+
+    def _get_focus_target(self) -> FocusTarget:
+        """Describe which editor surface currently owns user attention"""
+        overlay = self._get_visible_overlay()
+        if overlay != "none":
+            return cast(FocusTarget, overlay)
+        if self.search_visible:
+            return "search"
+        return "main"
+
+    def _capture_view_state(self) -> EditorViewState:
+        """Snapshot editor and search cursors plus selections for later restore"""
+        return EditorViewState(
+            focus=self._get_focus_target(),
+            main_cursor=self.buffer.cursor_position,
+            search_cursor=self.search_buffer.cursor_position,
+            main_selection=self._copy_selection_state(self.buffer.selection_state),
+            search_selection=self._copy_selection_state(
+                self.search_buffer.selection_state
+            ),
+        )
+
+    def _restore_view_state(self, state: EditorViewState) -> None:
+        """Restore editor and search cursors plus selections from a snapshot"""
+        self.buffer.cursor_position = state.main_cursor
+        self.search_buffer.cursor_position = state.search_cursor
+        self._restore_selection_state(self.buffer, state.main_selection)
+        self._restore_selection_state(self.search_buffer, state.search_selection)
+
+    def _focus_target(self, target: FocusTarget) -> None:
+        """Route focus changes through one place for all editor surfaces"""
+        if target == "search" and self.search_visible:
+            self._focus(self.search_buffer)
+        elif target == "help" and self.help_visible:
+            self._focus(self.help_window)
+        elif target == "error" and self.err_visible:
+            self._focus(self.err_window)
+        elif target == "quit" and self.quit_visible:
+            self._focus(self.quit_window)
+        else:
+            self._focus(self.main_window)
+
+    def _show_overlay(
+        self,
+        overlay: OverlayName,
+        *,
+        restore_focus: FocusTarget | None = None,
+        preserve_view: bool = False,
+    ) -> OverlayName:
+        """Show one overlay, suspending any currently visible overlay beneath it"""
+        current_focus = restore_focus or self._get_focus_target()
+        suspended = self._get_visible_overlay()
+        if suspended != "none" and suspended != overlay:
+            self._set_overlay_visible(suspended, False)
+        elif suspended == overlay:
+            suspended = self._overlay_suspended[overlay]
+
+        self._overlay_suspended[overlay] = suspended
+        self._overlay_restore_focus[overlay] = current_focus
+        self._overlay_view_state[overlay] = (
+            self._capture_view_state() if preserve_view else None
+        )
+        self._set_overlay_visible(overlay, True)
+        return suspended
+
+    def _hide_overlay(
+        self, overlay: OverlayName, *, restore_view: bool = False
+    ) -> None:
+        """Hide one overlay and resume the previously suspended overlay or focus target"""
+        suspended = self._overlay_suspended[overlay]
+        restore_focus = self._overlay_restore_focus[overlay]
+        view_state = self._overlay_view_state[overlay]
+
+        self._set_overlay_visible(overlay, False)
+        self._overlay_suspended[overlay] = "none"
+        self._overlay_view_state[overlay] = None
+
+        if restore_view and view_state is not None:
+            self._restore_view_state(view_state)
+
+        if suspended != "none":
+            self._set_overlay_visible(suspended, True)
+            self._focus_target(cast(FocusTarget, suspended))
+        else:
+            self._focus_target(restore_focus)
+
     def _focus(self, target) -> None:
         """Focus a target if an application is active"""
         try:
@@ -1547,13 +1701,14 @@ class InteractiveEditor:
 
     def _get_current_mode_name(self) -> str:
         """Return the editor mode that currently owns the user's attention"""
-        if self.quit_visible:
+        overlay = self._get_visible_overlay()
+        if overlay == "quit":
             return self.get_text("editor_mode_quit", "quit")
-        if self.help_visible:
+        if overlay == "help":
             return self.get_text("editor_mode_help", "help")
         if self.issue_mode_active:
             return self.get_text("editor_mode_issue", "issue")
-        if self.err_visible:
+        if overlay == "error":
             return self.get_text("editor_mode_err", "error")
         if self.search_visible:
             return self.get_text("editor_mode_search", "search")
@@ -1967,11 +2122,11 @@ class InteractiveEditor:
 
     def _focus_search(self) -> None:
         """Move input focus into the search field if an app is active"""
-        self._focus(self.search_buffer)
+        self._focus_target("search")
 
     def _focus_main(self) -> None:
         """Restore input focus to the main editor buffer"""
-        self._focus(self.main_window)
+        self._focus_target("main")
 
     def open_search(self) -> None:
         """Show the search bar and prepare it for immediate input"""
@@ -1992,53 +2147,24 @@ class InteractiveEditor:
         self.search_visible = False
         self._clear_search_message()
         self._reset_search_navigation()
-        self._focus_main()
+        self._focus_target("main")
 
     def open_help(self) -> None:
         """Show the help overlay and focus it"""
-        self._help_restore_focus = (
-            "quit"
-            if self.quit_visible
-            else "search"
-            if self.search_visible
-            else "error"
-            if self.err_visible
-            else "main"
-        )
-        self._help_restore_main_cursor = self.buffer.cursor_position
-        self._help_restore_search_cursor = self.search_buffer.cursor_position
-        self._help_restore_main_selection = self._copy_selection_state(
-            self.buffer.selection_state
-        )
-        self._help_restore_search_selection = self._copy_selection_state(
-            self.search_buffer.selection_state
-        )
-        self.help_visible = True
+        self._show_overlay("help", preserve_view=True)
         if self.search_visible and self._help_search_anchor >= 0:
             self._set_help_cursor(self._help_search_anchor)
         elif self.issue_mode_active and self._help_issue_anchor >= 0:
             self._set_help_cursor(self._help_issue_anchor)
         else:
             self._set_help_cursor(0)
-        self._focus(self.help_window)
+        self._focus_target("help")
+        self.invalidate()
 
     def close_help(self) -> None:
         """Hide the help overlay and return focus to the active edit target"""
-        self.help_visible = False
-        self.buffer.cursor_position = self._help_restore_main_cursor
-        self.search_buffer.cursor_position = self._help_restore_search_cursor
-        self._restore_selection_state(self.buffer, self._help_restore_main_selection)
-        self._restore_selection_state(
-            self.search_buffer, self._help_restore_search_selection
-        )
-        if self._help_restore_focus == "search" and self.search_visible:
-            self._focus_search()
-        elif self._help_restore_focus == "quit" and self.quit_visible:
-            self._focus(self.quit_window)
-        elif self._help_restore_focus == "error" and self.err_visible:
-            self._focus(self.err_window)
-        else:
-            self._focus_main()
+        self._hide_overlay("help", restore_view=True)
+        self.invalidate()
 
     def toggle_help(self) -> None:
         """Toggle help visibility without losing the active search context"""
@@ -2050,36 +2176,19 @@ class InteractiveEditor:
     def open_quit_confirm(self) -> None:
         """Show a confirmation modal before aborting the editor session"""
         self.note_user_activity()
-        self._quit_restore_focus = (
-            "help"
-            if self.help_visible
-            else "search"
-            if self.search_visible
-            else "error"
-            if self.err_visible
-            else "main"
-        )
-        self.quit_visible = True
+        self._show_overlay("quit")
         self.quit_buffer.cursor_position = 0
-        self._focus(self.quit_window)
+        self._focus_target("quit")
         self.invalidate()
 
     def close_quit_confirm(self) -> None:
         """Dismiss the quit modal and restore focus to the previous target"""
-        self.quit_visible = False
-        if self._quit_restore_focus == "help" and self.help_visible:
-            self._focus(self.help_window)
-        elif self._quit_restore_focus == "search" and self.search_visible:
-            self._focus_search()
-        elif self._quit_restore_focus == "error" and self.err_visible:
-            self._focus(self.err_window)
-        else:
-            self._focus_main()
+        self._hide_overlay("quit")
         self.invalidate()
 
     def confirm_quit(self) -> None:
         """Abort the current editor session without saving"""
-        self.quit_visible = False
+        self._set_overlay_visible("quit", False)
         self.result = None
         self.invalidate()
 
@@ -2151,9 +2260,8 @@ class InteractiveEditor:
     def deactivate_issue_mode(self) -> None:
         """Exit issue mode and dismiss the overlay"""
         self.issue_mode_active = False
-        self.err_visible = False
+        self._hide_overlay("error")
         self.err_message = ""
-        self._focus_main()
         self.invalidate()
 
     def _render_issue_overlay(self) -> None:
@@ -2168,7 +2276,7 @@ class InteractiveEditor:
             else "editor_issue_title_reference",
             "syntax" if issue.style == "invalid-syntax" else "reference",
         )
-        self.err_visible = True
+        self._show_overlay("error")
         self.err_message = issue.message
         self.err_buffer.set_document(
             Document(
@@ -2192,7 +2300,7 @@ class InteractiveEditor:
             ),
             bypass_readonly=True,
         )
-        self._focus(self.err_window)
+        self._focus_target("error")
         self.invalidate()
 
     def jump_to_issue(self, index: int) -> None:
@@ -2364,10 +2472,7 @@ class InteractiveEditor:
         )
         app.ttimeoutlen = APP_SETTINGS.editor_layout.ttimeoutlen
 
-        if self.help_visible:
-            app.layout.focus(self.help_window)
-        elif self.quit_visible:
-            app.layout.focus(self.quit_window)
+        self._focus_target(self._get_focus_target())
 
         token_task = asyncio.create_task(self._update_tokens_loop())
         await app.run_async()

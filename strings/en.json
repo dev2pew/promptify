@@ -79,7 +79,7 @@
     "editor_status_issue_count": "{count} {label}",
     "editor_issue_label_singular": "issue",
     "editor_issue_label_plural": "issues",
-    "editor_search_label": "SEARCH",
+    "editor_search_label": "search",
     "editor_search_status_count": "{current} of {total}",
     "editor_search_enter_query": "enter a query",
     "editor_search_not_found": "not found",
