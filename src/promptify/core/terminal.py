@@ -98,11 +98,7 @@ def _resolve_terminal_kind(env: Mapping[str, str | None], override: str) -> str:
         or os.name == "nt"
     )
 
-    if (
-        looks_like_windows_console
-        and has_cmd_prompt
-        and not has_powershell_markers
-    ):
+    if looks_like_windows_console and has_cmd_prompt and not has_powershell_markers:
         return "legacy-cmd"
 
     if looks_like_windows_env:
