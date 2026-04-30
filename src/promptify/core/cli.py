@@ -29,8 +29,8 @@ def extract_help_from_docstring(cls: type) -> dict[str, str]:
     doc = cls.__doc__ or ""
     helps = {}
     for line in doc.splitlines():
-        # CAPTURES DEFINITIONS LIKE ->  `   CASE (STR): DESCRIPTION...`
-        match = re.match(r"\s*([a-zA-Z0-9_]+)\s*\([^)]+\)\s*:\s*(.*)", line)
+        # CAPTURES DEFINITIONS LIKE -> `case (str): ...` OR ``case` (str): ...`
+        match = re.match(r"\s*`?([a-zA-Z0-9_]+)`?\s*\([^)]+\)\s*:\s*(.*)", line)
         if match:
             helps[match.group(1)] = match.group(2).strip()
     return helps
