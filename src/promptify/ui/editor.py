@@ -1193,6 +1193,32 @@ class InteractiveEditor:
                 weight=1,
             ),
         )
+        self.quit_visible = False
+        self._quit_restore_focus = "main"
+        self.quit_buffer = Buffer(
+            document=Document(
+                self.get_text(
+                    "editor_quit_confirm",
+                    "quit without saving?\nall progress will be discarded\n\n[Y/Enter] quit [N/Esc] cancel\n",
+                )
+            ),
+            read_only=True,
+        )
+        self.quit_window = Window(
+            content=BufferControl(buffer=self.quit_buffer),
+            style="class:err-text",
+            wrap_lines=True,
+            width=Dimension(
+                min=APP_SETTINGS.editor_layout.err_width_min,
+                max=APP_SETTINGS.editor_layout.err_width_max,
+                weight=1,
+            ),
+            height=Dimension(
+                min=APP_SETTINGS.editor_layout.err_height_min,
+                max=APP_SETTINGS.editor_layout.err_height_max,
+                weight=1,
+            ),
+        )
         self.search_visible = False
         self.search_message = ""
         self.search_buffer = Buffer(
@@ -1521,6 +1547,8 @@ class InteractiveEditor:
 
     def _get_current_mode_name(self) -> str:
         """Return the editor mode that currently owns the user's attention"""
+        if self.quit_visible:
+            return self.get_text("editor_mode_quit", "quit")
         if self.help_visible:
             return self.get_text("editor_mode_help", "help")
         if self.issue_mode_active:
@@ -1969,7 +1997,13 @@ class InteractiveEditor:
     def open_help(self) -> None:
         """Show the help overlay and focus it"""
         self._help_restore_focus = (
-            "search" if self.search_visible else "error" if self.err_visible else "main"
+            "quit"
+            if self.quit_visible
+            else "search"
+            if self.search_visible
+            else "error"
+            if self.err_visible
+            else "main"
         )
         self._help_restore_main_cursor = self.buffer.cursor_position
         self._help_restore_search_cursor = self.search_buffer.cursor_position
@@ -1999,6 +2033,8 @@ class InteractiveEditor:
         )
         if self._help_restore_focus == "search" and self.search_visible:
             self._focus_search()
+        elif self._help_restore_focus == "quit" and self.quit_visible:
+            self._focus(self.quit_window)
         elif self._help_restore_focus == "error" and self.err_visible:
             self._focus(self.err_window)
         else:
@@ -2010,6 +2046,42 @@ class InteractiveEditor:
             self.close_help()
         else:
             self.open_help()
+
+    def open_quit_confirm(self) -> None:
+        """Show a confirmation modal before aborting the editor session"""
+        self.note_user_activity()
+        self._quit_restore_focus = (
+            "help"
+            if self.help_visible
+            else "search"
+            if self.search_visible
+            else "error"
+            if self.err_visible
+            else "main"
+        )
+        self.quit_visible = True
+        self.quit_buffer.cursor_position = 0
+        self._focus(self.quit_window)
+        self.invalidate()
+
+    def close_quit_confirm(self) -> None:
+        """Dismiss the quit modal and restore focus to the previous target"""
+        self.quit_visible = False
+        if self._quit_restore_focus == "help" and self.help_visible:
+            self._focus(self.help_window)
+        elif self._quit_restore_focus == "search" and self.search_visible:
+            self._focus_search()
+        elif self._quit_restore_focus == "error" and self.err_visible:
+            self._focus(self.err_window)
+        else:
+            self._focus_main()
+        self.invalidate()
+
+    def confirm_quit(self) -> None:
+        """Abort the current editor session without saving"""
+        self.quit_visible = False
+        self.result = None
+        self.invalidate()
 
     def _find_search_match(
         self, query: str, start: int, direction: int
@@ -2102,7 +2174,7 @@ class InteractiveEditor:
             Document(
                 self.format_text(
                     "editor_issue_overlay",
-                    "{title} issue {ordinal} of {total}\nline {line}, col {column}\n\n{message}\n\n{context_label}\n{fragment}\n\n{controls}",
+                    "{title} issue at :{line}:{column}...\n\n{message}\n\n{fragment}\n{context_label}\n\nissue {ordinal} of {total}\n{controls}\n",
                     title=title,
                     ordinal=self.issue_index + 1,
                     total=total,
@@ -2251,6 +2323,13 @@ class InteractiveEditor:
             Condition(lambda: self.err_visible),
         )
 
+        quit_float = self._build_modal_float(
+            self.quit_window,
+            " < " + get_string("quit_title", "quit") + " > ",
+            "class:err-frame",
+            Condition(lambda: self.quit_visible),
+        )
+
         layout = Layout(
             FloatContainer(
                 content=body,
@@ -2262,6 +2341,7 @@ class InteractiveEditor:
                     ),
                     help_float,
                     err_float,
+                    quit_float,
                 ],
             )
         )
@@ -2286,6 +2366,8 @@ class InteractiveEditor:
 
         if self.help_visible:
             app.layout.focus(self.help_window)
+        elif self.quit_visible:
+            app.layout.focus(self.quit_window)
 
         token_task = asyncio.create_task(self._update_tokens_loop())
         await app.run_async()
