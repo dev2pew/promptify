@@ -121,7 +121,7 @@ class App:
             async with aiofiles.open(raw_filepath, "w", encoding="utf-8") as f:
                 await f.write(raw_content)
 
-        log.success(get_string("saved_output", "saved output").format(path=filepath))
+        log.success(get_string("saved_output", "saved - {path}").format(path=filepath))
 
         if APP_SETTINGS.app_behavior.copy_output_to_clipboard:
             try:
@@ -129,7 +129,7 @@ class App:
                 log.success(get_string("copied_clipboard", "copied to clipboard"))
             except Exception as err:
                 log.warn(
-                    get_string("clipboard_failed", "clipboard failed").format(err=err)
+                    get_string("clipboard_failed", "clip fail - {e}").format(e=err)
                 )
 
     async def run(self) -> None:
@@ -140,7 +140,7 @@ class App:
         if not cases:
             log.err(get_string("no_cases", "no cases found"))
             log.info(
-                get_string("root_dir_shows", "root dir").format(path=self.root_dir)
+                get_string("root_dir_shows", "pos - {path}").format(path=self.root_dir)
             )
             return
 
@@ -160,13 +160,13 @@ class App:
                 log.err(
                     get_string(
                         "duplicate_case_cli",
-                        "Multiple cases found for '{case}'. Only normal menu mode supports duplicates. If you want to use the CLI, then the user needs to adjust their cases to not contain duplicate names.",
+                        "multiple cases found for this name, leave only one",
                     ).format(case=self.cli_config.case)
                 )
                 return
             if not matching:
                 log.err(
-                    get_string("case_not_found", "Case '{case}' not found.").format(
+                    get_string("case_not_found", "not found - {case}").format(
                         case=self.cli_config.case
                     )
                 )
@@ -197,7 +197,7 @@ class App:
             print_columnized(display_items)
 
             try:
-                prompt_str = get_string("select_case", "select case")
+                prompt_str = get_string("select case", "select case")
                 if lastcase:
                     prompt_str = f"{prompt_str} ('{lastcase}')"
                 case_input = (await log.input_async(prompt_str)).strip()
@@ -234,7 +234,7 @@ class App:
         target_dir = Path(target_path_str).resolve()
         if not target_dir.is_dir():
             log.err(
-                get_string("dir_not_exist", "directory not exist").format(
+                get_string("dir_not_exist", "not found - {path}").format(
                     path=target_dir
                 )
             )
@@ -246,14 +246,10 @@ class App:
         has_git = shutil.which("git") is not None
         has_git_folder = (target_dir / ".git").exists()
         if not has_git:
-            log.warn(
-                get_string("git_not_found", "git executable not found in system path.")
-            )
+            log.warn(get_string("git_not_found", "git executable not found"))
         if not has_git_folder:
             log.warn(
-                get_string("no_git_folder", "no .git folder found in '{path}'.").format(
-                    path=target_dir
-                )
+                get_string("no_git_folder", "not found - .git").format(path=target_dir)
             )
 
         indexer = ProjectIndexer(target_dir, case)
@@ -290,7 +286,7 @@ class App:
             print_modes(
                 [
                     (
-                        get_string("mode_simple_name", "simple"),
+                        get_string("mode_simple_name", "simple mode"),
                         get_string("mode_simple_desc", "legacy desc"),
                     ),
                     (
@@ -339,7 +335,7 @@ class App:
         legacy_path = case.case_dir / case.legacy_file
         if not legacy_path.exists():
             log.err(
-                get_string("legacy_not_found", "legacy not found").format(
+                get_string("legacy_not_found", "not found - legacy").format(
                     path=legacy_path
                 )
             )

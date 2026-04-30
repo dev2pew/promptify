@@ -1587,13 +1587,19 @@ class InteractiveEditor:
     def _get_toolbar_text(self) -> str:
         """Swap toolbar hints to match the current interaction mode"""
         mode = self._get_current_mode_name()
+        if mode == "quit":
+            return get_string("toolbar_text_quit", "[Y/Enter/] quit | [N/Esc] cancel")
         if mode == "search":
-            return get_string("toolbar_text_search", "")
+            return get_string(
+                "toolbar_text_search", "[Enter] next | ^[R] prev | [Esc] close"
+            )
         if mode == "issue":
-            return get_string("toolbar_text_issue", "")
+            return get_string(
+                "toolbar_text_issue", "[N/Enter] next | ^[P/R] prev | [Esc] close"
+            )
         if mode == "help":
-            return get_string("toolbar_text_help", "")
-        return get_string("toolbar_text_normal", "")
+            return get_string("toolbar_text_help", "[Esc/Enter] close")
+        return get_string("toolbar_text_normal", "^[G] help | ^[F] find")
 
     def _remember_search_query(self, query: str) -> None:
         """Keep a small in-memory history of search queries"""
@@ -1859,7 +1865,7 @@ class InteractiveEditor:
                         "issue_symbol_resolution_err",
                         "{path}: {err}",
                         path=meta.rel_path,
-                        err=err,
+                        e=err,
                     ),
                 )
 
@@ -2138,7 +2144,7 @@ class InteractiveEditor:
                 " < "
                 + self.format_text(
                     "editor_issue_title_bar",
-                    "issues {ordinal} / {total}",
+                    "issues [{ordinal}/{total}]",
                     ordinal=ordinal,
                     total=total,
                 )

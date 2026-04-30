@@ -72,8 +72,8 @@ class CaseConfig:
                         self.legacy_file = legacy_file
             except Exception as err:
                 log.warn(
-                    get_string("config_parse_failed", "failed to parse config").format(
-                        name=self.name, err=err
+                    get_string("config_parse_failed", "config parse fail - {e}").format(
+                        name=self.name, e=err
                     )
                 )
 
@@ -88,8 +88,8 @@ class CaseConfig:
                     lines.extend(f.readlines())
             except Exception as err:
                 log.warn(
-                    get_string("gitignore_read_failed", "gitignore error").format(
-                        err=err
+                    get_string("gitignore_read_failed", "gitignore fail - {e}").format(
+                        e=err
                     )
                 )
 
@@ -100,9 +100,9 @@ class CaseConfig:
                     lines.extend(f.readlines())
             except Exception as err:
                 log.warn(
-                    get_string("caseignore_read_failed", "caseignore error").format(
-                        err=err
-                    )
+                    get_string(
+                        "caseignore_read_failed", "caseignore fail - {e}"
+                    ).format(e=err)
                 )
 
         return pathspec.PathSpec.from_lines("gitignore", lines)

@@ -202,7 +202,9 @@ class ProjectContext:
             try:
                 max_depth = int(depth_str.strip())
             except ValueError:
-                return get_string("err_invalid_depth", "\n\n").format(depth=depth_str)
+                return get_string("err_invalid_depth", "invalid depth ").format(
+                    depth=depth_str
+                )
 
         return self.generate_tree(rel_target, max_depth)
 
@@ -245,7 +247,7 @@ class ProjectContext:
                 )
             return f"- `{meta.rel_path}:{symbol_name}`\n\n```{meta.ext}\n{extracted}\n```\n"
         except ValueError as err:
-            return get_string("symbol_err", "symbol error").format(err=err)
+            return get_string("symbol_err", "symbol error").format(e=err)
 
     async def get_git_diff(
         self, path: str | None = None, branch: str | None = None
