@@ -1,23 +1,21 @@
-"""
-AST-LIKE SYMBOL EXTRACTION ENGINE POWERED BY PYGMENTS.
-FINDS AND EXTRACTS SPECIFIC CLASSES, METHODS, AND FUNCTIONS FROM SOURCE FILES.
-"""
+"""Symbol extraction helpers built on top of Pygments tokenization"""
 
 
 class SymbolExtractor:
     """
-    A ROBUST, LANGUAGE-AGNOSTIC SYMBOL EXTRACTOR THAT LEVERAGES PYGMENTS TOKENIZATION
-    TO FIND AND EXTRACT FUNCTIONS, CLASSES, AND STRUCTS FROM SOURCE CODE.
-    IT BUILDS A LIGHTWEIGHT SYMBOL TREE TO SUPPORT SCOPED NAMES LIKE 'CLASS.METHOD'.
+    Extract functions, classes, and related symbols from source code.
+
+    The extractor builds a lightweight symbol tree so scoped names such as
+    `Class.method` can be resolved.
     """
 
     def __init__(self, code: str, filename: str):
         """
-        INITIALIZES THE EXTRACTOR WITH CODE CONTENT AND TRIGGERS PARSING.
+        Initialize the extractor and parse the provided source.
 
         Args:
-            code (str): The raw string contents of the source file.
-            filename (str): Defines syntax behavior via lexer guessing.
+            `code` (str): The raw string contents of the source file.
+            `filename` (str): Defines syntax behavior via lexer guessing.
         """
         self.code = code
         self.filename = filename
@@ -27,8 +25,9 @@ class SymbolExtractor:
 
     def _parse(self) -> None:
         """
-        CORE LOGIC IDENTIFYING AND MAPPING ALL SCOPES VIA TOKEN STREAMS.
-        SUPPORTS BOTH PYTHON-STYLE (INDENTATION) AND C-STYLE (BRACE BLOCK) SYNTAX.
+        Parse the token stream and map symbol scopes.
+
+        This supports both indentation-based and brace-based languages.
         """
         try:
             from pygments.lexers import get_lexer_for_filename
@@ -189,12 +188,12 @@ class SymbolExtractor:
 
     def extract(self, symbol_name: str) -> str | None:
         """
-        RETRIEVES THE EXACT BLOCK FOR A REQUESTED SYMBOL.
+        Return the exact snippet for a requested symbol.
 
         Args:
-            symbol_name (str): The desired symbol ID (e.g. `MyClass.method_a`).
+            `symbol_name` (str): The desired symbol ID (e.g. `MyClass.method_a`).
 
         Returns:
-            str | None: Code snippet if mapped, None otherwise.
+            `str` | `None`: Code snippet if mapped, `None` otherwise.
         """
         return self.symbols.get(symbol_name)

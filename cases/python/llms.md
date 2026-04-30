@@ -95,7 +95,7 @@ app = typer.Typer()
 
 @app.command()
 def process(file_path: str, verbose: bool = False)...
-    """Process the target file."""
+    """Process the target file"""
     print(f"Processing {file_path}")
 
 if __name__ == "__main__"...

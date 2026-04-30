@@ -1,6 +1,4 @@
-"""
-TERMINAL CAPABILITY DETECTION AND LEGACY-SAFE GLYPH PROFILES.
-"""
+"""Terminal capability detection and legacy-safe glyph profiles"""
 
 from dataclasses import dataclass
 import os
@@ -110,7 +108,7 @@ def detect_terminal_profile(
     env: Mapping[str, str | None] | None = None,
     override: str | None = None,
 ) -> TerminalProfile:
-    """DETECTS A TERMINAL CAPABILITY PROFILE WITH A SAFE LEGACY FALLBACK."""
+    """Detect a terminal capability profile with a safe legacy fallback"""
     source_env = os.environ if env is None else env
     chosen = _resolve_terminal_kind(
         source_env,

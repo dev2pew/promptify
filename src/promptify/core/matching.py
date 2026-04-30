@@ -1,6 +1,4 @@
-"""
-PATH-AWARE MATCHING AND DISPLAY HELPERS FOR INDEXER SEARCH AND COMPLETIONS.
-"""
+"""Path-aware matching and display helpers for search and completions"""
 
 from collections import defaultdict
 from rapidfuzz import fuzz
@@ -10,17 +8,17 @@ _PATH_SEPARATORS = "/._- "
 
 
 def normalize_match_path(path: str) -> str:
-    """NORMALIZES USER PATH INPUTS TO THE INTERNAL PROJECT FORMAT."""
+    """Normalize a user path to the internal project format"""
     return path.replace("\\", "/").strip().strip("/")
 
 
 def _path_leaf(path: str) -> str:
-    """RETURNS THE FINAL PATH SEGMENT."""
+    """Return the final path segment"""
     return path.rsplit("/", 1)[-1]
 
 
 def _contains_boundary_match(text: str, query: str) -> bool:
-    """CHECKS WHETHER A SUBSTRING STARTS AT A PATH-OR-WORD BOUNDARY."""
+    """Return whether a substring starts at a path or word boundary"""
     start = text.find(query)
     while start != -1:
         if start == 0 or text[start - 1] in _PATH_SEPARATORS:
@@ -30,7 +28,7 @@ def _contains_boundary_match(text: str, query: str) -> bool:
 
 
 def _subsequence_score(query: str, text: str) -> int:
-    """SCORES ORDERED CHARACTER MATCHES WITH BONUSES FOR TIGHT, BOUNDARY HITS."""
+    """Score ordered character matches with boundary and adjacency bonuses"""
     if not query:
         return 0
 
@@ -59,7 +57,7 @@ def _subsequence_score(query: str, text: str) -> int:
 
 
 def path_candidate_matches(query: str, candidate: str) -> bool:
-    """LIGHTWEIGHT FILTER DECIDING WHETHER A PATH IS A PLAUSIBLE MATCH."""
+    """Return whether a candidate is a plausible path match"""
     normalized_query = normalize_match_path(query).lower()
     normalized_candidate = normalize_match_path(candidate).lower()
 
@@ -106,7 +104,7 @@ def path_candidate_matches(query: str, candidate: str) -> bool:
 
 
 def _path_rank_key(query: str, candidate: str) -> tuple:
-    """RETURNS AN ASCENDING SORT KEY SO STRONGER PATH MATCHES RISE FIRST."""
+    """Return a sort key that ranks stronger path matches first"""
     normalized_query = normalize_match_path(query).lower()
     normalized_candidate = normalize_match_path(candidate).lower()
     leaf = _path_leaf(normalized_candidate)
@@ -161,7 +159,7 @@ def _path_rank_key(query: str, candidate: str) -> tuple:
 
 
 def rank_path_candidates(query: str, candidates: list[str]) -> list[str]:
-    """SORTS CANDIDATES USING A PATH-FIRST HEURISTIC CLOSER TO FILE PICKERS."""
+    """Sort candidates using a path-first heuristic similar to file pickers"""
     normalized_query = normalize_match_path(query)
     unique_candidates = list(dict.fromkeys(normalize_match_path(c) for c in candidates))
 
@@ -173,7 +171,7 @@ def rank_path_candidates(query: str, candidates: list[str]) -> list[str]:
 
 
 def build_path_display_map(candidates: list[str]) -> dict[str, tuple[str, str]]:
-    """BUILDS COMPACT LABELS AND PATH TAILS FOR COMPLETION MENUS."""
+    """Build compact labels and metadata tails for completion menus"""
     normalized_candidates = list(
         dict.fromkeys(normalize_match_path(candidate) for candidate in candidates)
     )

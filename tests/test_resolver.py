@@ -1,6 +1,4 @@
-"""
-UNIT TESTS VERIFYING THE RELIABILITY OF THE MENTION EVALUATION ENGINE.
-"""
+"""Tests for the mention resolution engine"""
 
 import pytest
 from promptify.utils.i18n import get_string
@@ -10,7 +8,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_resolve_system_loop(app_components):
-    """VERIFIES `RESOLVE_SYSTEM` OPERATES RECURSIVELY, BUT STOPS WHEN IT DETECTS AN INFINITE LOOP."""
+    """`resolve_system` should recurse while stopping on infinite loops"""
     _, resolver = app_components
     res = await resolver.resolve_system("<@file:trap.md>")
     assert (
@@ -23,7 +21,7 @@ async def test_resolve_system_loop(app_components):
 
 
 async def test_resolve_user_single_pass(app_components):
-    """VERIFIES `RESOLVE_USER` EXECUTES ONLY ONE PASS TO PREVENT NESTED FILE EVALUATIONS."""
+    """`resolve_user` should execute only one pass"""
     _, resolver = app_components
     res = await resolver.resolve_user("<@file:trap.md>")
     assert "<@file:trap.md>" in res
@@ -32,7 +30,7 @@ async def test_resolve_user_single_pass(app_components):
 
 
 async def test_resolve_various_tags(app_components):
-    """TESTS MULTIPLE TAGS RESOLVING CORRECTLY IN A SINGLE PASS VIA THE NEW MODREGISTRY."""
+    """Multiple tags should resolve correctly in a single pass"""
     _, resolver = app_components
     res = await resolver.resolve_user("<@dir:src> <@ext:md> <@tree:src>")
     assert "main.py" in res
@@ -41,7 +39,7 @@ async def test_resolve_various_tags(app_components):
 
 
 async def test_invalid_syntax_highlighting(app_components):
-    """TESTS THAT INVALID MENTIONS DO NOT CRASH THE RESOLVER, BUT FALLBACK GRACEFULLY."""
+    """Invalid mentions should not crash the resolver"""
     _, resolver = app_components
     # AN UNCLOSED BRACKET SHOULD SIMPLY NOT RESOLVE AND BE TREATED AS TEXT
     res = await resolver.resolve_user("<@file:missing.py")
@@ -58,7 +56,7 @@ async def test_invalid_syntax_highlighting(app_components):
 
 
 async def test_file_mentions_outside_project_are_invalid(app_components):
-    """ABSOLUTE OR ESCAPING FILE QUERIES SHOULD BE FLAGGED INVALID IN THE EDITOR."""
+    """Absolute or escaping file queries should be treated as invalid"""
     context, resolver = app_components
     lexer = CustomPromptLexer(resolver.registry, context.indexer, resolver)
 
@@ -67,7 +65,7 @@ async def test_file_mentions_outside_project_are_invalid(app_components):
 
 
 async def test_root_dir_mentions_are_valid(app_components):
-    """ROOT-SCOPED DIR/TREE MENTIONS SHOULD MATCH RESOLVER BEHAVIOR."""
+    """Root-scoped dir and tree mentions should match resolver behavior"""
     context, resolver = app_components
     lexer = CustomPromptLexer(resolver.registry, context.indexer, resolver)
 
@@ -76,7 +74,7 @@ async def test_root_dir_mentions_are_valid(app_components):
 
 
 async def test_symbol_mentions_follow_resolver_validation(app_components):
-    """SYMBOL VALIDATION SHOULD ACCEPT OPTIONAL SYMBOL PARTS BUT REJECT ESCAPES."""
+    """Symbol validation should allow optional symbol parts but reject escapes"""
     context, resolver = app_components
     lexer = CustomPromptLexer(resolver.registry, context.indexer, resolver)
 
@@ -88,7 +86,7 @@ async def test_symbol_mentions_follow_resolver_validation(app_components):
 async def test_estimate_tokens_caches_expensive_tree_lookups(
     app_components, monkeypatch
 ):
-    """TREE TOKEN ESTIMATION SHOULD STAY EXACT WITHOUT REBUILDING ON EVERY PASS."""
+    """Tree token estimation should stay exact without repeated rebuilds"""
     context, resolver = app_components
     calls = 0
     original = resolver._estimate_tree_length

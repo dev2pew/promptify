@@ -1,6 +1,4 @@
-"""
-UNIT TESTS EVALUATING I/O AND TASKGROUP PERFORMANCE AND BOUNDARIES.
-"""
+"""Tests for I/O and TaskGroup-related performance boundaries"""
 
 import asyncio
 import pytest
@@ -15,7 +13,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_concurrent_resolution(app_components):
-    """TESTS RESOLVING A LARGE NUMBER OF TAGS CONCURRENTLY TO ENSURE TASKGROUP HANDLES IT FAST."""
+    """Resolving many tags concurrently should remain fast"""
     _, resolver = app_components
 
     # CREATE A PROMPT WITH 100 MENTIONS OF APP.PY
@@ -34,7 +32,7 @@ async def test_concurrent_resolution(app_components):
 
 
 async def test_editor_completion_gate_only_triggers_inside_mentions(app_components):
-    """ENSURES AUTOCOMPLETE DOES NOT SCAN THE PROJECT FOR ORDINARY PROSE."""
+    """Autocomplete should not scan the project for ordinary prose"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
 
@@ -44,7 +42,7 @@ async def test_editor_completion_gate_only_triggers_inside_mentions(app_componen
 
 
 async def test_editor_bulk_edit_temporarily_disables_expensive_checks(app_components):
-    """ENSURES LARGE PASTES SUSPEND REDRAW-TIME VALIDATION BRIEFLY."""
+    """Large pastes should briefly suspend redraw-time validation"""
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
 
@@ -58,7 +56,7 @@ async def test_editor_bulk_edit_temporarily_disables_expensive_checks(app_compon
 
 
 async def test_paste_text_uses_bulk_edit_path_for_large_payloads(app_components):
-    """ENSURES ALL PASTE SOURCES SHARE THE SAME FAST LARGE-PASTE LOGIC."""
+    """All paste sources should use the same fast large-paste path"""
     context, resolver = app_components
     editor = InteractiveEditor("keep old text", context.indexer, resolver)
     editor.buffer.selection_state = SelectionState(original_cursor_position=0)

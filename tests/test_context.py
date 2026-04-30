@@ -1,6 +1,4 @@
-"""
-UNIT TESTS EVALUATING FILE SYSTEM ISOLATION, DATA RETRIEVAL AND CACHING MECHANISMS.
-"""
+"""Tests for filesystem isolation, data retrieval, and caching behavior"""
 
 import pytest
 from promptify.core.terminal import detect_terminal_profile
@@ -10,7 +8,7 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_get_file_content(app_components):
-    """TESTS STANDARD FILE READING."""
+    """Standard file reads should return formatted file content"""
     context, _ = app_components
     res = await context.get_file_content("app.py")
     assert "This is line 1" in res
@@ -18,7 +16,7 @@ async def test_get_file_content(app_components):
 
 
 async def test_get_file_content_not_found(app_components):
-    """TESTS MISSING FILE HANDLING."""
+    """Missing files should return the localized not-found message"""
     context, _ = app_components
     res = await context.get_file_content("missing.py")
     assert res == get_string("err_file_not_found", "file not found").format(
@@ -27,7 +25,7 @@ async def test_get_file_content_not_found(app_components):
 
 
 async def test_get_file_content_ranges(app_components):
-    """TESTS ALL SUPPORTED LINE RANGE SYNTAXES."""
+    """All supported line range syntaxes should work as expected"""
     context, _ = app_components
     # 2-4
     res = await context.get_file_content("app.py", "2-4")
@@ -64,7 +62,7 @@ async def test_get_file_content_ranges(app_components):
 
 
 async def test_size_limits(app_components):
-    """TESTS THE SAFEGUARD AGAINST READING EXCESSIVELY LARGE FILES."""
+    """Large files should be blocked by the size safeguard"""
     context, _ = app_components
     context.MAX_FILE_SIZE = 10
     res = await context.get_file_content("app.py")
@@ -75,7 +73,7 @@ async def test_size_limits(app_components):
 
 
 async def test_get_type_contents(app_components):
-    """TESTS FETCHING MULTIPLE FILES BY EXTENSION."""
+    """Extension lookups should return all matching files"""
     context, _ = app_components
     res = await context.get_type_contents("py, md")
     assert "app.py" in res
@@ -83,7 +81,7 @@ async def test_get_type_contents(app_components):
 
 
 async def test_get_dir_contents(app_components):
-    """TESTS FETCHING ALL FILES IN A DIRECTORY."""
+    """Directory lookups should return files under the requested path"""
     context, _ = app_components
     res = await context.get_dir_contents("src")
     assert "main.py" in res
@@ -96,7 +94,7 @@ async def test_get_dir_contents(app_components):
 
 
 async def test_get_tree_contents(app_components):
-    """TESTS FETCHING A SCOPED PROJECT TREE VIA <@TREE:PATH> IMPLEMENTATION"""
+    """Tree mentions should return a scoped project tree"""
     context, _ = app_components
     res = await context.get_tree_contents("src")
     assert "tree_header_1" not in res  # TREE HEADER STRINGS RESOLVE TO EXACT OUTPUT
@@ -110,7 +108,7 @@ async def test_get_tree_contents(app_components):
 
 
 async def test_generate_tree(app_components):
-    """TESTS PROJECT TREE GENERATION."""
+    """Tree generation should include the expected headers and entries"""
     context, _ = app_components
     res = context.generate_tree()
     assert get_string("tree_header_1", "TREE /F") in res
@@ -123,7 +121,7 @@ async def test_generate_tree(app_components):
 
 
 async def test_generate_tree_uses_ascii_connectors_for_legacy_cmd(app_components):
-    """LEGACY CMD PROFILES SHOULD AVOID BOX-DRAWING TREE CONNECTORS."""
+    """Legacy cmd profiles should avoid box-drawing tree connectors"""
     context, _ = app_components
     context.terminal_profile = detect_terminal_profile(
         {
@@ -140,7 +138,7 @@ async def test_generate_tree_uses_ascii_connectors_for_legacy_cmd(app_components
 
 
 async def test_git_mentions(app_components):
-    """TESTS `<@GIT:STATUS>` GRACEFUL HANDLING ACROSS DIFFERENT REPO STATES."""
+    """`<@git:status>` should handle different repository states gracefully"""
     context, _ = app_components
     result = await context.get_git_status()
 
@@ -165,7 +163,7 @@ async def test_git_mentions(app_components):
 
 
 async def test_tree_depth_mentions(app_components):
-    """TESTS `<@TREE:PATH:LEVEL>` PROPERLY LIMITS THE RECURSIVE DEPTH."""
+    """`<@tree:path:level>` should limit recursive depth correctly"""
     context, _ = app_components
 
     # EVALUATE DEPTH RESTRICTION MECHANISM
