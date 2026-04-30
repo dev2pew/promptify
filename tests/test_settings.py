@@ -1,12 +1,10 @@
-"""
-UNIT TESTS FOR ENVIRONMENT SETTINGS PARSING AND CONFIG FALLBACKS.
-"""
+"""Tests for environment settings parsing and config fallbacks"""
 
 from promptify.core.settings import build_settings
 
 
 def test_build_settings_accepts_behavior_and_theme_overrides():
-    """VALID SETTINGS SHOULD FLOW INTO THE TYPED CONFIG OBJECT."""
+    """Valid settings should populate the typed config object"""
     settings, warns = build_settings(
         {
             "PROMPTIFY_MAX_FILE_SIZE": "1234",
@@ -32,7 +30,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
 
 
 def test_build_settings_invalid_values_fall_back_and_warn():
-    """INVALID SETTINGS SHOULD NOT CRASH IMPORT-TIME CONFIGURATION."""
+    """Invalid settings should fall back safely at import time"""
     settings, warns = build_settings(
         {
             "PROMPTIFY_MAX_FILE_SIZE": "oops",

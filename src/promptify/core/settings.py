@@ -1,6 +1,4 @@
-"""
-TYPED SETTINGS AND ENVIRONMENT VARIABLE PARSING FOR PROMPTIFY.
-"""
+"""Typed settings and environment-variable parsing for `promptify`"""
 
 from dataclasses import dataclass
 import os
@@ -379,7 +377,7 @@ def _build_theme_styles(
 def build_settings(
     env: Mapping[str, str | None] | None = None,
 ) -> tuple[AppSettings, list[str]]:
-    """BUILDS TYPED SETTINGS FROM AN ENVIRONMENT MAPPING"""
+    """Build typed settings from an environment mapping"""
     source_env = os.environ if env is None else env
     warns: list[str] = []
 
@@ -837,7 +835,7 @@ LOCALE = APP_SETTINGS.runtime.locale
 
 
 def consume_settings_warns() -> list[str]:
-    """RETURNS CURRENT SETTINGS WARNINGS AND CLEARS THEM FOR ONE-TIME LOGGING"""
+    """Return current settings warnings and clear them for one-time logging"""
     warns = list(SETTINGS_WARNINGS)
     SETTINGS_WARNINGS.clear()
     return warns

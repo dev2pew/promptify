@@ -1,6 +1,4 @@
-"""
-KEYBINDING REGISTRY IMPLEMENTING STANDARD AND CUSTOM SHORTCUTS.
-"""
+"""Keybinding registration for standard and custom editor shortcuts"""
 
 import asyncio
 import pyperclip
@@ -18,7 +16,7 @@ from ..core.context import get_comment_syntax
 
 
 def detect_indent_style(document: Document) -> str:
-    """ADAPTIVELY DETECTS INDENTATION FORMAT BASED ON THE USER'S WORKSPACE."""
+    """Detect the indentation style used in the current document"""
     for line in document.lines:
         if line.startswith("\t"):
             return "\t"
@@ -99,7 +97,7 @@ def setup_keybindings(editor) -> KeyBindings:
 
     @custom_bindings.add("c-f", filter=editor_focus | search_focus, eager=True)
     def _search(event) -> None:
-        """SHOWS THE CUSTOM SEARCH BAR WITHOUT ENTERING PROMPT-TOOLKIT SEARCH MODE."""
+        """Open the custom search bar without entering prompt-toolkit search mode"""
         editor.open_search()
 
     @custom_bindings.add("escape", filter=is_help_visible)

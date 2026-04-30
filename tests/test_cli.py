@@ -1,6 +1,4 @@
-"""
-UNIT TESTS VERIFYING COMMAND LINE INTERFACE ARGUMENT MAPPINGS.
-"""
+"""Tests for command-line interface argument mappings"""
 
 import pytest
 from promptify.core.cli import parse_cli_args, CLIConfig, extract_help_from_docstring
@@ -10,7 +8,7 @@ from promptify.main import App
 
 
 def test_docstring_extraction():
-    """VERIFIES THE DYNAMIC HELP PARSER CORRECTLY IDENTIFIES ARGS AND DESCRIPTIONS."""
+    """The dynamic help parser should identify args and descriptions"""
     helps = extract_help_from_docstring(CLIConfig)
 
     assert "case" in helps
@@ -22,7 +20,7 @@ def test_docstring_extraction():
 
 
 def test_cli_parsing_basic():
-    """VERIFIES MAPPING OF SHORT AND LONG FLAGS TO THE DATACLASS."""
+    """Short and long flags should map correctly to the dataclass"""
     # TEST SHORT FLAGS
     args = ["-c", "my_case", "-p", "./src", "-m", "s"]
     config = parse_cli_args(args)
@@ -39,7 +37,7 @@ def test_cli_parsing_basic():
 
 
 def test_cli_argument_order_independence():
-    """ENSURES THE ORDER OF ARGUMENTS DOES NOT AFFECT THE RESULTING CONFIG."""
+    """Argument order should not affect the resulting config"""
     order_a = parse_cli_args(["-m", "s", "-c", "case_a", "-p", "."])
     order_b = parse_cli_args(["-p", ".", "-m", "s", "-c", "case_a"])
 
@@ -48,8 +46,10 @@ def test_cli_argument_order_independence():
 
 def test_mode_normalization_logic():
     """
-    VERIFIES THAT THE PARSER ACCEPTS VARIOUS MODE STRINGS.
-    (NOTE: THE ACTUAL NORMALIZATION HAPPENS IN APP.RUN, BUT THE PARSER MUST CAPTURE THEM).
+    The parser should accept the supported mode strings.
+
+    The actual normalization happens in `App.run`, but the parser still needs
+    to capture the raw values.
     """
     valid_modes = [
         "s",
@@ -71,7 +71,7 @@ def test_mode_normalization_logic():
 
 
 def test_cli_default_behavior():
-    """VERIFIES THAT EMPTY ARGUMENTS RESULT IN NONE VALUES, ALLOWING THE APP TO TRIGGER WIZARDS."""
+    """Empty arguments should produce `None` values"""
     config = parse_cli_args([])
     assert config.case is None
     assert config.path is None
@@ -79,7 +79,7 @@ def test_cli_default_behavior():
 
 
 def test_programmatic_config_creation():
-    """VERIFIES THE DATACLASS CAN BE INSTANTIATED DIRECTLY WITHOUT THE PARSER."""
+    """The config dataclass should be instantiable without the parser"""
     config = CLIConfig(case="manual", path="/manual/path", mode="editor")
     assert config.case == "manual"
     assert config.path == "/manual/path"
@@ -88,7 +88,7 @@ def test_programmatic_config_creation():
 
 @pytest.mark.asyncio
 async def test_save_output_uses_case_folder(test_sandbox, monkeypatch):
-    """OUTPUTS SHOULD BE STORED UNDER THE CASE FOLDER NAME."""
+    """Outputs should be stored under the case folder name"""
     app = App()
     app.outs_dir = test_sandbox["outs"]
     case = CaseConfig(test_sandbox["case"])
@@ -105,7 +105,7 @@ async def test_save_output_uses_case_folder(test_sandbox, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_mode_state_is_persisted_per_case(test_sandbox):
-    """LAST MODE SHOULD BE STORED PER CASE USING A UNIQUE CASE KEY."""
+    """Last mode should be stored per case using a unique case key"""
     app = App()
     app.data_dir = test_sandbox["root"] / "data"
     case = CaseConfig(test_sandbox["case"])
@@ -119,7 +119,7 @@ async def test_mode_state_is_persisted_per_case(test_sandbox):
 
 @pytest.mark.asyncio
 async def test_mode_state_uses_unique_case_keys(test_sandbox):
-    """CASES WITH THE SAME DISPLAY NAME SHOULD NOT SHARE MODE HISTORY."""
+    """Cases with the same display name should not share mode history"""
     app = App()
     app.cases_dir = test_sandbox["root"] / "cases"
     app.data_dir = test_sandbox["root"] / "data"
@@ -148,7 +148,7 @@ async def test_mode_state_uses_unique_case_keys(test_sandbox):
 
 @pytest.mark.asyncio
 async def test_save_output_respects_behavior_toggles(test_sandbox, monkeypatch):
-    """OUTPUT PERSISTENCE SHOULD RESPECT RAW-SAVE AND CLIPBOARD TOGGLES."""
+    """Output persistence should respect raw-save and clipboard toggles"""
     app = App()
     app.outs_dir = test_sandbox["outs"] / "toggle_case"
     case = CaseConfig(test_sandbox["case"])

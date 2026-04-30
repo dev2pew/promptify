@@ -1,6 +1,4 @@
-"""
-CLI UI HELPERS FOR PRINTING COLUMNIZED LISTS AND FORMATTED MENUS.
-"""
+"""CLI rendering helpers for columnized lists and formatted menus"""
 
 import shutil
 import math
@@ -11,7 +9,7 @@ from ..core.settings import APP_SETTINGS
 
 def format_index(i: int) -> str:
     """
-    FORMAT SEQUENCE MENU INDICATORS MATCHING VISUAL ALIGNMENTS STRUCTURE CONFIGURATIONS APPROPRIATELY CLEANLY CONSISTENTLY NATIVELY CORRECTLY DIRECTLY.
+    Format a numeric menu index with consistent styling.
 
     Args:
         i (int): Reference selection marker.
@@ -27,10 +25,10 @@ def format_index(i: int) -> str:
 
 def print_columnized(items: list[str]) -> None:
     """
-    PRINTS A GRID OF SELECTIONS FITTING HORIZONTALLY BOUNDED SCREEN DIMENSIONS NATIVELY WITHOUT VISUAL WRAPPING FLAWS PRECISELY MAPPED CORRECTLY SEAMLESSLY SAFELY DIRECTLY.
+    Print a columnized list of items sized to the terminal width.
 
     Args:
-        items (list[str]): Structured list of configuration definitions objects target targets outputs.
+        `items` (list[str]): Structured list of configuration definitions objects target targets outputs.
     """
     term_width, _ = shutil.get_terminal_size(
         (
@@ -66,10 +64,10 @@ def print_columnized(items: list[str]) -> None:
 
 def print_modes(modes: list[tuple[str, str]]) -> None:
     """
-    FORMATS MULTI-LINE STRUCTURE MAPPED INTERACTION STATES MATCHING SPACING CONFIGURATIONS CORRECTLY ALIGNING OPTIONS SEAMLESSLY STRICTLY SAFELY CONSISTENTLY ACCURATELY NATIVE OUTPUT GENERATION MAPPING LOGIC OUTPUTS PERFECTLY NATIVELY.
+    Print numbered modes with aligned descriptions.
 
     Args:
-        modes (list[tuple[str, str]]): List describing option maps formatting titles representations matching strings appropriately.
+        `modes` (list[tuple[str, str]]): List describing option maps formatting titles representations matching strings appropriately.
     """
     formatted_prefixes = [
         f"{format_index(i + 1)} {name}" for i, (name, _) in enumerate(modes)

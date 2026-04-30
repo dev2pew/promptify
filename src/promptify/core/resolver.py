@@ -1,8 +1,4 @@
-"""
-ASYNCHRONOUS RESOLVER LEVERAGING STRUCTURED CONCURRENCY AND A DECOUPLED MOD SYSTEM.
-SYSTEM MODE OPERATES RECURSIVELY WITH LOOP PROTECTION.
-USER MODE OPERATES IN A STRICT SINGLE-PASS SANDBOX.
-"""
+"""Asynchronous mention resolution built on structured concurrency"""
 
 import re
 import asyncio
@@ -16,9 +12,10 @@ from ..utils.i18n import get_string
 
 class PromptResolver:
     """
-    ASYNCHRONOUS RESOLVER LEVERAGING STRUCTURED CONCURRENCY AND A DECOUPLED MOD SYSTEM.
-    SYSTEM MODE OPERATES RECURSIVELY WITH LOOP PROTECTION.
-    USER MODE OPERATES IN A STRICT SINGLE-PASS SANDBOX.
+    Resolve `promptify` mentions through a decoupled mod system.
+
+    System mode resolves recursively with loop protection. User mode resolves in
+    a strict single pass.
     """
 
     def __init__(self, context: ProjectContext, registry: ModRegistry):
@@ -30,7 +27,7 @@ class PromptResolver:
         self._git_estimate_cache: dict[str, tuple[float, int]] = {}
 
     def _get_registry_pattern(self) -> re.Pattern[str]:
-        """RETURNS THE COMPILED MOD REGEX AFTER ENSURING IT EXISTS."""
+        """Return the compiled mod regex, building it if needed"""
         if self.registry.pattern is None:
             self.registry.build()
         if self.registry.pattern is None:
@@ -40,7 +37,7 @@ class PromptResolver:
     def _estimate_tree_length(
         self, root_rel: str = "", max_depth: int | None = None
     ) -> int:
-        """ESTIMATES TREE OUTPUT LENGTH USING INDEXED PATHS WITHOUT BUILDING THE STRING."""
+        """Estimate tree output length without building the full string"""
         root_rel = root_rel.replace("\\", "/").strip("/")
         if not root_rel:
             header_name = self.context.target_dir.name
@@ -75,7 +72,7 @@ class PromptResolver:
         return sum(len(line) + 1 for line in lines) + 1
 
     async def _estimate_file_length(self, query: str, range_str: str | None) -> int:
-        """ESTIMATES FILE MENTION EXPANSION LENGTH, USING EXACT CACHED CONTENT WHEN NEEDED."""
+        """Estimate file mention expansion length, using cached content when needed"""
         matches = self.context.indexer.find_matches(query)
         if not matches:
             return len(
@@ -105,10 +102,7 @@ class PromptResolver:
         return length
 
     async def estimate_tokens(self, text: str) -> int:
-        """
-        CALCULATES AN ULTRA-FAST ESTIMATION OF TOKENS BASED STRICTLY ON
-        SIZES PROVIDED BY THE IN-MEMORY INDEXER AND CACHED RESOLUTIONS.
-        """
+        """Estimate token count from indexed sizes and cached resolutions"""
         matches = list(self._get_registry_pattern().finditer(text))
         if not matches:
             return int(len(text) // 3.2)
@@ -207,7 +201,7 @@ class PromptResolver:
         return int((base_len + added_len) // 3.2)
 
     async def resolve_system(self, text: str, seen: set[str] | None = None) -> str:
-        """RECURSIVE RESOLUTION FOR SYSTEM TEMPLATES, WITH LOOP PROTECTION."""
+        """Resolve system templates recursively with loop protection"""
         if seen is None:
             seen = set()
 
@@ -244,7 +238,7 @@ class PromptResolver:
         return "".join(parts)
 
     async def resolve_user(self, text: str) -> str:
-        """SINGLE-PASS RESOLUTION FOR USER TEXT (INTERACTIVE EDITOR)."""
+        """Resolve user text in a single pass"""
         matches = list(self._get_registry_pattern().finditer(text))
         if not matches:
             return text
@@ -265,7 +259,7 @@ class PromptResolver:
         return "".join(parts)
 
     async def _process_match(self, match: re.Match) -> str:
-        """DELEGATES RESOLUTION STRICTLY TO THE CORRESPONDING MOD."""
+        """Delegate a single regex match to the corresponding mod"""
         try:
             mod, text = self.registry.get_mod_and_text(match)
             return await mod.resolve(text, self.context)

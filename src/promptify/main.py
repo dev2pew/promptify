@@ -1,6 +1,4 @@
-"""
-CORE APPLICATION ENTRY POINT AND COORDINATOR FOR PROMPTIFY ARCHITECTURE.
-"""
+"""Application entry point and orchestration for `promptify`"""
 
 import sys
 import datetime
@@ -26,7 +24,7 @@ from .utils.i18n import get_string
 
 
 class App:
-    """MAIN APPLICATION ORCHESTRATOR LINKING CONTEXTS, RESOLVERS, AND UI."""
+    """Coordinate application state, context, resolver, and UI flows"""
 
     def __init__(self, cli_config: CLIConfig | None = None):
         self.cli_config = cli_config or CLIConfig()
@@ -39,12 +37,12 @@ class App:
             log.warn(warn)
 
     def ensure_directories(self) -> None:
-        """VERIFIES DIRECTORY TREES FOR SAFELY MAINTAINING OUTPUT STRUCTURES."""
+        """Ensure the application data directories exist"""
         for d in [self.cases_dir, self.data_dir, self.outs_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
     async def get_state(self) -> dict:
-        """LOADS THE JSON STATE RESUME METADATA FOR USER CONVENIENCE."""
+        """Load persisted application state from disk"""
         state_file = self.data_dir / "state.json"
         if state_file.exists():
             try:
@@ -55,19 +53,19 @@ class App:
         return {"lastcase": "", "paths": {}, "modes": {}}
 
     async def save_state(self, state: dict) -> None:
-        """PERSISTS THE JSON STATE RESUME METADATA."""
+        """Persist application state to disk"""
         state_file = self.data_dir / "state.json"
         state_file.parent.mkdir(parents=True, exist_ok=True)
         async with aiofiles.open(state_file, "w", encoding="utf-8") as f:
             await f.write(json.dumps(state, indent=4))
 
     async def get_last_path(self, case_name: str, state: dict) -> str:
-        """FETCHES THE LAST TARGET PROJECT PATH FOR A SPECIFIC CASE."""
+        """Return the last target path used for a given case"""
         paths = state.get("paths", {})
         return paths.get(case_name, "")
 
     async def save_last_path(self, case_name: str, path: str, state: dict) -> None:
-        """PERSISTS THE LAST TARGET PROJECT PATH FOR A SPECIFIC CASE."""
+        """Persist the last target path used for a given case"""
         if "paths" not in state:
             state["paths"] = {}
         state["paths"][case_name] = path
@@ -75,14 +73,14 @@ class App:
         await self.save_state(state)
 
     def get_case_state_key(self, case: CaseConfig) -> str:
-        """RETURNS A STABLE, UNIQUE CASE KEY FOR PER-CASE STATE."""
+        """Return a stable key for per-case state"""
         try:
             return str(case.case_dir.relative_to(self.cases_dir)).replace("\\", "/")
         except ValueError:
             return case.case_dir.name
 
     async def get_last_mode(self, case: CaseConfig, state: dict) -> int | None:
-        """FETCHES THE LAST SELECTED MODE FOR A SPECIFIC CASE."""
+        """Return the last selected mode for a given case"""
         modes = state.get("modes", {})
         if not isinstance(modes, dict):
             return None
@@ -91,20 +89,20 @@ class App:
         return mode if mode in (1, 2) else None
 
     async def save_last_mode(self, case: CaseConfig, mode: int, state: dict) -> None:
-        """PERSISTS THE LAST SELECTED MODE FOR A SPECIFIC CASE."""
+        """Persist the last selected mode for a given case"""
         if "modes" not in state or not isinstance(state["modes"], dict):
             state["modes"] = {}
         state["modes"][self.get_case_state_key(case)] = mode
         await self.save_state(state)
 
     def get_output_case_dir_name(self, case: CaseConfig) -> str:
-        """USES THE CASE'S FOLDER NAME FOR OUTPUT STORAGE SAFETY."""
+        """Return the output directory name for a case"""
         return case.case_dir.name
 
     async def save_output(
         self, case: CaseConfig, content: str, raw_content: str | None = None
     ) -> None:
-        """FORMATS AND SAVES THE EXECUTED PAYLOAD DIRECTLY TO DISK, COPIES TO CLIPBOARD."""
+        """Save rendered output to disk and optionally copy it to the clipboard"""
         now = datetime.datetime.now()
         out_dir = (
             self.outs_dir
@@ -135,7 +133,7 @@ class App:
                 )
 
     async def run(self) -> None:
-        """EXECUTES THE MAIN APPLICATION LOOP."""
+        """Run the main application flow"""
         print(get_string("welcome", "welcome to promptify"))
 
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
@@ -337,7 +335,7 @@ class App:
             indexer.stop_watching()
 
     async def run_legacy_mode(self, case: CaseConfig, resolver: PromptResolver) -> None:
-        """EXECUTES THE STATIC LEGACY RESOLVER MODE."""
+        """Run the legacy resolver mode"""
         legacy_path = case.case_dir / case.legacy_file
         if not legacy_path.exists():
             log.err(
@@ -357,7 +355,7 @@ class App:
     async def run_interactive_mode(
         self, case: CaseConfig, resolver: PromptResolver, indexer: ProjectIndexer
     ) -> None:
-        """SPAWNS THE PROMPT-TOOLKIT TERMINAL EDITOR."""
+        """Launch the interactive prompt-toolkit editor"""
         prompt_path = case.case_dir / case.prompt_file
         initial_text = ""
         if prompt_path.exists():
@@ -382,7 +380,7 @@ class App:
 
 
 def cli():
-    """CLI ENTRY POINT TO LAUNCH THE ASYNC ORCHESTRATION EVENT LOOP."""
+    """CLI entry point that starts the asynchronous application loop"""
     config = parse_cli_args()
     try:
         asyncio.run(App(config).run())

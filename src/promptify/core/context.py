@@ -1,7 +1,4 @@
-"""
-PROJECT CONTEXT MANAGEMENT PROVIDING ASYNCHRONOUS, SANDBOXED I/O ACCESS
-TO SOURCE FILES, DIRECTORIES, AND AST SYMBOLS.
-"""
+"""Project context helpers for sandboxed asynchronous file and Git access"""
 
 import asyncio
 import aiofiles
@@ -19,7 +16,7 @@ from ..utils.i18n import get_string, strings
 
 
 def get_comment_syntax(ext: str) -> tuple[str, str]:
-    """RETURNS COMMENT DELIMITERS FOR AN EXTENSION WITH A SAFE FALLBACK."""
+    """Return comment delimiters for an extension with a safe fallback"""
     syntax_map = strings.get("comment_syntax")
     if isinstance(syntax_map, dict):
         syntax = syntax_map.get(ext)
@@ -34,7 +31,7 @@ def get_comment_syntax(ext: str) -> tuple[str, str]:
 
 
 class ProjectContext:
-    """PROVIDES SANDBOXED, ASYNCHRONOUS, SIZE-LIMITED ACCESS TO PROJECT RESOURCES."""
+    """Provide sandboxed, asynchronous, size-limited access to project resources"""
 
     IO_SEMAPHORE = asyncio.Semaphore(MAX_CONCURRENT_READS)
     MAX_FILE_SIZE = MAX_FILE_SIZE
@@ -48,13 +45,13 @@ class ProjectContext:
         terminal_profile: TerminalProfile | None = None,
     ):
         """
-        INITIALIZES THE CONTEXT LINKING THE PROJECT PATH TO THE INDEXER.
+        Initialize a context bound to a project path and index.
 
         Args:
-            target_dir (Path): The absolute root path of the project.
-            case (CaseConfig): Configuration rules.
-            indexer (ProjectIndexer): Live index of the project files.
-            has_git (bool): Indicates if the directory contains a Git repository.
+            `target_dir` (Path): The absolute root path of the project.
+            `case` (CaseConfig): Configuration rules.
+            `indexer` (ProjectIndexer): Live index of the project files.
+            `has_git` (bool): Indicates if the directory contains a Git repository.
         """
         self.target_dir = target_dir
         self.case = case
@@ -64,7 +61,7 @@ class ProjectContext:
         self.terminal_profile = terminal_profile or APP_TERMINAL_PROFILE
 
     async def _run_git_command(self, *args: str) -> tuple[int, str, str]:
-        """EXECUTES A NON-INTERACTIVE GIT COMMAND AND RETURNS DECODED OUTPUT."""
+        """Run a non-interactive Git command and return decoded output"""
         proc = await asyncio.create_subprocess_exec(
             "git",
             "--no-pager",
@@ -82,17 +79,17 @@ class ProjectContext:
         )
 
     def _normalize_git_commit_limit(self, limit: int | None, default_limit: int) -> int:
-        """NORMALIZES OPTIONAL GIT COMMIT LIMITS TO A SAFE POSITIVE VALUE."""
+        """Normalize an optional Git commit limit to a safe positive value"""
         if limit is None:
             return default_limit
         return max(1, limit)
 
     def normalize_query_path(self, query: str) -> str:
-        """NORMALIZES USER-INPUTTED PATHS TO THE INTERNAL PROJECT FORMAT."""
+        """Normalize a user-provided path to the internal project format"""
         return query.replace("\\", "/").strip()
 
     def is_safe_query_path(self, query: str) -> bool:
-        """VALIDATES THAT A QUERY PATH STAYS INSIDE THE PROJECT ROOT."""
+        """Return whether a query path stays within the project root"""
         normalized = self.normalize_query_path(query)
         if not normalized:
             return False
@@ -106,26 +103,26 @@ class ProjectContext:
 
     def is_sandboxed(self, path: Path) -> bool:
         """
-        ENFORCES ABSOLUTE SANDBOXING TO THE TARGET DIRECTORY.
+        Return whether a path stays inside the target directory.
 
         Args:
-            path (Path): Path to verify.
+            `path` (Path): Path to verify.
 
         Returns:
-            bool: True if the file resides within the target_dir.
+            `bool`: True if the file resides within the `target_dir`.
         """
         return path.resolve().is_relative_to(self.target_dir.resolve())
 
     async def get_file_content(self, query: str, range_str: str | None = None) -> str:
         """
-        RETRIEVES FORMATTED FILE CONTENT WITH OPTIONAL LINE SLICING.
+        Return formatted file content with optional line slicing.
 
         Args:
-            query (str): File path or fuzzy search string.
-            range_str (str | None): Slicing rules (e.g., "10-20", "last 50").
+            `query` (str): File path or fuzzy search string.
+            `range_str` (str | None): Slicing rules (e.g., `10-20`, `last 50`).
 
         Returns:
-            str: Markdown-formatted file content.
+            `str`: Markdown-formatted file content.
         """
         matches = self.indexer.find_matches(query)
         if not matches:
@@ -136,13 +133,13 @@ class ProjectContext:
 
     async def get_type_contents(self, exts_str: str) -> str:
         """
-        RETRIEVES ALL PROJECT FILES MATCHING SPECIFIC EXTENSIONS.
+        Return formatted content for all files matching the requested extensions.
 
         Args:
-            exts_str (str): Comma-separated list of extensions (e.g., "py,md").
+            `exts_str` (str): Comma-separated list of extensions (e.g., `py,md`).
 
         Returns:
-            str: Markdown-formatted list of file contents.
+            `str`: Markdown-formatted list of file contents.
         """
         exts = list(dict.fromkeys(e.strip() for e in exts_str.split(",")))
         matches = self.indexer.get_by_extensions(exts)
@@ -155,13 +152,13 @@ class ProjectContext:
 
     async def get_dir_contents(self, dir_query: str) -> str:
         """
-        RETRIEVES ALL FILES CONTAINED WITHIN A SPECIFIC DIRECTORY.
+        Return formatted content for all files within a directory.
 
         Args:
-            dir_query (str): The relative directory path.
+            `dir_query` (str): The relative directory path.
 
         Returns:
-            str: Markdown-formatted list of file contents.
+            `str`: Markdown-formatted list of file contents.
         """
         clean_dir = self.normalize_query_path(dir_query).strip("/")
         matches = [
@@ -176,14 +173,14 @@ class ProjectContext:
         self, dir_query: str, depth_str: str | None = None
     ) -> str:
         """
-        RETRIEVES A FORMATTED TREE DIRECTORY STRUCTURE MAPPING.
+        Return a formatted tree view for a directory.
 
         Args:
-            dir_query (str): The relative directory path.
-            depth_str (str | None): Optional integer string limiting the recursive depth.
+            `dir_query` (str): The relative directory path.
+            `depth_str` (str | None): Optional integer string limiting the recursive depth.
 
         Returns:
-            str: Visual tree representation.
+            `str`: Visual tree representation.
         """
         clean_dir = self.normalize_query_path(dir_query).strip("/")
         target = (self.target_dir / clean_dir).resolve()
@@ -211,14 +208,14 @@ class ProjectContext:
 
     async def get_symbol_content(self, query: str, symbol_name: str) -> str:
         """
-        RETRIEVES A SPECIFICALLY REQUESTED AST SYMBOL FROM A FILE.
+        Return a formatted symbol snippet extracted from a file.
 
         Args:
-            query (str): The file containing the symbol.
-            symbol_name (str): The name of the class/method/function.
+            `query` (str): The file containing the symbol.
+            `symbol_name` (str): The name of the class/method/function.
 
         Returns:
-            str: Formatted symbol block.
+            `str`: Formatted symbol block.
         """
         if not symbol_name:
             return ""
@@ -254,14 +251,14 @@ class ProjectContext:
         self, path: str | None = None, branch: str | None = None
     ) -> str:
         """
-        RETRIEVES THE WORKING TREE DIFFERENCES FOR THE PROJECT OR SPECIFIC FILE.
+        Return the working-tree diff for the project or a specific file.
 
         Args:
-            path (str | None): Target path to isolate the diff.
-            branch (str | None): Optional branch or ref to diff against.
+            `path` (str | None): Target path to isolate the diff.
+            `branch` (str | None): Optional branch or ref to diff against.
 
         Returns:
-            str: Git diff output.
+            `str`: Git diff output.
         """
         if not self.has_git:
             return ""
@@ -282,13 +279,10 @@ class ProjectContext:
 
     async def get_git_status(self, branch: str | None = None) -> str:
         """
-        RETRIEVES THE WORKING TREE STATUS.
-
-        WHEN A BRANCH IS PROVIDED, THIS RETURNS A NAME-STATUS COMPARISON AGAINST
-        THAT REF SINCE `git status` DOES NOT ACCEPT REVISION ARGUMENTS.
+        Return the working-tree status. When a branch is provided, this returns a name-status comparison against that ref since `git status` does not accept revision arguments.
 
         Returns:
-            str: Git status output.
+            `str`: Git status output.
         """
         if not self.has_git:
             return ""
@@ -305,7 +299,7 @@ class ProjectContext:
     async def get_git_log(
         self, limit: int | None = None, branch: str | None = None
     ) -> str:
-        """RETRIEVES THE GIT LOG FOR THE CURRENT REPO OR A SPECIFIC BRANCH."""
+        """Return the Git log for the current repository or a specific branch"""
         if not self.has_git:
             return ""
 
@@ -325,7 +319,7 @@ class ProjectContext:
     async def get_git_history(
         self, limit: int | None = None, branch: str | None = None
     ) -> str:
-        """RETRIEVES COMMIT HISTORY PLUS PATCHES FOR A SMALL NUMBER OF COMMITS."""
+        """Return recent commit history together with patches"""
         if not self.has_git:
             return ""
 
@@ -354,14 +348,14 @@ class ProjectContext:
 
     async def _read_and_format(self, meta: FileMeta, range_str: str | None) -> str:
         """
-        CORE I/O PROCESS APPLYING RULES, LIMITS, CACHING, AND TEXT FORMATTING.
+        Read, validate, cache, and format a file match.
 
         Args:
-            meta (FileMeta): Target file metadata.
-            range_str (str | None): Slicing arguments.
+            `meta` (FileMeta): Target file metadata.
+            `range_str` (str | None): Slicing arguments.
 
         Returns:
-            str: The evaluated final markdown block.
+            `str`: The evaluated final markdown block.
         """
         if meta.size > self.MAX_FILE_SIZE:
             return get_string("err_file_too_large", "file too large").format(
@@ -393,7 +387,7 @@ class ProjectContext:
         matches: list[FileMeta],
         range_str: str | None,
     ) -> str:
-        """READS AND FORMATS A MATCH LIST THROUGH THE SHARED TASKGROUP PATH."""
+        """Read and format a list of matches through a shared task group"""
         async with asyncio.TaskGroup() as tg:
             tasks = [
                 tg.create_task(self._read_and_format(meta, range_str))
@@ -404,13 +398,13 @@ class ProjectContext:
 
     async def _read_cached(self, meta: FileMeta) -> str:
         """
-        READS FILE CONTENT SECURELY FROM DISK, LEVERAGING AN MTIME CACHE.
+        Read file content from disk using an mtime-aware cache.
 
         Args:
-            meta (FileMeta): Data object for the file to read.
+            `meta` (FileMeta): Data object for the file to read.
 
         Returns:
-            str: Unmodified text content.
+            `str`: Unmodified text content.
         """
         cached = self.cache.get(meta.rel_path)
         if cached and cached.mtime == meta.mtime:
@@ -427,14 +421,14 @@ class ProjectContext:
 
     def _apply_range(self, lines: list[str], range_str: str) -> tuple[list[str], int]:
         """
-        EVALUATES LIMITS LIKE 'FIRST 200', 'LAST 100', '10-20', OR '#L45'.
+        Apply range selectors such as `first 200`, `last 100`, `10-20`, or `#L45`.
 
         Args:
-            lines (list[str]): The original array of text lines.
-            range_str (str): The rule determining the slice limit.
+            `lines` (list[str]): The original array of text lines.
+            `range_str` (str): The rule determining the slice limit.
 
         Returns:
-            tuple[list[str], int]: Processed lines and count of omitted lines.
+            `tuple` [list[str], int]: Processed lines and count of omitted lines.
         """
         range_str = range_str.strip().lower()
         total = len(lines)
@@ -475,14 +469,14 @@ class ProjectContext:
 
     def generate_tree(self, root_rel: str = "", max_depth: int | None = None) -> str:
         """
-        RECREATES THE CLASSIC WINDOWS 'TREE /F' COMMAND STYLE MAP OF THE INDEX.
+        Recreate a `TREE /F`-style view of the indexed project.
 
         Args:
-            root_rel (str): Starting point inside the project for tree evaluation.
-            max_depth (int | None): Maximum recursive folder depth to crawl.
+            `root_rel` (str): Starting point inside the project for tree evaluation.
+            `max_depth` (int | None): Maximum recursive folder depth to crawl.
 
         Returns:
-            str: ASCII format tree.
+            `str`: ASCII format tree.
         """
         root_rel = root_rel.replace("\\", "/").strip("/")
 

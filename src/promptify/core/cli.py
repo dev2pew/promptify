@@ -1,6 +1,4 @@
-"""
-COMMAND LINE INTERFACE PARSING AND DEFINITION ARCHITECTURE.
-"""
+"""Command-line interface parsing and definitions"""
 
 import argparse
 import re
@@ -11,13 +9,14 @@ from typing import Optional
 @dataclass
 class CLIConfig:
     """
-    CONFIGURATION PARAMETERS FOR RUNNING PROMPTIFY PROGRAMMATICALLY OR VIA CLI.
-    THIS DOCSTRING DYNAMICALLY POPULATES THE CLI HELP COMMAND.
+    Configuration parameters for running `promptify` programmatically or via the CLI.
+
+    This docstring also supplies the generated CLI help text.
 
     Args:
-        case (str): Choose case by their name defined in the config.json. On duplicate, errors out and notifies that only normal mode supports duplicates, and if they want to use CLI, then the user needs to adjust their cases to not contain duplicate names. Accepts case name as a string. No default.
-        path (str): Target project path that will be scanned. Accepts valid (existing) paths. No default.
-        mode (str): Working mode. Accepts either 's', 'simple', 'l', 'legacy', 'o', 'old' vs 'i', 'interactive', 'a', 'advanced', 'e', 'editor'. Default is interactive mode.
+        `case` (str): Choose case by their name defined in the config.json. On duplicate, errors out and notifies that only normal mode supports duplicates, and if they want to use CLI, then the user needs to adjust their cases to not contain duplicate names. Accepts case name as a string. No default.
+        `path` (str): Target project path that will be scanned. Accepts valid (existing) paths. No default.
+        `mode` (str): Working mode. Accepts either `s`, `simple`, `l`, `legacy`, `o`, `old` vs `i`, `interactive`, `a`, `advanced`, `e`, `editor`. Default is interactive mode.
     """
 
     case: Optional[str] = None
@@ -26,7 +25,7 @@ class CLIConfig:
 
 
 def extract_help_from_docstring(cls: type) -> dict[str, str]:
-    """DYNAMICALLY PULLS DOCSTRINGS FROM THE SOURCE CODE TO ENSURE SYNCHRONIZATION."""
+    """Extract help text from a class docstring"""
     doc = cls.__doc__ or ""
     helps = {}
     for line in doc.splitlines():
@@ -38,7 +37,7 @@ def extract_help_from_docstring(cls: type) -> dict[str, str]:
 
 
 def parse_cli_args(args: list[str] | None = None) -> CLIConfig:
-    """PARSES SYS.ARGV USING DYNAMICALLY INJECTED DOCSTRINGS."""
+    """Parse CLI arguments using help text derived from docstrings"""
     helps = extract_help_from_docstring(CLIConfig)
 
     parser = argparse.ArgumentParser(
