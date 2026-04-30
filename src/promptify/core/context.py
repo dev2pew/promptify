@@ -247,8 +247,8 @@ class ProjectContext:
                     symbol=symbol_name, path=meta.rel_path
                 )
             return f"- `{meta.rel_path}:{symbol_name}`\n\n```{meta.ext}\n{extracted}\n```\n"
-        except ValueError as e:
-            return get_string("symbol_error", "symbol error").format(error=e)
+        except ValueError as err:
+            return get_string("symbol_err", "symbol error").format(err=err)
 
     async def get_git_diff(
         self, path: str | None = None, branch: str | None = None
@@ -274,7 +274,7 @@ class ProjectContext:
 
         returncode, stdout, stderr = await self._run_git_command(*cmd)
         if returncode != 0:
-            return get_string("git_diff_error", "git diff error").format(error=stderr)
+            return get_string("git_diff_err", "git diff error").format(err=stderr)
 
         if not stdout.strip():
             return get_string("no_changes", "no changes")
@@ -296,9 +296,7 @@ class ProjectContext:
         cmd = ["status", "-s"] if branch is None else ["diff", "--name-status", branch]
         returncode, stdout, stderr = await self._run_git_command(*cmd)
         if returncode != 0:
-            return get_string("git_status_error", "git status error").format(
-                error=stderr
-            )
+            return get_string("git_status_err", "git status error").format(err=stderr)
 
         if not stdout.strip():
             return get_string("working_tree_clean", "clean tree")
@@ -318,7 +316,7 @@ class ProjectContext:
 
         returncode, stdout, stderr = await self._run_git_command(*cmd)
         if returncode != 0:
-            return get_string("git_log_error", "git log error").format(error=stderr)
+            return get_string("git_log_err", "git log error").format(err=stderr)
 
         if not stdout.strip():
             return get_string("no_changes", "no changes")
@@ -348,9 +346,7 @@ class ProjectContext:
 
         returncode, stdout, stderr = await self._run_git_command(*cmd)
         if returncode != 0:
-            return get_string("git_history_error", "git history error").format(
-                error=stderr
-            )
+            return get_string("git_history_err", "git history error").format(err=stderr)
 
         if not stdout.strip():
             return get_string("no_changes", "no changes")
@@ -442,7 +438,7 @@ class ProjectContext:
         """
         range_str = range_str.strip().lower()
         total = len(lines)
-        error_msg = get_string("err_invalid_range", "invalid range").format(
+        err_msg = get_string("err_invalid_range", "invalid range").format(
             range=range_str
         )
 
@@ -451,14 +447,14 @@ class ProjectContext:
                 n = int(range_str.split()[1])
                 return lines[:n], max(0, total - n)
             except ValueError:
-                return lines + [error_msg], 0
+                return lines + [err_msg], 0
 
         elif range_str.startswith("last "):
             try:
                 n = int(range_str.split()[1])
                 return lines[-n:], max(0, total - n)
             except ValueError:
-                return lines + [error_msg], 0
+                return lines + [err_msg], 0
 
         elif "-" in range_str:
             try:
@@ -466,16 +462,16 @@ class ProjectContext:
                 s, e = map(int, r.split("-"))
                 return lines[max(0, s - 1) : e], max(0, total - (e - max(0, s - 1)))
             except ValueError:
-                return lines + [error_msg], 0
+                return lines + [err_msg], 0
 
         elif range_str.startswith("#l"):
             try:
                 n = int(range_str.replace("#l", ""))
                 return lines[max(0, n - 1) : n], max(0, total - 1)
             except ValueError:
-                return lines + [error_msg], 0
+                return lines + [err_msg], 0
 
-        return lines + [error_msg], 0
+        return lines + [err_msg], 0
 
     def generate_tree(self, root_rel: str = "", max_depth: int | None = None) -> str:
         """

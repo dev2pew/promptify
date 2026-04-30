@@ -147,7 +147,7 @@ async def test_git_mentions(app_components):
     # RETRIEVE THE CONFIGURED LOCALIZATION STRINGS DYNAMICALLY
     # SO THE TEST DOESN'T BREAK IF THE USER EDITS EN.JSON.
     clean_state = get_string("working_tree_clean", "working tree clean")
-    error_state = get_string("git_status_error", "git status error").split("{")[0]
+    err_state = get_string("git_status_err", "git status error").split("{")[0]
 
     # IN A REAL ENVIRONMENT, IT EITHER RETURNS AN ERROR STRING (NO GIT),
     # A CLEAN TREE STRING, OR A FORMATTED LOG OF THE CHANGES.
@@ -155,9 +155,9 @@ async def test_git_mentions(app_components):
     assert result == "" or any(
         state in result
         for state in [
-            "error: git not available",
+            "err... git not available",
             clean_state,
-            error_state,
+            err_state,
             # FIXES THE FAILURE WHEN YOU HAVE UNCOMMITTED CHANGES
             "```log",
         ]

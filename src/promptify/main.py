@@ -20,7 +20,7 @@ from .core.indexer import ProjectIndexer
 from .core.resolver import PromptResolver
 from .core.mods import ModRegistry
 from .core.cli import CLIConfig, parse_cli_args
-from .core.settings import APP_SETTINGS, consume_settings_warnings
+from .core.settings import APP_SETTINGS, consume_settings_warns
 from .ui.editor import InteractiveEditor
 from .utils.i18n import get_string
 
@@ -35,8 +35,8 @@ class App:
         self.data_dir = self.root_dir / "data"
         self.outs_dir = self.root_dir / "outs"
         self.ensure_directories()
-        for warning in consume_settings_warnings():
-            log.warning(warning)
+        for warn in consume_settings_warns():
+            log.warn(warn)
 
     def ensure_directories(self) -> None:
         """VERIFIES DIRECTORY TREES FOR SAFELY MAINTAINING OUTPUT STRUCTURES."""
@@ -129,9 +129,9 @@ class App:
             try:
                 await asyncio.to_thread(pyperclip.copy, content)
                 log.success(get_string("copied_clipboard", "copied to clipboard"))
-            except Exception as e:
-                log.warning(
-                    get_string("clipboard_failed", "clipboard failed").format(error=e)
+            except Exception as err:
+                log.warn(
+                    get_string("clipboard_failed", "clipboard failed").format(err=err)
                 )
 
     async def run(self) -> None:
@@ -140,7 +140,7 @@ class App:
 
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
         if not cases:
-            log.error(get_string("no_cases", "no cases found"))
+            log.err(get_string("no_cases", "no cases found"))
             log.info(
                 get_string("root_dir_shows", "root dir").format(path=self.root_dir)
             )
@@ -159,7 +159,7 @@ class App:
         if self.cli_config.case:
             matching = [d for c, d in configs if c.name == self.cli_config.case]
             if len(matching) > 1:
-                log.error(
+                log.err(
                     get_string(
                         "duplicate_case_cli",
                         "Multiple cases found for '{case}'. Only normal menu mode supports duplicates. If you want to use the CLI, then the user needs to adjust their cases to not contain duplicate names.",
@@ -167,7 +167,7 @@ class App:
                 )
                 return
             if not matching:
-                log.error(
+                log.err(
                     get_string("case_not_found", "Case '{case}' not found.").format(
                         case=self.cli_config.case
                     )
@@ -209,9 +209,7 @@ class App:
                         d for c, d in configs if c.name == lastcase
                     )
                 elif not case_input:
-                    log.warning(
-                        get_string("operation_cancelled", "operation cancelled")
-                    )
+                    log.warn(get_string("operation_cancelled", "operation cancelled"))
                     return
                 else:
                     case_idx = int(case_input) - 1
@@ -219,7 +217,7 @@ class App:
                         raise IndexError
                     selected_case_dir = cases[case_idx]
             except (ValueError, IndexError):
-                log.error(get_string("invalid_selection", "invalid selection"))
+                log.err(get_string("invalid_selection", "invalid selection"))
                 return
 
             case = CaseConfig(selected_case_dir)
@@ -237,7 +235,7 @@ class App:
 
         target_dir = Path(target_path_str).resolve()
         if not target_dir.is_dir():
-            log.error(
+            log.err(
                 get_string("dir_not_exist", "directory not exist").format(
                     path=target_dir
                 )
@@ -250,11 +248,11 @@ class App:
         has_git = shutil.which("git") is not None
         has_git_folder = (target_dir / ".git").exists()
         if not has_git:
-            log.warning(
+            log.warn(
                 get_string("git_not_found", "git executable not found in system path.")
             )
         if not has_git_folder:
-            log.warning(
+            log.warn(
                 get_string("no_git_folder", "no .git folder found in '{path}'.").format(
                     path=target_dir
                 )
@@ -283,7 +281,7 @@ class App:
             elif m in ("i", "interactive", "a", "advanced", "e", "editor"):
                 mode = 2
             else:
-                log.error(get_string("invalid_mode", "invalid mode"))
+                log.err(get_string("invalid_mode", "invalid mode"))
                 indexer.stop_watching()
                 return
         elif self.cli_config.case and self.cli_config.path:
@@ -311,7 +309,7 @@ class App:
                 mode_input = (await log.input_async(prompt_str)).strip()
                 if not mode_input:
                     if last_mode is None:
-                        log.warning(
+                        log.warn(
                             get_string("operation_cancelled", "operation cancelled")
                         )
                         indexer.stop_watching()
@@ -320,7 +318,7 @@ class App:
                 else:
                     mode = int(mode_input)
             except ValueError:
-                log.error(get_string("invalid_selection", "invalid selection"))
+                log.err(get_string("invalid_selection", "invalid selection"))
                 indexer.stop_watching()
                 return
 
@@ -334,7 +332,7 @@ class App:
             elif mode == 2:
                 await self.run_interactive_mode(case, resolver, indexer)
             else:
-                log.error(get_string("invalid_mode", "invalid mode"))
+                log.err(get_string("invalid_mode", "invalid mode"))
         finally:
             indexer.stop_watching()
 
@@ -342,7 +340,7 @@ class App:
         """EXECUTES THE STATIC LEGACY RESOLVER MODE."""
         legacy_path = case.case_dir / case.legacy_file
         if not legacy_path.exists():
-            log.error(
+            log.err(
                 get_string("legacy_not_found", "legacy not found").format(
                     path=legacy_path
                 )
@@ -375,7 +373,7 @@ class App:
         edited_text = await editor.run_async()
 
         if edited_text is None:
-            log.warning(get_string("operation_cancelled", "operation cancelled"))
+            log.warn(get_string("operation_cancelled", "operation cancelled"))
             return
 
         log.normal(get_string("resolving_mentions", "resolving mentions"))
@@ -390,5 +388,5 @@ def cli():
         asyncio.run(App(config).run())
     except KeyboardInterrupt:
         print()
-        log.warning(get_string("exiting", "exiting"))
+        log.warn(get_string("exiting", "exiting"))
         sys.exit(0)

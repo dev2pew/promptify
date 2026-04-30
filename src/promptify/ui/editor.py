@@ -77,7 +77,7 @@ try:
     )
     from prompt_toolkit.utils import get_cwidth
 except ImportError:
-    log.error(
+    log.err(
         get_string(
             "err_prompt_toolkit_missing",
             "'prompt_toolkit' library is missing. install it using: 'uv pip install prompt_toolkit'",
@@ -137,7 +137,7 @@ try:
     HAS_PYGMENTS = True
 except ImportError:
     HAS_PYGMENTS = False
-    log.warning(
+    log.warn(
         get_string(
             "err_pygments_missing",
             "'pygments' library is missing. syntax highlighting will be disabled. install it using: 'uv pip install pygments'",
@@ -147,7 +147,7 @@ except ImportError:
 try:
     from rapidfuzz import process  # NOQA: F401
 except ImportError:
-    log.error(
+    log.err(
         get_string(
             "err_rapidfuzz_missing",
             "'rapidfuzz' library is missing. install it using: 'uv pip install rapidfuzz'",
@@ -1178,21 +1178,21 @@ class InteractiveEditor:
             ),
         )
 
-        self.error_visible = False
-        self.error_message = ""
-        self.error_buffer = Buffer(document=Document(""), read_only=True)
-        self.error_window = Window(
-            content=BufferControl(buffer=self.error_buffer),
-            style="class:error-text",
+        self.err_visible = False
+        self.err_message = ""
+        self.err_buffer = Buffer(document=Document(""), read_only=True)
+        self.err_window = Window(
+            content=BufferControl(buffer=self.err_buffer),
+            style="class:err-text",
             wrap_lines=True,
             width=Dimension(
-                min=APP_SETTINGS.editor_layout.error_width_min,
-                max=APP_SETTINGS.editor_layout.error_width_max,
+                min=APP_SETTINGS.editor_layout.err_width_min,
+                max=APP_SETTINGS.editor_layout.err_width_max,
                 weight=1,
             ),
             height=Dimension(
-                min=APP_SETTINGS.editor_layout.error_height_min,
-                max=APP_SETTINGS.editor_layout.error_height_max,
+                min=APP_SETTINGS.editor_layout.err_height_min,
+                max=APP_SETTINGS.editor_layout.err_height_max,
                 weight=1,
             ),
         )
@@ -1288,10 +1288,10 @@ class InteractiveEditor:
                     "search-match": "bg:#5d4a1d #fff0cb",
                     "search-match-active": "bg:#1f5d8e #f7fbff bold",
                     "current-line": "bg:#262a31",
-                    "error-frame": "bg:#101317",
-                    "error-frame.border": "fg:#768394",
-                    "error-frame.label": "bg:#101317 #d7e6f6 bold",
-                    "error-text": "bg:#171c22 #f2f5f8",
+                    "err-frame": "bg:#101317",
+                    "err-frame.border": "fg:#768394",
+                    "err-frame.label": "bg:#101317 #d7e6f6 bold",
+                    "err-text": "bg:#171c22 #f2f5f8",
                     "mention-tag": "fg:#00ffff bold",
                     "mention-path": "fg:#ffaa00",
                     "mention-range": "fg:#ff55ff",
@@ -1528,8 +1528,8 @@ class InteractiveEditor:
             return self.get_text("editor_mode_help", "help")
         if self.issue_mode_active:
             return self.get_text("editor_mode_issue", "issue")
-        if self.error_visible:
-            return self.get_text("editor_mode_error", "error")
+        if self.err_visible:
+            return self.get_text("editor_mode_err", "error")
         if self.search_visible:
             return self.get_text("editor_mode_search", "search")
         return self.get_text("editor_mode_normal", "normal")
@@ -1854,15 +1854,15 @@ class InteractiveEditor:
                             symbol=symbol,
                         )
                     )
-            except Exception as error:
+            except Exception as err:
                 issues[issue_key] = self._make_buffer_match_issue(
                     match,
                     issue.style,
                     self.format_text(
-                        "issue_symbol_resolution_error",
-                        "{path}: {error}",
+                        "issue_symbol_resolution_err",
+                        "{path}: {err}",
                         path=meta.rel_path,
-                        error=error,
+                        err=err,
                     ),
                 )
 
@@ -1966,11 +1966,7 @@ class InteractiveEditor:
     def open_help(self) -> None:
         """SHOWS THE HELP OVERLAY AND FOCUSES IT."""
         self._help_restore_focus = (
-            "search"
-            if self.search_visible
-            else "error"
-            if self.error_visible
-            else "main"
+            "search" if self.search_visible else "error" if self.err_visible else "main"
         )
         self._help_restore_main_cursor = self.buffer.cursor_position
         self._help_restore_search_cursor = self.search_buffer.cursor_position
@@ -2000,8 +1996,8 @@ class InteractiveEditor:
         )
         if self._help_restore_focus == "search" and self.search_visible:
             self._focus_search()
-        elif self._help_restore_focus == "error" and self.error_visible:
-            self._focus(self.error_window)
+        elif self._help_restore_focus == "error" and self.err_visible:
+            self._focus(self.err_window)
         else:
             self._focus_main()
 
@@ -2080,8 +2076,8 @@ class InteractiveEditor:
     def deactivate_issue_mode(self) -> None:
         """EXITS ISSUE MODE AND DISMISSES THE OVERLAY."""
         self.issue_mode_active = False
-        self.error_visible = False
-        self.error_message = ""
+        self.err_visible = False
+        self.err_message = ""
         self._focus_main()
         self.invalidate()
 
@@ -2097,9 +2093,9 @@ class InteractiveEditor:
             else "editor_issue_title_reference",
             "syntax" if issue.style == "invalid-syntax" else "reference",
         )
-        self.error_visible = True
-        self.error_message = issue.message
-        self.error_buffer.set_document(
+        self.err_visible = True
+        self.err_message = issue.message
+        self.err_buffer.set_document(
             Document(
                 self.format_text(
                     "editor_issue_overlay",
@@ -2110,9 +2106,7 @@ class InteractiveEditor:
                     line=issue.line + 1,
                     column=issue.column + 1,
                     message=issue.message,
-                    context_label=self.get_text(
-                        "editor_issue_context_label", "context"
-                    ),
+                    context_label=self.get_text("editor_issue_context_label", "^^^^"),
                     fragment=issue.fragment,
                     controls=self.get_text(
                         "editor_issue_controls",
@@ -2123,7 +2117,7 @@ class InteractiveEditor:
             ),
             bypass_readonly=True,
         )
-        self._focus(self.error_window)
+        self._focus(self.err_window)
         self.invalidate()
 
     def jump_to_issue(self, index: int) -> None:
@@ -2138,7 +2132,7 @@ class InteractiveEditor:
         self._search_cache_state = None
         self.invalidate()
 
-    def _get_error_title_text(self) -> str:
+    def _get_err_title_text(self) -> str:
         """RETURNS A COMPACT, RESPONSIVE TITLE FOR ERROR AND ISSUE OVERLAYS."""
         if self.issue_mode_active and self._document_issue_cache:
             total = len(self._document_issue_cache)
@@ -2153,7 +2147,7 @@ class InteractiveEditor:
                 )
                 + " > "
             )
-        return " < " + get_string("error_title", "error") + " > "
+        return " < " + get_string("err_title", "error") + " > "
 
     def step_issue(self, direction: int) -> bool:
         """MOVES TO THE NEXT OR PREVIOUS ISSUE WHILE ISSUE MODE IS ACTIVE."""
@@ -2247,11 +2241,11 @@ class InteractiveEditor:
             Condition(lambda: self.help_visible),
         )
 
-        error_float = self._build_modal_float(
-            self.error_window,
-            self._get_error_title_text,
-            "class:error-frame",
-            Condition(lambda: self.error_visible),
+        err_float = self._build_modal_float(
+            self.err_window,
+            self._get_err_title_text,
+            "class:err-frame",
+            Condition(lambda: self.err_visible),
         )
 
         layout = Layout(
@@ -2264,7 +2258,7 @@ class InteractiveEditor:
                         content=self.completions_menu,
                     ),
                     help_float,
-                    error_float,
+                    err_float,
                 ],
             )
         )

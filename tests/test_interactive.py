@@ -259,17 +259,17 @@ async def test_interactive_overlay_windows_use_responsive_dimensions(app_compone
 
     help_width = cast(Dimension, editor.help_window.width)
     help_height = cast(Dimension, editor.help_window.height)
-    error_width = cast(Dimension, editor.error_window.width)
-    error_height = cast(Dimension, editor.error_window.height)
+    err_width = cast(Dimension, editor.err_window.width)
+    err_height = cast(Dimension, editor.err_window.height)
 
     assert help_width.weight == 1
     assert help_width.min == 40
     assert help_width.max == 160
     assert help_height.weight == 1
-    assert error_width.weight == 1
-    assert error_width.min == 28
-    assert error_width.max == 96
-    assert error_height.weight == 1
+    assert err_width.weight == 1
+    assert err_width.min == 28
+    assert err_width.max == 96
+    assert err_height.weight == 1
 
 
 async def test_interactive_editor_runtime_search_opens_and_closes_cleanly(
@@ -593,11 +593,11 @@ async def test_interactive_editor_issue_mode_tracks_issue_navigation(
             ),
         )
         .splitlines()[0]
-        in editor.error_buffer.text
+        in editor.err_buffer.text
     )
     assert (
         get_string("editor_issue_controls", "[Enter/N] next  ^[R/P] prev  [Esc] close")
-        in editor.error_buffer.text
+        in editor.err_buffer.text
     )
     assert editor.buffer.document.cursor_position_row == 0
 
@@ -621,11 +621,11 @@ async def test_interactive_editor_issue_mode_tracks_issue_navigation(
             ),
         )
         .splitlines()[0]
-        in editor.error_buffer.text
+        in editor.err_buffer.text
     )
     assert (
         get_string("editor_issue_controls", "[Enter/N] next  ^[R/P] prev  [Esc] close")
-        in editor.error_buffer.text
+        in editor.err_buffer.text
     )
     assert editor.buffer.document.cursor_position_row == 1
 

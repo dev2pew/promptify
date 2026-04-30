@@ -7,7 +7,7 @@ from promptify.core.settings import build_settings
 
 def test_build_settings_accepts_behavior_and_theme_overrides():
     """VALID SETTINGS SHOULD FLOW INTO THE TYPED CONFIG OBJECT."""
-    settings, warnings = build_settings(
+    settings, warns = build_settings(
         {
             "PROMPTIFY_MAX_FILE_SIZE": "1234",
             "PROMPTIFY_COPY_OUTPUT_TO_CLIPBOARD": "false",
@@ -20,7 +20,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
         }
     )
 
-    assert warnings == []
+    assert warns == []
     assert settings.runtime.max_file_size == 1234
     assert not settings.app_behavior.copy_output_to_clipboard
     assert not settings.app_behavior.save_raw_output
@@ -33,7 +33,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
 
 def test_build_settings_invalid_values_fall_back_and_warn():
     """INVALID SETTINGS SHOULD NOT CRASH IMPORT-TIME CONFIGURATION."""
-    settings, warnings = build_settings(
+    settings, warns = build_settings(
         {
             "PROMPTIFY_MAX_FILE_SIZE": "oops",
             "PROMPTIFY_LOG_TIMESTAMPS": "sometimes",
@@ -60,4 +60,4 @@ def test_build_settings_invalid_values_fall_back_and_warn():
         ".venv/",
         "node_modules/",
     )
-    assert len(warnings) >= 6
+    assert len(warns) >= 6
