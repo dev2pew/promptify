@@ -104,12 +104,10 @@ class ProjectIndexer(FileSystemEventHandler):
             )
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
-        except Exception as e:
+        except Exception as err:
             if watch_mode == "native":
                 raise
-            log.warning(
-                get_string("observer_fallback", "observer failed").format(error=e)
-            )
+            log.warn(get_string("observer_fallback", "observer failed").format(err=err))
             self._observer = PollingObserver()
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()

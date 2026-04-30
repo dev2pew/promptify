@@ -89,14 +89,14 @@ class Logger:
             return await self._session.prompt_async(formatted_text)
         except (EOFError, KeyboardInterrupt):
             print()
-            self.warning(get_string("operation_cancelled", "operation cancelled"))
+            self.warn(get_string("operation_cancelled", "operation cancelled"))
             sys.exit(0)
 
-    def error(self, message: str, **kwargs: Any) -> None:
+    def err(self, message: str, **kwargs: Any) -> None:
         """PRINTS ERROR STATE REPRESENTATIONS DIRECTLY UTILIZING FATAL INDICATORS."""
         self._print(
-            APP_SETTINGS.logger.error_prefix,
-            APP_SETTINGS.logger.error_color,
+            APP_SETTINGS.logger.err_prefix,
+            APP_SETTINGS.logger.err_color,
             message,
             **kwargs,
         )
@@ -110,11 +110,11 @@ class Logger:
             **kwargs,
         )
 
-    def warning(self, message: str, **kwargs: Any) -> None:
+    def warn(self, message: str, **kwargs: Any) -> None:
         """PRINTS WARNING CONDITION EVALUATIONS PREVENTING EXECUTION FAULTS."""
         self._print(
-            APP_SETTINGS.logger.warning_prefix,
-            APP_SETTINGS.logger.warning_color,
+            APP_SETTINGS.logger.warn_prefix,
+            APP_SETTINGS.logger.warn_color,
             message,
             **kwargs,
         )

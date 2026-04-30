@@ -72,10 +72,10 @@ class CaseConfig:
                     legacy_file = data.get("legacy")
                     if isinstance(legacy_file, str) and legacy_file:
                         self.legacy_file = legacy_file
-            except Exception as e:
-                log.warning(
+            except Exception as err:
+                log.warn(
                     get_string("config_parse_failed", "failed to parse config").format(
-                        name=self.name, error=e
+                        name=self.name, err=err
                     )
                 )
 
@@ -88,10 +88,10 @@ class CaseConfig:
             try:
                 with open(target_ignore_path, "r", encoding="utf-8") as f:
                     lines.extend(f.readlines())
-            except Exception as e:
-                log.warning(
+            except Exception as err:
+                log.warn(
                     get_string("gitignore_read_failed", "gitignore error").format(
-                        error=e
+                        err=err
                     )
                 )
 
@@ -100,10 +100,10 @@ class CaseConfig:
             try:
                 with open(case_ignore_path, "r", encoding="utf-8") as f:
                     lines.extend(f.readlines())
-            except Exception as e:
-                log.warning(
+            except Exception as err:
+                log.warn(
                     get_string("caseignore_read_failed", "caseignore error").format(
-                        error=e
+                        err=err
                     )
                 )
 
