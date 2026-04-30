@@ -210,7 +210,7 @@ Use multi-stage builds to keep final image sizes small (copying only the `.venv`
 import os
 API_KEY = os.getenv("SECRET_KEY")
 if not API_KEY...
-    raise RuntimeError("SECRET_KEY environment variable is missing.")
+    raise RuntimeError("SECRET_KEY environment variable is missing")
 
 ```
 
