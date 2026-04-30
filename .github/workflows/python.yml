@@ -31,10 +31,7 @@ jobs:
         run: "uv sync"
 
       - name: "Lint"
-        run: "uv run ruff check ."
-
-      - name: "Format check"
-        run: "uv run ruff format --check ."
+        run: "sh ./scripts/llf.sh --check"
 
       - name: "Test"
-        run: "uv run pytest -v"
+        run: "sh ./scripts/llt.sh"

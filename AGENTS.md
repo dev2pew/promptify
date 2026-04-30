@@ -18,7 +18,7 @@
 
 ## TESTING RULES
 
-Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\.uv-cache'; ./llt.bat` to avoid requiring elevation.
+Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\.uv-cache'; ./scripts/llt.bat` to avoid requiring elevation.
 
 - Add or update unit tests for every behavioral change;
 - Tests should assert localized text through `get_string(...)` instead of hardcoded copies when the value comes from `strings/en.json`;
@@ -41,4 +41,6 @@ Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs
 - `tests/` should remain unit-focused and cover regressions;
 - `strings/en.json` centralizes user-facing strings and can reference locale-scoped resource files under `strings/en/` for large text blocks;
 - `.env.example` documents safe, non-secret local configuration and preference toggles;
+- scripts under `scripts/` should resolve the repo root from their own location so they keep working after directory moves or when launched from outside the repository root;
+- maintenance helpers under `scripts/` should prompt before destructive git actions, restore any required remotes automatically when possible, clean up generated temporary files when they are script-owned, and reject obvious no-op destructive operations;
 - `README.md` should stay aligned with user-visible capabilities, controls, and configuration.

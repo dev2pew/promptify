@@ -146,7 +146,7 @@ uv run pytest -v
 or on Windows...
 
 ```powershell
-./llt.bat
+./scripts/llt.bat
 ```
 
 format and lint...
@@ -159,7 +159,7 @@ uv run ruff format
 or on Windows...
 
 ```powershell
-./llf.bat
+./scripts/llf.bat
 ```
 
 ## INSTALL
@@ -180,7 +180,7 @@ uv run promptify
 or...
 
 ```powershell
-./llr.bat
+./scripts/llr.bat
 ```
 
 module entry point...
@@ -202,6 +202,8 @@ uv run python -m promptify
 ## CONTRIBUTING
 
 automation and CLI agents should also follow [AGENTS.md](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/AGENTS.md:1).
+
+repo maintenance helpers live under [`scripts/`](C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/scripts/). [`filter.ps1`](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/scripts/filter.ps1:1) prompts for the source and target git identity, refuses no-op rewrites, rewrites git author history using `git-filter-repo`, restores `origin`, force-pushes rewritten refs, and removes the generated `.mailmap-rewrite` file after the run.
 
 ## DEMO
 

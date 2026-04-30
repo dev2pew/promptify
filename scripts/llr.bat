@@ -1,6 +1,10 @@
 @ECHO OFF
 TITLE %~n0
 
+PUSHD "%~dp0.."
 uv.exe run promptify %*
+SET "EXIT_CODE=%ERRORLEVEL%"
+POPD
 
 PAUSE
+EXIT /B %EXIT_CODE%
