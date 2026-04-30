@@ -23,6 +23,8 @@ Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs
 - Add or update unit tests for every behavioral change;
 - Tests should assert localized text through `get_string(...)` instead of hardcoded copies when the value comes from `strings/en.json`;
 - Keep tests deterministic and sandboxed;
+- The test harness seeds `PROMPTIFY_*` values from `.env.example` through `tests/_settings_master.py` before importing application modules, so local `.env` tweaks must not influence test expectations;
+- Settings-sensitive tests should reuse the generated passes from `tests/_settings_master.py` instead of hardcoding layout or render defaults; set `PROMPTIFY_TEST_PASS_COUNT` to control the number of generated passes, with a default of `4`;
 - Run formatting and the full pytest wrapper before finishing work.
 
 ## EDITING RULES

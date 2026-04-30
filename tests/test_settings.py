@@ -2,6 +2,8 @@
 
 from promptify.core.settings import build_settings
 
+from _settings_master import get_setting_attr_map
+
 
 def test_build_settings_accepts_behavior_and_theme_overrides():
     """Valid settings should populate the typed config object"""
@@ -27,6 +29,16 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
     assert settings.indexer.watch_mode == "polling"
     assert settings.logger.info_color == "ansigreen"
     assert settings.terminal.profile == "legacy-cmd"
+
+
+def test_build_settings_generated_layout_passes_are_applied(settings_pass):
+    """Generated settings passes should parse into matching typed values"""
+    settings, warns = build_settings(settings_pass.env)
+
+    assert warns == []
+    for env_key, section_name, attr_name in get_setting_attr_map():
+        section = getattr(settings, section_name)
+        assert getattr(section, attr_name) == int(settings_pass.env[env_key])
 
 
 def test_build_settings_invalid_values_fall_back_and_warn():

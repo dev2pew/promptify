@@ -1,5 +1,7 @@
 """Pytest configuration and sandbox bootstrapping for the `promptify` suite"""
+# ruff: noqa: E402
 
+import os
 import pytest
 import shutil
 import sys
@@ -8,12 +10,23 @@ from typing import cast
 
 # ADD THE SRC FOLDER TO THE PATH SO TESTS CAN IMPORT OUR MODULES NATIVELY
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent))
+
+from _settings_master import (
+    SettingsPass,
+    build_settings_passes,
+    install_settings_master_env,
+)
+
+install_settings_master_env(os.environ)
 
 from promptify.core.config import CaseConfig
 from promptify.core.indexer import ProjectIndexer
 from promptify.core.context import ProjectContext
 from promptify.core.resolver import PromptResolver
 from promptify.core.mods import ModRegistry
+from promptify.core.settings import AppSettings, build_settings
+from promptify.core.terminal import TerminalProfile, detect_terminal_profile
 
 
 @pytest.fixture(scope="session")
@@ -93,3 +106,66 @@ async def app_components(
     resolver = PromptResolver(context, cast(ModRegistry, registry))
 
     return context, resolver
+
+
+@pytest.fixture(scope="session")
+def settings_passes() -> tuple[SettingsPass, ...]:
+    """Return the centralized deterministic settings matrix"""
+    return build_settings_passes()
+
+
+@pytest.fixture(params=build_settings_passes(), ids=lambda item: item.name)
+def settings_pass(request) -> SettingsPass:
+    """Iterate through the shared multi-pass settings matrix"""
+    return cast(SettingsPass, request.param)
+
+
+@pytest.fixture
+def apply_settings_pass(monkeypatch):
+    """Patch imported APP_SETTINGS bindings to a generated settings pass"""
+
+    def _apply(
+        settings_pass: SettingsPass,
+    ) -> tuple[AppSettings, list[str], TerminalProfile]:
+        settings, warns = build_settings(settings_pass.env)
+
+        import promptify.core.settings as settings_module
+        import promptify.core.terminal as terminal_module
+
+        monkeypatch.setattr(settings_module, "APP_SETTINGS", settings)
+        monkeypatch.setattr(settings_module, "SETTINGS_WARNINGS", warns)
+
+        monkeypatch.setattr(terminal_module, "APP_SETTINGS", settings)
+        terminal_profile = detect_terminal_profile(
+            env=settings_pass.env,
+            override=settings.terminal.profile,
+        )
+        monkeypatch.setattr(terminal_module, "APP_TERMINAL_PROFILE", terminal_profile)
+
+        module_names = (
+            "promptify.core.config",
+            "promptify.core.indexer",
+            "promptify.core.matching",
+            "promptify.core.mods",
+            "promptify.core.resolver",
+            "promptify.main",
+            "promptify.ui.editor",
+            "promptify.ui.logger",
+            "promptify.ui.ui",
+        )
+        for module_name in module_names:
+            module = sys.modules.get(module_name)
+            if module is None or not hasattr(module, "APP_SETTINGS"):
+                continue
+            monkeypatch.setattr(module, "APP_SETTINGS", settings, raising=False)
+            if hasattr(module, "APP_TERMINAL_PROFILE"):
+                monkeypatch.setattr(
+                    module,
+                    "APP_TERMINAL_PROFILE",
+                    terminal_profile,
+                    raising=False,
+                )
+
+        return settings, warns, terminal_profile
+
+    return _apply

@@ -296,8 +296,11 @@ async def test_interactive_completion_menu_respects_available_width(app_componen
         assert "some/" not in narrow_line
 
 
-async def test_interactive_overlay_windows_use_responsive_dimensions(app_components):
+async def test_interactive_overlay_windows_use_responsive_dimensions(
+    app_components, settings_pass, apply_settings_pass
+):
     """Help and error panels should scale via min and max bounds"""
+    layout, _warns, _profile = apply_settings_pass(settings_pass)
     context, resolver = app_components
     editor = InteractiveEditor("", context.indexer, resolver)
 
@@ -307,13 +310,17 @@ async def test_interactive_overlay_windows_use_responsive_dimensions(app_compone
     err_height = cast(Dimension, editor.err_window.height)
 
     assert help_width.weight == 1
-    assert help_width.min == 40
-    assert help_width.max == 160
+    assert help_width.min == layout.editor_layout.help_width_min
+    assert help_width.max == layout.editor_layout.help_width_max
     assert help_height.weight == 1
+    assert help_height.min == layout.editor_layout.help_height_min
+    assert help_height.max == layout.editor_layout.help_height_max
     assert err_width.weight == 1
-    assert err_width.min == 28
-    assert err_width.max == 96
+    assert err_width.min == layout.editor_layout.err_width_min
+    assert err_width.max == layout.editor_layout.err_width_max
     assert err_height.weight == 1
+    assert err_height.min == layout.editor_layout.err_height_min
+    assert err_height.max == layout.editor_layout.err_height_max
 
 
 async def test_interactive_editor_runtime_search_opens_and_closes_cleanly(

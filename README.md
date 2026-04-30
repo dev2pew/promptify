@@ -133,6 +133,8 @@ the project is unit-test driven and expects source changes to stay covered.
 
 - use `get_string(...)` in tests when asserting localized UI text;
 - keep tests sandboxed and deterministic;
+- tests seed `PROMPTIFY_*` values from `.env.example` through `tests/_settings_master.py`, so repo-local `.env` changes do not shift test expectations;
+- settings-sensitive tests reuse the generated multi-pass matrix from `tests/_settings_master.py`; set `PROMPTIFY_TEST_PASS_COUNT` to change the pass count, which defaults to `4`;
 - preserve Pylance basic type-checking cleanliness.
 
 run tests...
