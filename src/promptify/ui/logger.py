@@ -3,11 +3,36 @@
 import sys
 import datetime
 from typing import Any
+from prompt_toolkit.application.current import get_app
+from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion
+from prompt_toolkit.filters import Condition
+from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit import print_formatted_text, HTML
 from prompt_toolkit.shortcuts import PromptSession
+from prompt_toolkit.styles import Style
 
 from ..core.settings import APP_SETTINGS
 from ..utils.i18n import get_string
+
+_AUTO_SUGGESTION_STYLE = "#888888 bg:default noreverse noitalic nounderline noblink"
+
+
+class PrefixSuggestion(AutoSuggest):
+    """Show the remainder of a default value while the input stays on its prefix"""
+
+    def __init__(self, value: str):
+        self.value = value
+
+    def get_suggestion(self, _buffer: Any, document: Any) -> Suggestion | None:
+        """Return the unmatched suffix when the current input matches the prefix"""
+        typed = document.text
+        if not self.value or not self.value.startswith(typed):
+            return None
+
+        remainder = self.value[len(typed) :]
+        if not remainder:
+            return None
+        return Suggestion(remainder)
 
 
 class Logger:
@@ -24,6 +49,48 @@ class Logger:
         self.verbosity = verbosity
         self.include_timestamp = include_timestamp
         self._session: PromptSession[str] | None = None
+        self._input_style = Style.from_dict({"auto-suggestion": _AUTO_SUGGESTION_STYLE})
+        self._input_bindings = self._build_input_bindings()
+
+    def _build_input_bindings(self) -> KeyBindings:
+        """Add prompt-only bindings for inline suggestion acceptance"""
+        bindings = KeyBindings()
+
+        @Condition
+        def suggestion_available() -> bool:
+            app = get_app()
+            suggestion = app.current_buffer.suggestion
+            return (
+                suggestion is not None
+                and len(suggestion.text) > 0
+                and app.current_buffer.document.is_cursor_at_the_end
+            )
+
+        @bindings.add("tab", filter=suggestion_available)
+        def _accept_suggestion(event: Any) -> None:
+            suggestion = event.current_buffer.suggestion
+            if suggestion:
+                event.current_buffer.insert_text(suggestion.text)
+
+        @Condition
+        def empty_buffer_suggestion_available() -> bool:
+            app = get_app()
+            return suggestion_available() and app.current_buffer.text == ""
+
+        @bindings.add("enter", filter=empty_buffer_suggestion_available)
+        def _accept_empty_buffer_suggestion(event: Any) -> None:
+            suggestion = event.current_buffer.suggestion
+            if suggestion:
+                event.current_buffer.insert_text(suggestion.text)
+            event.current_buffer.validate_and_handle()
+
+        return bindings
+
+    def _prime_default_suggestion(self) -> None:
+        """Trigger auto-suggestion rendering for untouched empty prompts"""
+        buffer = self._session.default_buffer if self._session is not None else None
+        if buffer is not None and not buffer.text:
+            buffer.insert_text("")
 
     def _get_timestamp(self) -> str:
         """Return the formatted current time when timestamps are enabled"""
@@ -59,12 +126,13 @@ class Logger:
             **kwargs,
         )
 
-    async def input_async(self, message: str) -> str:
+    async def input_async(self, message: str, default: str = "") -> str:
         """
         Prompt for input asynchronously without blocking the event loop.
 
         Args:
             `message` (str): Instruction context outputting for prompting operation inputs.
+            `default` (str): Suggested trailing text shown while the typed input stays on its prefix.
 
         Returns:
             `str`: Supplied responses processed natively from keyboard inputs directly mapping UI interaction states.
@@ -84,7 +152,13 @@ class Logger:
             self._session = PromptSession()
 
         try:
-            return await self._session.prompt_async(formatted_text)
+            return await self._session.prompt_async(
+                formatted_text,
+                auto_suggest=PrefixSuggestion(default),
+                style=self._input_style,
+                key_bindings=self._input_bindings,
+                pre_run=self._prime_default_suggestion,
+            )
         except (EOFError, KeyboardInterrupt):
             print()
             self.warn(get_string("operation_cancelled", "operation cancelled"))

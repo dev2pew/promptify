@@ -6,7 +6,7 @@
     "select_case": "select case",
     "operation_cancelled": "operation cancelled",
     "invalid_selection": "invalid selection",
-    "enter_target_path": "enter target project path ('{path}')",
+    "enter_target_path": "enter target project path",
     "dir_not_exist": "directory '{path}' does not exist",
     "available_modes": "\n[available modes]",
     "mode_simple_name": "simple mode",

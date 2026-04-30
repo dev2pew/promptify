@@ -50,7 +50,7 @@ class App:
                     return json.loads(await f.read())
             except Exception:
                 pass
-        return {"lastcase": "", "paths": {}, "modes": {}}
+        return {"lastcase_index": None, "paths": {}, "modes": {}}
 
     async def save_state(self, state: dict) -> None:
         """Persist application state to disk"""
@@ -69,7 +69,20 @@ class App:
         if "paths" not in state:
             state["paths"] = {}
         state["paths"][case_name] = path
-        state["lastcase"] = case_name
+        await self.save_state(state)
+
+    async def get_last_case_index(self, state: dict, case_count: int) -> int | None:
+        """Return the remembered 1-based case index when it still fits the current list"""
+        index = state.get("lastcase_index")
+        if not isinstance(index, int):
+            return None
+        if index < 1 or index > case_count:
+            return None
+        return index
+
+    async def save_last_case_index(self, index: int, state: dict) -> None:
+        """Persist the remembered 1-based case index shown in the menu"""
+        state["lastcase_index"] = index
         await self.save_state(state)
 
     def get_case_state_key(self, case: CaseConfig) -> str:
@@ -94,6 +107,17 @@ class App:
             state["modes"] = {}
         state["modes"][self.get_case_state_key(case)] = mode
         await self.save_state(state)
+
+    async def prompt_with_suggestion(
+        self,
+        string_key: str,
+        fallback: str,
+        *,
+        suggested_text: str = "",
+    ) -> str:
+        """Prompt with a shared inline suggestion instead of embedding defaults in labels"""
+        prompt_text = get_string(string_key, fallback)
+        return (await log.input_async(prompt_text, default=suggested_text)).strip()
 
     def get_output_case_dir_name(self, case: CaseConfig) -> str:
         """Return the output directory name for a case"""
@@ -152,6 +176,7 @@ class App:
 
         # CASE SELECTION
         selected_case_dir = None
+        selected_case_index: int | None = None
         last_path = ""
 
         if self.cli_config.case:
@@ -181,39 +206,34 @@ class App:
                 name_counts[cfg.name] = name_counts.get(cfg.name, 0) + 1
 
             display_items = []
-            valid_names = []
             for cfg, d in configs:
-                valid_names.append(cfg.name)
                 if name_counts[cfg.name] > 1:
                     display_items.append(f"{cfg.name} <ansigray>({d.name})</ansigray>")
                 else:
                     display_items.append(cfg.name)
 
-            lastcase = state.get("lastcase", "")
-            if lastcase not in valid_names:
-                lastcase = ""
+            lastcase_index = await self.get_last_case_index(state, len(cases))
 
             print(get_string("available_cases", "available cases"))
             print_columnized(display_items)
 
             try:
-                prompt_str = get_string("select case", "select case")
-                if lastcase:
-                    prompt_str = f"{prompt_str} ('{lastcase}')"
-                case_input = (await log.input_async(prompt_str)).strip()
+                case_input = await self.prompt_with_suggestion(
+                    "select_case",
+                    "select case",
+                    suggested_text=""
+                    if lastcase_index is None
+                    else str(lastcase_index),
+                )
 
-                if not case_input and lastcase:
-                    selected_case_dir = next(
-                        d for c, d in configs if c.name == lastcase
-                    )
-                elif not case_input:
+                if not case_input:
                     log.warn(get_string("operation_cancelled", "operation cancelled"))
                     return
-                else:
-                    case_idx = int(case_input) - 1
-                    if case_idx < 0:
-                        raise IndexError
-                    selected_case_dir = cases[case_idx]
+                case_idx = int(case_input) - 1
+                if case_idx < 0:
+                    raise IndexError
+                selected_case_dir = cases[case_idx]
+                selected_case_index = case_idx + 1
             except (ValueError, IndexError):
                 log.err(get_string("invalid_selection", "invalid selection"))
                 return
@@ -226,10 +246,13 @@ class App:
             target_path_str = self.cli_config.path
         else:
             target_path_str = (
-                await log.input_async(
-                    get_string("enter_target_path", "enter path").format(path=last_path)
+                await self.prompt_with_suggestion(
+                    "enter_target_path",
+                    "enter target project path",
+                    suggested_text=last_path,
                 )
-            ).strip() or last_path
+                or last_path
+            )
 
         target_dir = Path(target_path_str).resolve()
         if not target_dir.is_dir():
@@ -240,6 +263,8 @@ class App:
             )
             return
 
+        if selected_case_index is not None:
+            await self.save_last_case_index(selected_case_index, state)
         await self.save_last_path(case.name, str(target_dir), state)
 
         # SETUP PROJECT ENGINE
@@ -296,11 +321,11 @@ class App:
                 ]
             )
             try:
-                prompt_str = get_string("select_mode", "select mode")
-                if last_mode is not None:
-                    prompt_str = f"{prompt_str} ('{last_mode}')"
-
-                mode_input = (await log.input_async(prompt_str)).strip()
+                mode_input = await self.prompt_with_suggestion(
+                    "select_mode",
+                    "select mode",
+                    suggested_text="" if last_mode is None else str(last_mode),
+                )
                 if not mode_input:
                     if last_mode is None:
                         log.warn(

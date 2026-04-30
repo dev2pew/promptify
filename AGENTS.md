@@ -13,8 +13,10 @@
 - Route new environment configuration through `src/promptify/core/settings.py`;
 - Invalid configuration values must never crash import-time startup. Fall back safely;
 - Preserve Pylance basic type-checking cleanliness;
-- Prefer shared helpers over repeated logic, especially in editor, resolver, and completion flows.
-- Preserve terminal compatibility across modern terminals, classic Windows console hosts, and legacy `cmd.exe`; avoid assuming Unicode box-drawing support or safe full-screen behavior everywhere.
+- Prefer shared helpers over repeated logic, especially in editor, resolver, and completion flows;
+- Reuse existing code and helpers before adding new logic; do not reinvent the wheel;
+- Preserve terminal compatibility across modern terminals, classic Windows console hosts, and legacy `cmd.exe`; avoid assuming Unicode box-drawing support or safe full-screen behavior everywhere;
+- Match the existing codebase style for structure, naming, localization, and user-facing tone when adding or changing code.
 
 ## TESTING RULES
 
