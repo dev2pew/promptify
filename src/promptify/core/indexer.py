@@ -49,7 +49,7 @@ class ProjectIndexer(FileSystemEventHandler):
     async def build_index(self) -> None:
         """Build the initial index using a fast directory scan"""
         log.info(
-            get_string("indexing_project", "indexing project").format(
+            get_string("indexing_project", "indexing - {name}").format(
                 name=self.target_dir.name
             )
         )
@@ -87,7 +87,7 @@ class ProjectIndexer(FileSystemEventHandler):
         await asyncio.to_thread(_scan, self.target_dir)
         self.revision += 1
         log.success(
-            get_string("indexed_success", "indexed success").format(
+            get_string("indexed_success", "indexing done").format(
                 files=len(self.files_by_rel), dirs=len(self.dirs)
             )
         )
@@ -107,7 +107,7 @@ class ProjectIndexer(FileSystemEventHandler):
         except Exception as err:
             if watch_mode == "native":
                 raise
-            log.warn(get_string("observer_fallback", "observer failed").format(err=err))
+            log.warn(get_string("observer_fallback", "observer failed").format(e=err))
             self._observer = PollingObserver()
             self._observer.schedule(self, str(self.target_dir), recursive=True)
             self._observer.start()
