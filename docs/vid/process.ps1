@@ -14,12 +14,12 @@ Get-ChildItem -File | Where-Object {
     if ($width -eq 0) { $scale = 'scale=iw:-1:flags=lanczos' }
     else { $scale = "scale=${width}:-1:flags=lanczos" }
 
-    Write-Host "Processing: $input -> $outgif"
+    Write-Host "processing... $input -> $outgif"
 
     & ffmpeg -y -i $input -vf "fps=$fps,$scale,palettegen=stats_mode=diff" -q:v 2 $palette
 
     if (-not (Test-Path $palette)) {
-        Write-Warning "Palette generation failed for $input. Skipping."
+        Write-Warning "Palette generation failed for $input. skipping"
         return
     }
 
@@ -27,5 +27,5 @@ Get-ChildItem -File | Where-Object {
     & ffmpeg -y -i $input -i $palette -filter_complex $gifFilter -loop 0 $outgif
 
     Remove-Item $palette -ErrorAction SilentlyContinue
-    Write-Host "Finished: $outgif"
+    Write-Host "finished... $outgif"
 }

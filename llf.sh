@@ -8,4 +8,4 @@ uv run ruff check --fix src/
 echo "[i] formatting..."
 uv run ruff format src/ tests/
 
-echo "[+] all done."
+echo "[+] all done"

@@ -1,7 +1,7 @@
 [project]
 name = "promptify"
 version = "0.1.0"
-description = "collect context from your projects and create prompts in a neat way."
+description = "collect context from your projects and create prompts in a neat way"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

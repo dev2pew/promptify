@@ -42,7 +42,7 @@ def parse_cli_args(args: list[str] | None = None) -> CLIConfig:
 
     parser = argparse.ArgumentParser(
         prog="promptify",
-        description="Bridge the gap between your local source code and LLMs.",
+        description="bridge the gap between your local source code and LLMs",
         add_help=False,  # CUSTOMIZING TO MAP TO `-H` CLEANLY
     )
 
@@ -51,19 +51,19 @@ def parse_cli_args(args: list[str] | None = None) -> CLIConfig:
         "--help",
         action="help",
         default=argparse.SUPPRESS,
-        help="Display help message with commands and arguments then exits.",
+        help="display help message with commands and arguments then exits",
     )
 
     parser.add_argument(
-        "-c", "--case", type=str, help=helps.get("case", "Choose case by name.")
+        "-c", "--case", type=str, help=helps.get("case", "choose case by name")
     )
 
     parser.add_argument(
-        "-p", "--path", type=str, help=helps.get("path", "Target project path.")
+        "-p", "--path", type=str, help=helps.get("path", "target project path")
     )
 
     parser.add_argument(
-        "-m", "--mode", type=str, help=helps.get("mode", "Working mode.")
+        "-m", "--mode", type=str, help=helps.get("mode", "working mode")
     )
 
     parsed, _ = parser.parse_known_args(args)

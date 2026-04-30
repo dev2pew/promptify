@@ -433,7 +433,7 @@ class ModRegistry:
             text = match.group(mod.name)
             if text is not None:
                 return mod, text
-        raise ValueError("No mod matched the given text.")
+        raise ValueError("no mod matched the given text")
 
     def get_all_completions(
         self, text_before_cursor: str, indexer: "ProjectIndexer"
