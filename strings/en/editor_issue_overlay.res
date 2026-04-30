@@ -1,4 +1,4 @@
-{title} issue at :{line}:{column}...
+{title} issue at :{line}:{column}
 
 {message}
 
