@@ -90,16 +90,22 @@ def _resolve_terminal_kind(env: Mapping[str, str | None], override: str) -> str:
         env.get("PSModulePath") or env.get("POWERSHELL_DISTRIBUTION_CHANNEL")
     )
     has_cmd_prompt = bool(env.get("PROMPT"))
+    looks_like_windows_console = comspec.endswith("cmd.exe")
+    looks_like_windows_env = (
+        looks_like_windows_console
+        or env.get("WT_SESSION") is not None
+        or has_powershell_markers
+        or os.name == "nt"
+    )
 
     if (
-        os.name == "nt"
-        and comspec.endswith("cmd.exe")
+        looks_like_windows_console
         and has_cmd_prompt
         and not has_powershell_markers
     ):
         return "legacy-cmd"
 
-    if os.name == "nt":
+    if looks_like_windows_env:
         return "conhost"
     return "modern"
 
