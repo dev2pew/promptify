@@ -3,7 +3,7 @@
 ^[G] / [F1]                   : help
 ^[F]                          : search
 ^[S]                          : resolve
-^[Q]                          : abort
+^[Q] / [F10]                  : abort
 
 [ search ]
 
