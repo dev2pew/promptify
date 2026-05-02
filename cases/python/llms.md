@@ -2,16 +2,12 @@
 
 Python — Build anything with a language that prioritizes readability, rapid development, and modern performance 🐍.
 
----
-
 ## TABLE OF CONTENTS
 
 - [Language Reference](https://docs.python.org/3/reference/index.html);
 - [Standard Library](https://docs.python.org/3/library/index.html);
 - [The Zen of Python (PEP 20)](https://peps.python.org/pep-0020/);
 - [Style Guide (PEP 8)](https://peps.python.org/pep-0008/).
-
----
 
 ## PROJECT FOUNDATIONS
 
@@ -43,8 +39,6 @@ uv run my_script.py
 ```
 
 Use `uv` instead of `pip`, `venv`, or `poetry`. It centralizes dependency management, Python versioning, and environment isolation via a global cache for 10-100x speed improvements. Keep all configurations inside `pyproject.toml`.
-
----
 
 ## DATA MODELING
 
@@ -79,8 +73,6 @@ class UserConfig(BaseModel)...
 ```
 
 Reserve Pydantic for boundaries where untrusted external data enters your system (e.g., JSON parsing, Web APIs, configuration files). Use `strict=True` to prevent unexpected type coercion.
-
----
 
 ## INTERFACES & APPLICATION DESIGN
 
@@ -121,8 +113,6 @@ async def main()...
 
 Use `asyncio.TaskGroup` (Python 3.11+) for structural concurrency. Never use blocking operations (like `time.sleep()` or standard `requests`) inside `async def` functions, as it freezes the entire event loop.
 
----
-
 ## TESTING & CODE QUALITY
 
 ### ULTRA-FAST LINTING WITH RUFF
@@ -156,8 +146,6 @@ def test_doubler(input, expected)...
 
 Write pure functions whenever possible to make testing trivial. Use `pytest.mark.parametrize` to test multiple edge cases without writing repetitive test functions.
 
----
-
 ## PROFILING & PERFORMANCE
 
 ### SCALENE (CPU/MEMORY/GPU PROFILER)
@@ -181,8 +169,6 @@ py-spy record -o profile.svg --pid 1234
 ```
 
 Attach Py-spy to running production processes to generate flame graphs. Because it is a sampling profiler, it adds virtually zero overhead and requires no code modifications.
-
----
 
 ## DEPLOYMENT & SECURITY
 
@@ -215,8 +201,6 @@ if not API_KEY...
 ```
 
 Never commit `.env` files or hardcode credentials. Fail fast and loudly if a required environment variable is missing at startup.
-
----
 
 ## API & REFERENCES
 
