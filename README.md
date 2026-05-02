@@ -119,7 +119,7 @@ the full documented surface is in [.env.example](/C:/Users/lucky/Documents/vscod
 - runtime limits like max file size and concurrent reads;
 - output behavior such as clipboard copy and raw prompt saving;
 - logger prefixes, colors, verbosity, and timestamps;
-- terminal and menu rendering fallbacks, including `PROMPTIFY_TERMINAL_PROFILE` for legacy `cmd.exe`, raster-font consoles, or forced modern profiles;
+- terminal and menu rendering fallbacks, including `PROMPTIFY_TERMINAL_PROFILE` for legacy `cmd.exe`, classic `conhost`, raster-font consoles, or forced modern profiles;
 - watch mode selection;
 - advanced real-token counting toggle with automatic fallback to the legacy heuristic estimator;
 - exact tokenizer data stored under `data/o200k_base.tiktoken`, with automatic download if it is missing and safe fallback when the download is unavailable;
@@ -129,7 +129,7 @@ the full documented surface is in [.env.example](/C:/Users/lucky/Documents/vscod
 
 invalid values fall back safely to code defaults through [settings.py](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/core/settings.py:1).
 
-when `PROMPTIFY_TERMINAL_PROFILE=auto`, `promptify` detects common environments such as VS Code, Windows Terminal, classic `conhost`, and legacy `cmd.exe`. older `cmd.exe` sessions automatically switch to ASCII-safe borders, tree connectors, and EOF markers so UI chrome remains readable even without box-drawing glyph support. classic Windows console hosts also disable prompt-toolkit full-screen mode automatically because window-state actions like `Win + Down` can hide the session while the process keeps running in the background.
+when `PROMPTIFY_TERMINAL_PROFILE=auto`, `promptify` detects common environments such as VS Code, Windows Terminal, and legacy `cmd.exe`. older `cmd.exe` sessions automatically switch to ASCII-safe borders, tree connectors, and EOF markers so UI chrome remains readable even without box-drawing glyph support. if you need the old classic Windows console compatibility profile, set `PROMPTIFY_TERMINAL_PROFILE=conhost` explicitly to keep prompt-toolkit full-screen mode off and mouse support disabled.
 
 ## TESTING
 
@@ -198,7 +198,7 @@ uv run python -m promptify
 - default max file size is `5242880` bytes (`5 MiB`), configurable through `.env`;
 - default max concurrent reads is `64`, configurable through `.env`;
 - invalid env values never fail startup and instead fall back with warnings;
-- legacy terminal profiles avoid unsupported box-drawing glyphs, disable mouse support automatically where needed, and keep full-screen mode off on classic Windows console hosts;
+- legacy terminal profiles avoid unsupported box-drawing glyphs, disable mouse support automatically where needed, and keep full-screen mode off when the explicit `conhost` profile is selected;
 - recursive system resolution detects loops and neutralizes them;
 - clipboard failures do not abort prompt generation;
 - missing `git` or missing `.git` repositories are handled gracefully.

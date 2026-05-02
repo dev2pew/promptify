@@ -32,13 +32,29 @@ def test_detect_terminal_profile_falls_back_for_legacy_cmd():
     assert profile.tree.branch == "|---"
 
 
-def test_detect_terminal_profile_uses_safe_conhost_defaults():
-    """Classic Windows console hosts should avoid full-screen mode"""
+def test_detect_terminal_profile_defaults_to_modern_when_host_is_unclear():
+    """Generic Windows shells should keep the editor on the full-screen path"""
+    profile = detect_terminal_profile(
+        {
+            "COMSPEC": r"C:\Windows\System32\cmd.exe",
+            "PSModulePath": r"C:\Program Files\PowerShell\Modules",
+        },
+        override="auto",
+    )
+
+    assert profile.name == "modern"
+    assert profile.supports_box_drawing
+    assert profile.supports_mouse
+    assert profile.supports_full_screen
+
+
+def test_detect_terminal_profile_can_force_safe_conhost_defaults():
+    """Explicit conhost mode should still disable prompt-toolkit full-screen"""
     profile = detect_terminal_profile(
         {
             "COMSPEC": r"C:\Windows\System32\cmd.exe",
         },
-        override="auto",
+        override="conhost",
     )
 
     assert profile.name == "conhost"
