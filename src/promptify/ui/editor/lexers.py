@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Callable
+from typing import Callable, cast
 
 from ...core.indexer import ProjectIndexer
 from ...core.mods import (
@@ -21,7 +21,14 @@ from ...shared.editor_support import (
     flatten_fragments_to_chars,
 )
 from ...utils.i18n import get_string
-from ._imports import Document, HAS_PYGMENTS, Lexer, MarkdownLexer, PygmentsLexer
+from ._imports import (
+    Document,
+    HAS_PYGMENTS,
+    Lexer,
+    MarkdownLexer,
+    PygmentsLexer,
+    StyleAndTextTuples,
+)
 
 
 def tokenize_mention(text: str) -> list[tuple[str, str]]:
@@ -348,7 +355,7 @@ class CustomPromptLexer(Lexer):
         get_original_line = self.md_lexer.lex_document(document)
         invalid_fence_lines = self.get_invalid_fence_lines(document)
 
-        def get_line(lineno: int):
+        def get_line(lineno: int) -> StyleAndTextTuples:
             original_tokens = get_original_line(lineno)
             text = document.lines[lineno]
             matches = list(self.mention_pattern.finditer(text))
@@ -358,7 +365,7 @@ class CustomPromptLexer(Lexer):
                 return original_tokens
 
             chars = flatten_fragments_to_chars(original_tokens)
-            new_tokens: list[tuple[str | None, str]] = []
+            new_tokens: list[tuple[object, ...]] = []
             last_idx = 0
             for match in matches:
                 start, end = match.span()
@@ -377,7 +384,7 @@ class CustomPromptLexer(Lexer):
             append_original_token_range(new_tokens, chars, last_idx, len(chars))
             if lineno in invalid_fence_lines:
                 return [("class:invalid-syntax", text)]
-            return new_tokens
+            return cast(StyleAndTextTuples, new_tokens)
 
         return get_line
 
@@ -390,12 +397,12 @@ class HelpLexer(Lexer):
         self.combined_re = re.compile(HELP_TOKEN_PATTERN)
 
     def lex_document(self, document: Document):
-        def get_line(lineno: int):
+        def get_line(lineno: int) -> StyleAndTextTuples:
             text = document.lines[lineno]
             if self.header_re.match(text):
                 return [("class:help-header", text)]
 
-            tokens = []
+            tokens: list[tuple[object, ...]] = []
             last_idx = 0
             for match in self.combined_re.finditer(text):
                 start = match.start()
@@ -411,6 +418,6 @@ class HelpLexer(Lexer):
 
             if last_idx < len(text):
                 tokens.append(("", text[last_idx:]))
-            return tokens
+            return cast(StyleAndTextTuples, tokens)
 
         return get_line

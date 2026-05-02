@@ -5,13 +5,12 @@ from __future__ import annotations
 import asyncio
 import re
 from contextlib import suppress
-from typing import cast
+from typing import final, override
 
 import promptify.core.settings as settings_module
 import promptify.core.terminal as terminal_module
 
 from ...core.indexer import ProjectIndexer
-from ...core.mods import ModRegistry
 from ...core.resolver import PromptResolver
 from ...core.terminal import TerminalProfile
 from ...shared.editor_state import (
@@ -44,10 +43,11 @@ from ._imports import (
     Layout,
     NumberedMargin,
     Window,
+    HAS_PYGMENTS,
     load_key_bindings,
     merge_key_bindings,
     to_filter,
-    HAS_PYGMENTS,
+    Processor,
     get_app,
 )
 from .completion import MentionCompleter, ResponsiveCompletionsMenu
@@ -65,6 +65,7 @@ from .search import EditorSearchMixin
 from .view import EditorViewMixin
 
 
+@final
 class InteractiveEditor(
     EditorIssuesMixin,
     EditorSearchMixin,
@@ -143,8 +144,8 @@ class InteractiveEditor(
         self.buffer = Buffer(
             document=Document(initial_text, cursor_position=0),
             completer=MentionCompleter(
-                cast(ProjectIndexer, indexer),
-                cast(ModRegistry, resolver.registry),
+                indexer,
+                resolver.registry,
                 self.should_complete,
             ),
             complete_while_typing=Condition(self.should_complete_while_typing),
@@ -258,15 +259,15 @@ class InteractiveEditor(
 
         self.lexer = (
             CustomPromptLexer(
-                cast(ModRegistry, resolver.registry),
-                cast(ProjectIndexer, indexer),
+                resolver.registry,
+                indexer,
                 resolver,
                 self.expensive_checks_enabled,
             )
             if HAS_PYGMENTS
             else None
         )
-        processors = [
+        processors: list[Processor] = [
             HighlightTrailingWhitespaceProcessor(),
             HighlightMatchingBracketProcessor(),
             EOFNewlineProcessor(self.terminal_profile),
@@ -295,9 +296,9 @@ class InteractiveEditor(
             scroll_offset=self.COMPLETION_MENU_SCROLL_OFFSET,
         )
 
-    async def _update_tokens_loop(self):
+    async def _update_tokens_loop(self) -> None:
         """Update token counts asynchronously using debounced estimation."""
-        last_text = None
+        last_text: str | None = None
         last_count = 0
         while True:
             await asyncio.sleep(self.TOKEN_UPDATE_INTERVAL)
@@ -377,7 +378,7 @@ class InteractiveEditor(
             )
         )
         style = self._build_style()
-        app = Application(
+        app: Application[None] = Application(
             layout=layout,
             key_bindings=bindings,
             style=style,
@@ -396,15 +397,16 @@ class InteractiveEditor(
 
         token_task = asyncio.create_task(self._update_tokens_loop())
         try:
-            await app.run_async()
+            _ = await app.run_async()
         finally:
-            token_task.cancel()
+            _ = token_task.cancel()
             with suppress(asyncio.CancelledError):
-                await token_task
+                _ = await token_task
             self._token_estimate_busy = False
 
         return self.result
 
+    @override
     def expensive_checks_enabled(self) -> bool:
         """Skip redraw-time validation while a bulk edit is still settling."""
         try:
@@ -434,7 +436,7 @@ class InteractiveEditor(
         )
         self.invalidate()
 
-        async def _refresh_after_pause():
+        async def _refresh_after_pause() -> None:
             await asyncio.sleep(self.BULK_EDIT_SUSPEND_SECONDS)
             try:
                 app = get_app()
@@ -442,7 +444,7 @@ class InteractiveEditor(
                 return
             app.invalidate()
 
-        asyncio.create_task(_refresh_after_pause())
+        _ = asyncio.create_task(_refresh_after_pause())
 
     def paste_text(self, buffer: Buffer, text: str) -> None:
         """Apply pasted text through the fast bulk-edit path."""
@@ -450,7 +452,7 @@ class InteractiveEditor(
             return
         buffer.save_to_undo_stack()
         if buffer.selection_state:
-            buffer.cut_selection()
+            _ = buffer.cut_selection()
             buffer.selection_state = None
         self.start_bulk_edit(text)
         buffer.insert_text(text)

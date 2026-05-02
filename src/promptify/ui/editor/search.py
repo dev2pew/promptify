@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from ...shared.editor_state import FocusTarget, SearchHighlightState, SearchMatch
 from ...shared.editor_support import (
@@ -14,48 +14,65 @@ from ...shared.editor_support import (
 from ...shared.editor_state import SearchOptions
 from ._imports import Buffer, Document
 
-if TYPE_CHECKING:
 
-    class _EditorSearchHost:
-        SEARCH_HISTORY_LIMIT: int
-        _search_history: list[str]
-        _search_history_index: int
-        _search_history_draft: str
-        _search_history_navigation_active: bool
-        _search_last_query: str
-        _search_last_direction: int
-        _search_last_match: SearchMatch | None
-        _search_cache_text_id: int
-        _search_cache_cursor: int
-        _search_cache_query: str
-        _search_cache_options: SearchOptions
-        _search_cache_state: SearchHighlightState | None
-        search_visible: bool
-        replace_visible: bool
-        jump_visible: bool
-        search_options: SearchOptions
-        search_buffer: Buffer
-        replace_buffer: Buffer
-        jump_buffer: Buffer
-        buffer: Buffer
-
-        def invalidate(self) -> None: ...
-        def note_user_activity(self) -> None: ...
-        def get_text(self, key: str, default: str) -> str: ...
-        def _clear_search_message(self) -> None: ...
-        def _clear_jump_message(self) -> None: ...
-        def _set_search_message(self, message: str, transient: bool = True) -> None: ...
-        def _set_jump_message(self, message: str) -> None: ...
-        def _focus_target(self, target: FocusTarget) -> None: ...
-        def _normalize_jump_target_text(self, text: str) -> str: ...
-else:
-
-    class _EditorSearchHost:
-        pass
-
-
-class EditorSearchMixin(_EditorSearchHost):
+class EditorSearchMixin:
     """Provide search, replace, jump, and token-count refresh behavior."""
+
+    SEARCH_HISTORY_LIMIT: int = 0
+    _search_history: list[str] = []
+    _search_history_index: int = -1
+    _search_history_draft: str = ""
+    _search_history_navigation_active: bool = False
+    _search_last_query: str = ""
+    _search_last_direction: int = 1
+    _search_last_match: SearchMatch | None = None
+    _search_cache_text_id: int = 0
+    _search_cache_cursor: int = -1
+    _search_cache_query: str = ""
+    _search_cache_options: SearchOptions = SearchOptions()
+    _search_cache_state: SearchHighlightState | None = None
+    search_visible: bool = False
+    replace_visible: bool = False
+    jump_visible: bool = False
+    search_options: SearchOptions = SearchOptions()
+    search_buffer: Buffer = cast(Buffer, cast(object, None))
+    replace_buffer: Buffer = cast(Buffer, cast(object, None))
+    jump_buffer: Buffer = cast(Buffer, cast(object, None))
+    buffer: Buffer = cast(Buffer, cast(object, None))
+
+    if TYPE_CHECKING:
+
+        def invalidate(self) -> None:
+            raise NotImplementedError
+
+        def note_user_activity(self) -> None:
+            raise NotImplementedError
+
+        def get_text(self, key: str, default: str) -> str:
+            _ = key, default
+            raise NotImplementedError
+
+        def _clear_search_message(self) -> None:
+            raise NotImplementedError
+
+        def _clear_jump_message(self) -> None:
+            raise NotImplementedError
+
+        def _set_search_message(self, message: str, transient: bool = True) -> None:
+            _ = message, transient
+            raise NotImplementedError
+
+        def _set_jump_message(self, message: str) -> None:
+            _ = message
+            raise NotImplementedError
+
+        def _focus_target(self, target: FocusTarget) -> None:
+            _ = target
+            raise NotImplementedError
+
+        def _normalize_jump_target_text(self, text: str) -> str:
+            _ = text
+            raise NotImplementedError
 
     def _remember_search_query(self, query: str) -> None:
         """Keep a small in-memory history of search queries."""

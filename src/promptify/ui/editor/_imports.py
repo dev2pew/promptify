@@ -31,6 +31,7 @@ try:
     from prompt_toolkit.key_binding import merge_key_bindings
     from prompt_toolkit.key_binding.defaults import load_key_bindings
     from prompt_toolkit.layout.containers import (
+        AnyContainer,
         ConditionalContainer,
         Float,
         FloatContainer,
@@ -75,17 +76,19 @@ try:
     from pygments.lexers.markup import MarkdownLexer
     from prompt_toolkit.lexers import PygmentsLexer
 
-    HAS_PYGMENTS = True
+    _has_pygments = True
 except ImportError:
     MarkdownLexer = None
     PygmentsLexer = None
-    HAS_PYGMENTS = False
+    _has_pygments = False
     log.warn(
         get_string(
             "err_pygments_missing",
             "'pygments' library is missing. syntax highlighting will be disabled. install it using: 'uv pip install pygments'",
         )
     )
+
+HAS_PYGMENTS = _has_pygments
 
 try:
     from rapidfuzz import process as _rapidfuzz_process  # NOQA: F401
@@ -120,6 +123,7 @@ __all__ = [
     "merge_key_bindings",
     "load_key_bindings",
     "ConditionalContainer",
+    "AnyContainer",
     "Float",
     "FloatContainer",
     "HSplit",

@@ -3,52 +3,72 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, cast
 
-from ...shared.editor_state import EditorIssue, SearchHighlightState
+from ...core.indexer import ProjectIndexer
+from ...shared.editor_state import (
+    EditorIssue,
+    FocusTarget,
+    OverlayName,
+    SearchHighlightState,
+)
 from ...utils.i18n import get_string
-from ._imports import Document
-
-if TYPE_CHECKING:
-
-    class _EditorIssuesHost:
-        issue_mode_active: bool
-        issue_index: int
-        _document_issue_cache_text_id: int
-        _document_issue_cache_enabled: bool
-        _document_issue_cache: tuple[EditorIssue, ...]
-        _search_cache_state: SearchHighlightState | None
-        buffer: Any
-        lexer: Any
-        indexer: Any
-        err_message: str
-        err_buffer: Any
-
-        def expensive_checks_enabled(self) -> bool: ...
-        def get_text(self, key: str, default: str) -> str: ...
-        def format_text(self, key: str, default: str, /, **values: object) -> str: ...
-        def invalidate(self) -> None: ...
-        def _hide_overlay(
-            self, overlay: str, *, restore_view: bool = False
-        ) -> None: ...
-        def _show_overlay(
-            self,
-            overlay: str,
-            *,
-            restore_focus: object = None,
-            preserve_view: bool = False,
-        ) -> str: ...
-        def _focus_target(self, target: object) -> None: ...
-else:
-
-    class _EditorIssuesHost:
-        pass
+from ._imports import Buffer, Document
+from .lexers import CustomPromptLexer
 
 
-class EditorIssuesMixin(_EditorIssuesHost):
+class EditorIssuesMixin:
     """Provide document issue collection plus issue-mode navigation."""
 
-    def _handle_buffer_text_changed(self, _buffer) -> None:
+    issue_mode_active: bool = False
+    issue_index: int = 0
+    _document_issue_cache_text_id: int = 0
+    _document_issue_cache_enabled: bool = True
+    _document_issue_cache: tuple[EditorIssue, ...] = ()
+    _search_cache_state: SearchHighlightState | None = None
+    buffer: Buffer = cast(Buffer, cast(object, None))
+    lexer: CustomPromptLexer | None = None
+    indexer: ProjectIndexer = cast(ProjectIndexer, cast(object, None))
+    err_message: str = ""
+    err_buffer: Buffer = cast(Buffer, cast(object, None))
+
+    if TYPE_CHECKING:
+
+        def expensive_checks_enabled(self) -> bool:
+            raise NotImplementedError
+
+        def get_text(self, key: str, default: str) -> str:
+            _ = key, default
+            raise NotImplementedError
+
+        def format_text(self, key: str, default: str, /, **values: object) -> str:
+            _ = key, default, values
+            raise NotImplementedError
+
+        def invalidate(self) -> None:
+            raise NotImplementedError
+
+        def _hide_overlay(
+            self, overlay: OverlayName, *, restore_view: bool = False
+        ) -> None:
+            _ = overlay, restore_view
+            raise NotImplementedError
+
+        def _show_overlay(
+            self,
+            overlay: OverlayName,
+            *,
+            restore_focus: FocusTarget | None = None,
+            preserve_view: bool = False,
+        ) -> OverlayName:
+            _ = overlay, restore_focus, preserve_view
+            raise NotImplementedError
+
+        def _focus_target(self, target: FocusTarget) -> None:
+            _ = target
+            raise NotImplementedError
+
+    def _handle_buffer_text_changed(self, _buffer: Buffer) -> None:
         """Invalidate cached issue state and stale issue overlays after edits."""
         self._document_issue_cache_text_id = 0
         self._document_issue_cache = tuple()
@@ -257,7 +277,7 @@ class EditorIssuesMixin(_EditorIssuesHost):
             else "editor_issue_title_reference",
             "syntax" if issue.style == "invalid-syntax" else "reference",
         )
-        self._show_overlay("error")
+        _ = self._show_overlay("error")
         self.err_message = issue.message
         self.err_buffer.set_document(
             Document(

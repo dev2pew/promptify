@@ -14,8 +14,9 @@ class PrefixSuggestion(AutoSuggest):
     def __init__(self, value: str | Callable[[], str]):
         self._value = value
 
-    def get_suggestion(self, _buffer: Any, document: Any) -> Suggestion | None:
+    def get_suggestion(self, buffer: Any, document: Any) -> Suggestion | None:
         """Return the unmatched suffix when the current input matches the prefix"""
+        del buffer
         value = self._value() if callable(self._value) else self._value
         typed = document.text
         if not value or not value.startswith(typed):

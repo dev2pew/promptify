@@ -16,7 +16,7 @@ from prompt_toolkit.layout.margins import NumberedMargin
 from prompt_toolkit.output.base import DummyOutput
 from prompt_toolkit.selection import SelectionState
 
-from _settings_master import SettingsPass
+from ._settings_master import SettingsPass
 from promptify.ui.bindings import setup_keybindings
 from promptify.ui.editor import (
     InteractiveEditor,

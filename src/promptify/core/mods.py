@@ -6,7 +6,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, TYPE_CHECKING
+from typing import Any, Iterable
 from prompt_toolkit.completion import Completion
 from rapidfuzz import process, utils as fuzz_utils
 
@@ -17,10 +17,9 @@ from .matching import (
 )
 from .settings import APP_SETTINGS
 
-if TYPE_CHECKING:
-    from .context import ProjectContext
-    from .indexer import ProjectIndexer
-    from .models import FileMeta
+ProjectContext = Any
+ProjectIndexer = Any
+FileMeta = Any
 
 
 def fuzzy_complete(
@@ -391,7 +390,7 @@ class ModRegistry:
     def __init__(self):
         """Initialize empty mod and pattern storage"""
         self.mods: list[MentionMod] = []
-        self.pattern: re.Pattern | None = None
+        self.pattern: re.Pattern[str] | None = None
 
     def register(self, mod: MentionMod) -> None:
         """
@@ -419,7 +418,7 @@ class ModRegistry:
             parts.append(f"(?P<{mod.name}>{mod.pattern})")
         self.pattern = re.compile("|".join(parts))
 
-    def get_mod_and_text(self, match: re.Match) -> tuple[MentionMod, str]:
+    def get_mod_and_text(self, match: re.Match[str]) -> tuple[MentionMod, str]:
         """
         Translate a regex match into its corresponding mod and raw text.
 
@@ -487,7 +486,8 @@ class ProjectMod(MentionMod):
     name = "mod_project"
     pattern = r"\[@project\]"
 
-    async def resolve(self, text: str, context: "ProjectContext") -> str:
+    async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
+        del full_match_text
         return context.generate_tree()
 
     def get_completions(
@@ -517,8 +517,8 @@ class FileMod(MentionMod):
         except Exception:
             return 0
 
-    async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = _must_match(self.pattern, text)
+    async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
+        m = _must_match(self.pattern, full_match_text)
         return await context.get_file_content(m.group(1), m.group(2))
 
     def get_completions(
@@ -551,8 +551,8 @@ class DirMod(MentionMod):
     name = "mod_dir"
     pattern = r"<@dir:([^>]+)>"
 
-    async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = _must_match(self.pattern, text)
+    async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
+        m = _must_match(self.pattern, full_match_text)
         return await context.get_dir_contents(m.group(1))
 
     def get_completions(
@@ -573,8 +573,8 @@ class TreeMod(MentionMod):
     name = "mod_tree"
     pattern = r"<@tree:([^>:]+?)(?::([^>]+))?>"
 
-    async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = _must_match(self.pattern, text)
+    async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
+        m = _must_match(self.pattern, full_match_text)
         return await context.get_tree_contents(m.group(1), m.group(2))
 
     def get_completions(
@@ -635,8 +635,8 @@ class ExtMod(MentionMod):
     name = "mod_ext"
     pattern = r"<@(type|ext):([^>]+)>"
 
-    async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = _must_match(self.pattern, text)
+    async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
+        m = _must_match(self.pattern, full_match_text)
         return await context.get_type_contents(m.group(2))
 
     def get_completions(
@@ -748,11 +748,11 @@ class GitMod(MentionMod):
                 display=f"[{branch}]",
             )
 
-    async def resolve(self, text: str, context: "ProjectContext") -> str:
-        body = text.removeprefix("<@git:").removesuffix(">")
+    async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
+        body = full_match_text.removeprefix("<@git:").removesuffix(">")
         query = parse_git_mention_query(body)
         if query is None:
-            return text
+            return full_match_text
         if query.command == "status":
             return await context.get_git_status(query.branch)
         if query.command == "diff":
@@ -763,7 +763,7 @@ class GitMod(MentionMod):
         if query.command == "history":
             limit = int(query.argument) if query.argument is not None else None
             return await context.get_git_history(limit=limit, branch=query.branch)
-        return text
+        return full_match_text
 
     def get_completions(
         self, text_before_cursor: str, indexer: "ProjectIndexer"
@@ -846,8 +846,8 @@ class SymbolMod(MentionMod):
         except Exception:
             return []
 
-    async def resolve(self, text: str, context: "ProjectContext") -> str:
-        m = _must_match(self.pattern, text)
+    async def resolve(self, full_match_text: str, context: "ProjectContext") -> str:
+        m = _must_match(self.pattern, full_match_text)
         return await context.get_symbol_content(m.group(1), m.group(2))
 
     def get_completions(

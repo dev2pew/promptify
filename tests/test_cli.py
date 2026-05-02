@@ -125,7 +125,7 @@ async def test_logger_input_async_passes_prefix_suggestion(monkeypatch):
             return ""
 
     logger = Logger()
-    logger._session = cast(PromptSession[str], FakeSession())
+    logger._session = cast(PromptSession[str], cast(object, FakeSession()))
 
     result = await logger.input_async("select case", default="demo")
 
@@ -171,7 +171,7 @@ def test_logger_prime_default_suggestion_nudges_empty_buffer():
         default_buffer = FakeBuffer()
 
     logger = Logger()
-    logger._session = cast(PromptSession[str], FakeSession())
+    logger._session = cast(PromptSession[str], cast(object, FakeSession()))
 
     logger._prime_default_suggestion()
 
@@ -199,7 +199,10 @@ def test_logger_tab_binding_accepts_current_suggestion(monkeypatch):
 
     bindings = logger._build_input_bindings()
     binding = bindings.get_bindings_for_keys((Keys.Tab,))[0]
-    event = cast(KeyPressEvent, type("EventStub", (), {"current_buffer": buffer})())
+    event = cast(
+        KeyPressEvent,
+        cast(object, type("EventStub", (), {"current_buffer": buffer})()),
+    )
 
     assert binding.filter()
     binding.handler(event)
@@ -231,7 +234,10 @@ def test_logger_enter_binding_accepts_empty_buffer_suggestion_and_submits(monkey
 
     bindings = logger._build_input_bindings()
     binding = bindings.get_bindings_for_keys((Keys.ControlM,))[0]
-    event = cast(KeyPressEvent, type("EventStub", (), {"current_buffer": buffer})())
+    event = cast(
+        KeyPressEvent,
+        cast(object, type("EventStub", (), {"current_buffer": buffer})()),
+    )
 
     assert binding.filter()
     binding.handler(event)

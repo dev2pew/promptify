@@ -72,7 +72,9 @@ def test_file_mod_completions_support_backslash_queries_and_compact_meta():
     )
 
     completions = list(
-        FileMod().get_completions("<@file:src\\ma", cast(ProjectIndexer, indexer))
+        FileMod().get_completions(
+            "<@file:src\\ma", cast(ProjectIndexer, cast(object, indexer))
+        )
     )
 
     assert completions[0].text == "src/main.py"
@@ -95,7 +97,9 @@ def test_file_mod_completions_are_not_limited_to_fifteen_items():
     indexer = IndexerStub(files_by_rel=files, dirs=set())
 
     completions = list(
-        FileMod().get_completions("<@file:file_", cast(ProjectIndexer, indexer))
+        FileMod().get_completions(
+            "<@file:file_", cast(ProjectIndexer, cast(object, indexer))
+        )
     )
 
     assert len(completions) == 20
@@ -117,7 +121,9 @@ def test_file_mod_exact_match_helpers_do_not_show_path_meta():
     )
 
     completions = list(
-        FileMod().get_completions("<@file:src/main.py", cast(ProjectIndexer, indexer))
+        FileMod().get_completions(
+            "<@file:src/main.py", cast(ProjectIndexer, cast(object, indexer))
+        )
     )
 
     assert completions[0].display_text == "main.py>"
@@ -134,7 +140,9 @@ def test_dir_mod_completions_do_not_show_path_meta():
     )
 
     completions = list(
-        DirMod().get_completions("<@dir:auth", cast(ProjectIndexer, indexer))
+        DirMod().get_completions(
+            "<@dir:auth", cast(ProjectIndexer, cast(object, indexer))
+        )
     )
 
     assert completions[0].display_meta_text == ""

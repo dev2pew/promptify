@@ -2,7 +2,7 @@
 
 import pytest
 
-import _editor_interactive_cases as cases
+from . import _editor_interactive_cases as cases
 
 pytestmark = pytest.mark.asyncio
 

@@ -2,7 +2,7 @@
 
 from promptify.core.settings import build_settings
 
-from _settings_master import get_setting_attr_map
+from ._settings_master import get_setting_attr_map
 
 
 def test_build_settings_accepts_behavior_and_theme_overrides():

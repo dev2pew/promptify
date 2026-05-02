@@ -2,45 +2,64 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from ...shared.editor_state import EditorViewState, FocusTarget, OverlayName
-from ._imports import Buffer, SelectionState, get_app
+from ._imports import Buffer, SelectionState, Window, get_app
+
 
 if TYPE_CHECKING:
-
-    class _EditorOverlayHost:
-        _overlay_visibility: dict[OverlayName, bool]
-        _overlay_restore_focus: dict[OverlayName, FocusTarget]
-        _overlay_suspended: dict[OverlayName, OverlayName]
-        _overlay_view_state: dict[OverlayName, EditorViewState | None]
-        search_visible: bool
-        replace_visible: bool
-        jump_visible: bool
-        issue_mode_active: bool
-        _help_search_anchor: int
-        _help_issue_anchor: int
-        result: str | None
-        buffer: Buffer
-        search_buffer: Buffer
-        replace_buffer: Buffer
-        jump_buffer: Buffer
-        help_window: Any
-        err_window: Any
-        quit_window: Any
-        main_window: Any
-        quit_buffer: Buffer
-
-        def _set_help_cursor(self, position: int) -> None: ...
-        def note_user_activity(self) -> None: ...
-else:
-
-    class _EditorOverlayHost:
-        pass
+    from prompt_toolkit.layout.layout import FocusableElement
 
 
-class EditorOverlayMixin(_EditorOverlayHost):
+class EditorOverlayMixin:
     """Provide shared overlay visibility, focus, and restore behavior."""
+
+    _overlay_visibility: dict[OverlayName, bool] = {
+        "help": False,
+        "error": False,
+        "quit": False,
+    }
+    _overlay_restore_focus: dict[OverlayName, FocusTarget] = {
+        "help": "main",
+        "error": "main",
+        "quit": "main",
+    }
+    _overlay_suspended: dict[OverlayName, OverlayName] = {
+        "help": "none",
+        "error": "none",
+        "quit": "none",
+    }
+    _overlay_view_state: dict[OverlayName, EditorViewState | None] = {
+        "help": None,
+        "error": None,
+        "quit": None,
+    }
+    search_visible: bool = False
+    replace_visible: bool = False
+    jump_visible: bool = False
+    issue_mode_active: bool = False
+    _help_search_anchor: int = -1
+    _help_issue_anchor: int = -1
+    result: str | None = None
+    buffer: Buffer = cast(Buffer, cast(object, None))
+    search_buffer: Buffer = cast(Buffer, cast(object, None))
+    replace_buffer: Buffer = cast(Buffer, cast(object, None))
+    jump_buffer: Buffer = cast(Buffer, cast(object, None))
+    help_window: Window = cast(Window, cast(object, None))
+    err_window: Window = cast(Window, cast(object, None))
+    quit_window: Window = cast(Window, cast(object, None))
+    main_window: Window = cast(Window, cast(object, None))
+    quit_buffer: Buffer = cast(Buffer, cast(object, None))
+
+    if TYPE_CHECKING:
+
+        def _set_help_cursor(self, position: int) -> None:
+            _ = position
+            raise NotImplementedError
+
+        def note_user_activity(self) -> None:
+            raise NotImplementedError
 
     def _copy_selection_state(
         self, selection_state: SelectionState | None
@@ -202,7 +221,7 @@ class EditorOverlayMixin(_EditorOverlayHost):
         else:
             self._focus_target(restore_focus)
 
-    def _focus(self, target) -> None:
+    def _focus(self, target: FocusableElement) -> None:
         """Focus a target if an application is active."""
         try:
             get_app().layout.focus(target)
@@ -220,7 +239,7 @@ class EditorOverlayMixin(_EditorOverlayHost):
 
     def open_help(self) -> None:
         """Show the help overlay and focus it."""
-        self._show_overlay("help", preserve_view=True)
+        _ = self._show_overlay("help", preserve_view=True)
         if self.search_visible and self._help_search_anchor >= 0:
             self._set_help_cursor(self._help_search_anchor)
         elif self.issue_mode_active and self._help_issue_anchor >= 0:
@@ -245,7 +264,7 @@ class EditorOverlayMixin(_EditorOverlayHost):
     def open_quit_confirm(self) -> None:
         """Show a confirmation modal before aborting the editor session."""
         self.note_user_activity()
-        self._show_overlay("quit")
+        _ = self._show_overlay("quit")
         self.quit_buffer.cursor_position = 0
         self._focus_target("quit")
         self.invalidate()

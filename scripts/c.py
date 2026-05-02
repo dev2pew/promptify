@@ -200,6 +200,56 @@ def _load_report(raw_path: Path) -> dict[str, Any]:
     return report
 
 
+def _format_summary_line(summary: dict[str, int | float]) -> str:
+    return (
+        "summary:"
+        f" files={summary['filesAnalyzed']}"
+        f" errors={summary['errorCount']}"
+        f" warnings={summary['warningCount']}"
+        f" info={summary['informationCount']}"
+        f" time={summary['timeInSec']:.3f}s"
+    )
+
+
+def _format_markdown_report(
+    summary: dict[str, int | float],
+    issues: list[dict[str, Any]],
+) -> str:
+    lines = [
+        "# SUMMARY",
+        "",
+        "```log",
+        _format_summary_line(summary),
+        "",
+        "```",
+    ]
+
+    if not issues:
+        lines.extend(["", "no issues."])
+        return "\n".join(lines) + "\n"
+
+    for index, issue in enumerate(issues, start=1):
+        file_count = len(issue["files"])
+        lines.extend(
+            [
+                "",
+                f"{index}. `{issue['type']}`"
+                f" ({issue['severity']}, {issue['diagnosticCount']} diagnostics, {file_count} files)",
+            ]
+        )
+
+        if file_count == 0:
+            lines.extend(["", "- <no-file-diagnostic>."])
+            continue
+
+        lines.append("")
+        for file_index, file_path in enumerate(issue["files"], start=1):
+            suffix = "." if file_index == file_count else ";"
+            lines.append(f"- `{file_path}`{suffix}")
+
+    return "\n".join(lines) + "\n"
+
+
 def _write_compact_report(
     output_path: Path,
     summary: dict[str, int | float],
@@ -214,37 +264,24 @@ def _write_compact_report(
     )
 
 
-def _print_console_summary(
+def _write_markdown_report(
+    repo_root: str,
     summary: dict[str, int | float],
     issues: list[dict[str, Any]],
 ) -> None:
-    print(
-        "summary:"
-        f" files={summary['filesAnalyzed']}"
-        f" errors={summary['errorCount']}"
-        f" warnings={summary['warningCount']}"
-        f" info={summary['informationCount']}"
-        f" time={summary['timeInSec']:.3f}s"
+    output_path = Path(repo_root) / "data" / "problems.md"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        _format_markdown_report(summary, issues),
+        encoding="utf-8",
     )
 
-    if not issues:
-        print("no issues.")
-        return
 
-    for index, issue in enumerate(issues, start=1):
-        file_count = len(issue["files"])
-        print(
-            f"{index}. `{issue['type']}`"
-            f" ({issue['severity']}, {issue['diagnosticCount']} diagnostics, {file_count} files)"
-        )
-
-        if file_count == 0:
-            print("- <no-file-diagnostic>.")
-            continue
-
-        for file_index, file_path in enumerate(issue["files"], start=1):
-            suffix = "." if file_index == file_count else ";"
-            print(f"- {file_path}{suffix}")
+def _print_markdown_report(
+    summary: dict[str, int | float],
+    issues: list[dict[str, Any]],
+) -> None:
+    print(_format_markdown_report(summary, issues), end="")
 
 
 def main() -> int:
@@ -280,14 +317,15 @@ def main() -> int:
 
     try:
         _write_compact_report(output_path, summary, issues)
+        _write_markdown_report(repo_root, summary, issues)
     except OSError as exc:
         print(
-            f"error: could not write compact report: {output_path}: {exc}",
+            f"error: could not write report output: {exc}",
             file=sys.stderr,
         )
         return 1
 
-    _print_console_summary(summary, issues)
+    _print_markdown_report(summary, issues)
     return int(summary["errorCount"])
 
 

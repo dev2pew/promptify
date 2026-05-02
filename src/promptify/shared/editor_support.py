@@ -100,13 +100,13 @@ def flatten_fragments_to_chars(
 
 
 def append_original_token_range(
-    tokens: list[tuple[str | None, str]],
+    tokens: list[tuple[object, ...]],
     chars: list[tuple[str, str]],
     start: int,
     end: int,
 ) -> None:
     """Restore a style-preserving token slice from flattened character data."""
-    curr_style = None
+    curr_style = ""
     curr_text: list[str] = []
     for index in range(start, end):
         style, char = chars[index]

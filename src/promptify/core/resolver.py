@@ -303,7 +303,7 @@ class PromptResolver:
         if not matches:
             return text
 
-        async def _resolve_and_recurse(m: re.Match) -> str:
+        async def _resolve_and_recurse(m: re.Match[str]) -> str:
             full_match = m.group(0)
             if full_match in seen:
                 return get_string("loop_detected", "loop detected").format(
@@ -322,10 +322,10 @@ class PromptResolver:
         """Resolve user text in a single pass"""
         return await self._resolve_matches_once(text)
 
-    async def _process_match(self, match: re.Match) -> str:
+    async def _process_match(self, match: re.Match[str]) -> str:
         """Delegate a single regex match to the corresponding mod"""
         try:
-            mod, text = self.registry.get_mod_and_text(match)
-            return await mod.resolve(text, self.context)
+            mod, full_match_text = self.registry.get_mod_and_text(match)
+            return await mod.resolve(full_match_text, self.context)
         except Exception:
             return match.group(0)

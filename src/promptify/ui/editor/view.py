@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Callable, cast
 
 import promptify.core.settings as settings_module
 
-from ...shared.editor_state import EditorIssue, SearchHighlightState, SearchOptions
+from ...core.terminal import TerminalProfile
+from ...shared.editor_state import (
+    EditorIssue,
+    OverlayName,
+    SearchHighlightState,
+    SearchOptions,
+)
 from ...shared.editor_support import build_jump_target
 from ...utils.i18n import get_string
 from ..suggestions import AUTO_SUGGESTION_STYLE
 from ._imports import (
+    AnyContainer,
     AnyFormattedText,
     Buffer,
     BufferControl,
@@ -29,46 +36,45 @@ from ._imports import (
     to_filter,
 )
 
-if TYPE_CHECKING:
 
-    class _EditorViewHost:
-        terminal_profile: Any
-        token_count: int
-        word_wrap_enabled: bool
-        search_visible: bool
-        replace_visible: bool
-        jump_visible: bool
-        help_visible: bool
-        issue_mode_active: bool
-        issue_index: int
-        search_options: SearchOptions
-        search_message: str
-        jump_message: str
-        _search_message_transient: bool
-        _passive_status: str
-        _passive_status_transient: bool
-        _token_estimate_busy: bool
-        _document_issue_cache: tuple[EditorIssue, ...]
-        buffer: Buffer
-        search_buffer: Buffer
-        replace_buffer: Buffer
-        jump_buffer: Buffer
-        help_buffer: Buffer
-        main_window: Any
+class EditorViewMixin:
+    """Provide shared view builders, status text, and small UI helpers."""
+
+    terminal_profile: TerminalProfile = cast(TerminalProfile, cast(object, None))
+    token_count: int = 0
+    word_wrap_enabled: bool = False
+    search_visible: bool = False
+    replace_visible: bool = False
+    jump_visible: bool = False
+    help_visible: bool = False
+    issue_mode_active: bool = False
+    issue_index: int = 0
+    search_options: SearchOptions = SearchOptions()
+    search_message: str = ""
+    jump_message: str = ""
+    _search_message_transient: bool = False
+    _passive_status: str = ""
+    _passive_status_transient: bool = False
+    _token_estimate_busy: bool = False
+    _document_issue_cache: tuple[EditorIssue, ...] = ()
+    buffer: Buffer = cast(Buffer, cast(object, None))
+    search_buffer: Buffer = cast(Buffer, cast(object, None))
+    replace_buffer: Buffer = cast(Buffer, cast(object, None))
+    jump_buffer: Buffer = cast(Buffer, cast(object, None))
+    help_buffer: Buffer = cast(Buffer, cast(object, None))
+    main_window: Window = cast(Window, cast(object, None))
+
+    if TYPE_CHECKING:
 
         def invalidate(self) -> None: ...
+
         def expensive_checks_enabled(self) -> bool: ...
+
         def get_document_issues(self) -> tuple[EditorIssue, ...]: ...
-        def _get_visible_overlay(self) -> str: ...
+
+        def _get_visible_overlay(self) -> OverlayName: ...
+
         def _get_search_highlight_state(self) -> SearchHighlightState | None: ...
-else:
-
-    class _EditorViewHost:
-        pass
-
-
-class EditorViewMixin(_EditorViewHost):
-    """Provide shared view builders, status text, and small UI helpers."""
 
     def _build_input_bar(
         self,
@@ -131,7 +137,7 @@ class EditorViewMixin(_EditorViewHost):
         """Build the editor style map and fall back if config values are invalid."""
         try:
             styles = dict(settings_module.APP_SETTINGS.theme.styles)
-            styles.setdefault("auto-suggestion", AUTO_SUGGESTION_STYLE)
+            _ = styles.setdefault("auto-suggestion", AUTO_SUGGESTION_STYLE)
             return Style.from_dict(styles)
         except Exception:
             return Style.from_dict(
@@ -179,7 +185,7 @@ class EditorViewMixin(_EditorViewHost):
             )
 
     def _build_centered_overlay(
-        self, container, visible_filter: Condition
+        self, container: AnyContainer, visible_filter: Condition
     ) -> ConditionalContainer:
         """Center an interactive panel while allowing it to scale with the viewport."""
         return ConditionalContainer(
@@ -201,7 +207,12 @@ class EditorViewMixin(_EditorViewHost):
             filter=visible_filter,
         )
 
-    def _build_chrome(self, body, title, style: str):
+    def _build_chrome(
+        self,
+        body: AnyContainer,
+        title: str | Callable[[], str],
+        style: str,
+    ) -> HSplit:
         """Build resize-safe chrome using ASCII or Unicode border glyphs."""
         border = self.terminal_profile.border
         border_style = f"{style}.border"
@@ -276,8 +287,8 @@ class EditorViewMixin(_EditorViewHost):
 
     def _build_modal_float(
         self,
-        body,
-        title,
+        body: AnyContainer,
+        title: str | Callable[[], str],
         style: str,
         visible_filter: Condition,
     ) -> Float:

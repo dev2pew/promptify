@@ -10,7 +10,7 @@ from prompt_toolkit.filters import Condition, has_focus
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.selection import SelectionState
 
-from .keybinding.context import EditorBindingContext
+from .keybinding.context import EditorBindingContext, EditorBindingHost
 from .keybinding.dialogs import register_dialog_bindings
 from .keybinding.editing import register_editing_bindings
 
@@ -27,7 +27,7 @@ def detect_indent_style(document: Document) -> str:
     return "    "
 
 
-def setup_keybindings(editor) -> KeyBindings:
+def setup_keybindings(editor: EditorBindingHost) -> KeyBindings:
     """Register the complete interactive-editor keymap"""
     custom_bindings = KeyBindings()
 
@@ -99,7 +99,7 @@ def setup_keybindings(editor) -> KeyBindings:
                 editor.paste_text(b, text)
                 get_app().invalidate()
 
-        asyncio.create_task(_do_paste())
+        _ = asyncio.create_task(_do_paste())
 
     ctx = EditorBindingContext(
         editor=editor,

@@ -5,6 +5,7 @@ import os
 import pytest
 import shutil
 import sys
+from collections.abc import Generator
 from pathlib import Path
 from typing import cast
 
@@ -12,13 +13,20 @@ from typing import cast
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
-from _settings_master import (
+from ._settings_master import (
     SettingsPass,
     build_settings_passes,
     install_settings_master_env,
 )
+from ._types import (
+    AppComponents,
+    ApplySettingsPass,
+    FixtureRequest,
+    MonkeyPatch,
+    SandboxPaths,
+)
 
-install_settings_master_env(os.environ)
+_ = install_settings_master_env(os.environ)
 
 from promptify.core.config import CaseConfig
 from promptify.core.indexer import ProjectIndexer
@@ -30,7 +38,7 @@ from promptify.core.terminal import TerminalProfile, detect_terminal_profile
 
 
 @pytest.fixture(scope="session")
-def test_sandbox():
+def test_sandbox() -> Generator[SandboxPaths, None, None]:
     """
     Create a fully isolated environment for testing.
 
@@ -53,35 +61,35 @@ def test_sandbox():
     # GENERATE DEMO PROJECT FILES
     # 20-LINE FILE FOR RANGE TESTING
     lines = [f"print('This is line {i}')" for i in range(1, 21)]
-    (demo_dir / "app.py").write_text("\n".join(lines), encoding="utf-8")
+    _ = (demo_dir / "app.py").write_text("\n".join(lines), encoding="utf-8")
 
     # RECURSIVE TRAP FILE (MENTIONS ITSELF AND THE PROJECT)
-    (demo_dir / "trap.md").write_text(
+    _ = (demo_dir / "trap.md").write_text(
         "Look at this loop: <@file:trap.md>\nAnd tree: [@project]", encoding="utf-8"
     )
 
     # IGNORED FILE
-    (demo_dir / "secret.key").write_text("SUPER_SECRET_DATA", encoding="utf-8")
+    _ = (demo_dir / "secret.key").write_text("SUPER_SECRET_DATA", encoding="utf-8")
 
     # .GITIGNORE AND TEST.LOG
-    (demo_dir / ".gitignore").write_text("*.log\n", encoding="utf-8")
-    (demo_dir / "test.log").write_text("log data", encoding="utf-8")
+    _ = (demo_dir / ".gitignore").write_text("*.log\n", encoding="utf-8")
+    _ = (demo_dir / "test.log").write_text("log data", encoding="utf-8")
 
     # SRC DIR
     src_dir = demo_dir / "src"
     src_dir.mkdir()
-    (src_dir / "main.py").write_text("def main():\n    pass\n", encoding="utf-8")
-    (src_dir / "utils.py").write_text("def util():\n    pass\n", encoding="utf-8")
+    _ = (src_dir / "main.py").write_text("def main():\n    pass\n", encoding="utf-8")
+    _ = (src_dir / "utils.py").write_text("def util():\n    pass\n", encoding="utf-8")
 
     # GENERATE CASE CONFIGURATION
-    (case_dir / "config.json").write_text(
+    _ = (case_dir / "config.json").write_text(
         '{"name": "test_case", "types": ["*"]}', encoding="utf-8"
     )
-    (case_dir / ".caseignore").write_text("*.key\n", encoding="utf-8")
-    (case_dir / "system.md").write_text(
+    _ = (case_dir / ".caseignore").write_text("*.key\n", encoding="utf-8")
+    _ = (case_dir / "system.md").write_text(
         "You are a helpful assistant.", encoding="utf-8"
     )
-    (case_dir / "legacy.md").write_text("Analyze: <@file:app.py>", encoding="utf-8")
+    _ = (case_dir / "legacy.md").write_text("Analyze: <@file:app.py>", encoding="utf-8")
 
     yield {"root": root, "demo": demo_dir, "case": case_dir, "outs": outs_dir}
 
@@ -91,19 +99,17 @@ def test_sandbox():
 
 
 @pytest.fixture
-async def app_components(
-    test_sandbox,
-) -> tuple[ProjectContext, PromptResolver]:
+async def app_components(test_sandbox: SandboxPaths) -> AppComponents:
     """Bootstrap core logic components that point to the dynamic sandbox"""
     case = CaseConfig(test_sandbox["case"])
     indexer = ProjectIndexer(test_sandbox["demo"], case)
     await indexer.build_index()
 
-    context = ProjectContext(test_sandbox["demo"], case, cast(ProjectIndexer, indexer))
+    context = ProjectContext(test_sandbox["demo"], case, indexer)
     registry = ModRegistry()
     registry.register_defaults()
 
-    resolver = PromptResolver(context, cast(ModRegistry, registry))
+    resolver = PromptResolver(context, registry)
 
     return context, resolver
 
@@ -114,14 +120,18 @@ def settings_passes() -> tuple[SettingsPass, ...]:
     return build_settings_passes()
 
 
-@pytest.fixture(params=build_settings_passes(), ids=lambda item: item.name)
-def settings_pass(request) -> SettingsPass:
+def _settings_pass_id(item: SettingsPass) -> str:
+    return item.name
+
+
+@pytest.fixture(params=build_settings_passes(), ids=_settings_pass_id)
+def settings_pass(request: FixtureRequest) -> SettingsPass:
     """Iterate through the shared multi-pass settings matrix"""
     return cast(SettingsPass, request.param)
 
 
 @pytest.fixture
-def apply_settings_pass(monkeypatch):
+def apply_settings_pass(monkeypatch: MonkeyPatch) -> ApplySettingsPass:
     """Patch imported APP_SETTINGS bindings to a generated settings pass"""
 
     def _apply(

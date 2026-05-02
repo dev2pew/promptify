@@ -103,7 +103,7 @@ def path_candidate_matches(query: str, candidate: str) -> bool:
     return False
 
 
-def _path_rank_key(query: str, candidate: str) -> tuple:
+def _path_rank_key(query: str, candidate: str) -> tuple[int | float | str, ...]:
     """Return a sort key that ranks stronger path matches first"""
     normalized_query = normalize_match_path(query).lower()
     normalized_candidate = normalize_match_path(candidate).lower()

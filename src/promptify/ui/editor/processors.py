@@ -11,7 +11,14 @@ from ...shared.editor_support import (
     flatten_fragments_to_chars,
     fragment_text,
 )
-from ._imports import Margin, Processor, Transformation, UIContent, get_app
+from ._imports import (
+    Margin,
+    Processor,
+    StyleAndTextTuples,
+    Transformation,
+    UIContent,
+    get_app,
+)
 
 
 class HighlightTrailingWhitespaceProcessor(Processor):
@@ -164,15 +171,18 @@ class ActiveLineProcessor(Processor):
         ):
             return Transformation(transformation_input.fragments)
 
-        tokens: list[tuple[str | None, str]] = []
+        tokens: list[tuple[object, ...]] = []
         chars = flatten_fragments_to_chars(transformation_input.fragments)
         if not chars:
             return Transformation(transformation_input.fragments)
         append_original_token_range(tokens, chars, 0, len(chars))
         return Transformation(
             [
-                (f"{style or ''} class:current-line".strip(), text)
-                for style, text in tokens
+                (
+                    f"{str(fragment[0]) or ''} class:current-line".strip(),
+                    fragment_text(fragment),
+                )
+                for fragment in tokens
             ]
         )
 
@@ -186,5 +196,8 @@ class VerticalSeparatorMargin(Margin):
     def get_width(self, get_ui_content: Callable[[], UIContent]) -> int:
         return 1
 
-    def create_margin(self, window_render_info, width: int, height: int):
+    def create_margin(
+        self, window_render_info, width: int, height: int
+    ) -> StyleAndTextTuples:
+        del window_render_info, width
         return [("class:editor-frame.border", (self._separator + "\n") * height)]
