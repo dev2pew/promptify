@@ -1,14 +1,14 @@
 """Application entry point and orchestration for `promptify`"""
 
-import sys
-import datetime
 import asyncio
-import aiofiles
-import pyperclip
+import datetime
 import shutil
-import json
+import sys
 from pathlib import Path
 from typing import cast
+
+import aiofiles
+import pyperclip
 
 from .ui.logger import log
 from .ui.ui import print_columnized, print_modes
@@ -19,6 +19,7 @@ from .core.resolver import PromptResolver
 from .core.mods import ModRegistry
 from .core.cli import CLIConfig, parse_cli_args
 from .core.settings import APP_SETTINGS, consume_settings_warns
+from .shared.state import AppState, AppStateStore
 from .ui.editor import InteractiveEditor
 from .utils.i18n import get_string
 
@@ -41,48 +42,35 @@ class App:
         for d in [self.cases_dir, self.data_dir, self.outs_dir]:
             d.mkdir(parents=True, exist_ok=True)
 
-    async def get_state(self) -> dict:
+    @property
+    def state_store(self) -> AppStateStore:
+        """Return a state store bound to the current data directory"""
+        return AppStateStore(self.data_dir / "state.json")
+
+    async def get_state(self) -> AppState:
         """Load persisted application state from disk"""
-        state_file = self.data_dir / "state.json"
-        if state_file.exists():
-            try:
-                async with aiofiles.open(state_file, "r", encoding="utf-8") as f:
-                    return json.loads(await f.read())
-            except Exception:
-                pass
-        return {"lastcase_index": None, "paths": {}, "modes": {}}
+        return await self.state_store.load()
 
-    async def save_state(self, state: dict) -> None:
+    async def save_state(self, state: AppState) -> None:
         """Persist application state to disk"""
-        state_file = self.data_dir / "state.json"
-        state_file.parent.mkdir(parents=True, exist_ok=True)
-        async with aiofiles.open(state_file, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(state, indent=4))
+        await self.state_store.save(state)
 
-    async def get_last_path(self, case_name: str, state: dict) -> str:
+    async def get_last_path(self, case_name: str, state: AppState) -> str:
         """Return the last target path used for a given case"""
-        paths = state.get("paths", {})
-        return paths.get(case_name, "")
+        return state.get_last_path(case_name)
 
-    async def save_last_path(self, case_name: str, path: str, state: dict) -> None:
+    async def save_last_path(self, case_name: str, path: str, state: AppState) -> None:
         """Persist the last target path used for a given case"""
-        if "paths" not in state:
-            state["paths"] = {}
-        state["paths"][case_name] = path
+        state.save_last_path(case_name, path)
         await self.save_state(state)
 
-    async def get_last_case_index(self, state: dict, case_count: int) -> int | None:
+    async def get_last_case_index(self, state: AppState, case_count: int) -> int | None:
         """Return the remembered 1-based case index when it still fits the current list"""
-        index = state.get("lastcase_index")
-        if not isinstance(index, int):
-            return None
-        if index < 1 or index > case_count:
-            return None
-        return index
+        return state.get_last_case_index(case_count)
 
-    async def save_last_case_index(self, index: int, state: dict) -> None:
+    async def save_last_case_index(self, index: int, state: AppState) -> None:
         """Persist the remembered 1-based case index shown in the menu"""
-        state["lastcase_index"] = index
+        state.save_last_case_index(index)
         await self.save_state(state)
 
     def get_case_state_key(self, case: CaseConfig) -> str:
@@ -92,20 +80,15 @@ class App:
         except ValueError:
             return case.case_dir.name
 
-    async def get_last_mode(self, case: CaseConfig, state: dict) -> int | None:
+    async def get_last_mode(self, case: CaseConfig, state: AppState) -> int | None:
         """Return the last selected mode for a given case"""
-        modes = state.get("modes", {})
-        if not isinstance(modes, dict):
-            return None
+        return state.get_last_mode(self.get_case_state_key(case))
 
-        mode = modes.get(self.get_case_state_key(case))
-        return mode if mode in (1, 2) else None
-
-    async def save_last_mode(self, case: CaseConfig, mode: int, state: dict) -> None:
+    async def save_last_mode(
+        self, case: CaseConfig, mode: int, state: AppState
+    ) -> None:
         """Persist the last selected mode for a given case"""
-        if "modes" not in state or not isinstance(state["modes"], dict):
-            state["modes"] = {}
-        state["modes"][self.get_case_state_key(case)] = mode
+        state.save_last_mode(self.get_case_state_key(case), mode)
         await self.save_state(state)
 
     async def prompt_with_suggestion(

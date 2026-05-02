@@ -1,4 +1,4 @@
-"""Tests for asynchronous exact token counting."""
+"""Tests for asynchronous exact token counting"""
 
 import asyncio
 from pathlib import Path
@@ -14,7 +14,7 @@ from promptify.core.token_counter import AsyncTokenCounter
 
 @pytest.mark.asyncio
 async def test_async_token_counter_caches_completed_results(monkeypatch):
-    """Repeated exact counts should reuse the completed cache entry."""
+    """Repeated exact counts should reuse the completed cache entry"""
     counter = AsyncTokenCounter(True)
     calls = 0
 
@@ -34,7 +34,7 @@ async def test_async_token_counter_caches_completed_results(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_async_token_counter_deduplicates_inflight_requests(monkeypatch):
-    """Concurrent requests for the same text should share one worker task."""
+    """Concurrent requests for the same text should share one worker task"""
     counter = AsyncTokenCounter(True)
     calls = 0
 
@@ -57,7 +57,7 @@ async def test_async_token_counter_deduplicates_inflight_requests(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_async_token_counter_does_not_prepare_runtime_during_init(monkeypatch):
-    """Constructing the counter should stay cheap until the first real count."""
+    """Constructing the counter should stay cheap until the first real count"""
     calls = 0
 
     def fake_load_runtime():
@@ -78,7 +78,7 @@ async def test_async_token_counter_does_not_prepare_runtime_during_init(monkeypa
 
 
 def test_ensure_model_file_downloads_when_missing(monkeypatch):
-    """The advanced tokenizer should fetch the model when the target file is absent."""
+    """The advanced tokenizer should fetch the model when the target file is absent"""
     target = Path("tests/.model-download-success/data/o200k_base.tiktoken")
     calls = 0
 
@@ -101,7 +101,7 @@ def test_ensure_model_file_downloads_when_missing(monkeypatch):
 
 
 def test_ensure_model_file_returns_false_after_failed_download(monkeypatch):
-    """When the download fails, exact mode should fall back instead of crashing."""
+    """When the download fails, exact mode should fall back instead of crashing"""
     target = Path("tests/.model-download-fail/data/o200k_base.tiktoken")
 
     monkeypatch.setattr(token_counter_module, "_LAST_PREPARE_FAILURE", 0.0)

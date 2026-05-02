@@ -208,7 +208,7 @@ class PromptResolver:
         return int((base_len + added_len) // 3.2)
 
     async def count_tokens(self, text: str) -> int:
-        """Count tokens using the configured exact or heuristic strategy."""
+        """Count tokens using the configured exact or heuristic strategy"""
         if not self._token_counter.is_enabled:
             return await self.estimate_tokens(text)
 
@@ -230,11 +230,11 @@ class PromptResolver:
         return count
 
     def _fingerprint_text(self, text: str) -> bytes:
-        """Create a compact cache key for rendered-token counts."""
+        """Create a compact cache key for rendered-token counts"""
         return blake2b(text.encode("utf-8"), digest_size=16).digest()
 
     async def _resolve_matches_once(self, text: str) -> str:
-        """Resolve a single user-facing pass for exact token counting."""
+        """Resolve a single user-facing pass for exact token counting"""
         matches = list(self._get_registry_pattern().finditer(text))
         if not matches:
             return text
@@ -243,7 +243,7 @@ class PromptResolver:
         )
 
     async def _process_match_for_tokens(self, match: re.Match[str]) -> str:
-        """Resolve token-count mentions through a cache for unchanged expansions."""
+        """Resolve token-count mentions through a cache for unchanged expansions"""
         try:
             mod, text = self.registry.get_mod_and_text(match)
         except Exception:
@@ -270,7 +270,7 @@ class PromptResolver:
         matches: list[re.Match[str]],
         resolver,
     ) -> str:
-        """Resolve matches concurrently and stitch them back into the text."""
+        """Resolve matches concurrently and stitch them back into the text"""
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(resolver(m)) for m in matches]
 
@@ -283,7 +283,7 @@ class PromptResolver:
         matches: list[re.Match[str]],
         replacements: list[str],
     ) -> str:
-        """Join replacement segments without rebuilding the matching logic."""
+        """Join replacement segments without rebuilding the matching logic"""
         parts: list[str] = []
         last_idx = 0
         for m, repl in zip(matches, replacements):

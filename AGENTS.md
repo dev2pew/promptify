@@ -14,6 +14,7 @@
 - Invalid configuration values must never crash import-time startup. Fall back safely;
 - Preserve Pylance basic type-checking cleanliness;
 - Prefer shared helpers over repeated logic, especially in editor, resolver, and completion flows;
+- Prefer `src/promptify/shared/` for cross-cutting helpers reused across modules, and keep editor keybinding logic decomposed under `src/promptify/ui/keybinding/` instead of growing a single binding file;
 - Reuse existing code and helpers before adding new logic; do not reinvent the wheel;
 - Preserve terminal compatibility across modern terminals, classic Windows console hosts, and legacy `cmd.exe`; avoid assuming Unicode box-drawing support or safe full-screen behavior everywhere;
 - Treat performance as a correctness concern in editor, resolver, and token-counting code paths; avoid changes that add eager startup work, repeated full-buffer scans, or unnecessary background churn;

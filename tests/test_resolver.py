@@ -108,7 +108,7 @@ async def test_estimate_tokens_caches_expensive_tree_lookups(
 
 
 async def test_count_tokens_uses_exact_resolved_text(app_components, monkeypatch):
-    """Advanced token counting should tokenize the resolved prompt content."""
+    """Advanced token counting should tokenize the resolved prompt content"""
     _, resolver = app_components
     captured: list[str] = []
 
@@ -130,7 +130,7 @@ async def test_count_tokens_uses_exact_resolved_text(app_components, monkeypatch
 async def test_count_tokens_falls_back_to_heuristic_when_advanced_disabled(
     app_components, monkeypatch
 ):
-    """The simple-mode toggle should preserve the legacy estimator path."""
+    """The simple-mode toggle should preserve the legacy estimator path"""
     _, resolver = app_components
     monkeypatch.setattr(resolver._token_counter, "_enabled", False)
 
@@ -153,7 +153,7 @@ async def test_count_tokens_falls_back_to_heuristic_when_advanced_disabled(
 async def test_count_tokens_reuses_cached_mention_expansions(
     app_components, monkeypatch
 ):
-    """Small edits outside mentions should not re-resolve unchanged mentions."""
+    """Small edits outside mentions should not re-resolve unchanged mentions"""
     _, resolver = app_components
     calls = 0
     original = resolver.context.get_file_content

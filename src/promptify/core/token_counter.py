@@ -1,4 +1,4 @@
-"""Shared asynchronous token counting helpers."""
+"""Shared asynchronous token counting helpers"""
 
 from __future__ import annotations
 
@@ -47,14 +47,14 @@ _O200K_PATTERN = "|".join(
 
 @dataclass(frozen=True, slots=True)
 class TokenizerRuntime:
-    """Prepared exact-tokenizer state shared across resolver instances."""
+    """Prepared exact-tokenizer state shared across resolver instances"""
 
     encoding: Encoding
     piece_pattern: regex.Pattern[str]
 
 
 class _CountCancelled(Exception):
-    """Internal cooperative cancellation sentinel for worker-thread counts."""
+    """Internal cooperative cancellation sentinel for worker-thread counts"""
 
 
 _RUNTIME_LOCK = threading.Lock()
@@ -63,12 +63,12 @@ _LAST_PREPARE_FAILURE = 0.0
 
 
 def _fingerprint_text(text: str) -> bytes:
-    """Create a compact stable cache key without retaining full text copies."""
+    """Create a compact stable cache key without retaining full text copies"""
     return blake2b(text.encode("utf-8"), digest_size=16).digest()
 
 
 def _download_model_file(path: Path) -> bool:
-    """Download the tokenizer model into the shared repo-local data directory."""
+    """Download the tokenizer model into the shared repo-local data directory"""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_suffix(path.suffix + ".tmp")
     try:
@@ -87,7 +87,7 @@ def _download_model_file(path: Path) -> bool:
 
 
 def _ensure_model_file(path: Path) -> bool:
-    """Ensure the exact-tokenizer model file exists, downloading it on demand."""
+    """Ensure the exact-tokenizer model file exists, downloading it on demand"""
     global _LAST_PREPARE_FAILURE
 
     if path.is_file():
@@ -105,7 +105,7 @@ def _ensure_model_file(path: Path) -> bool:
 
 
 def _load_runtime() -> TokenizerRuntime | None:
-    """Load and cache the exact-tokenizer runtime once for the whole process."""
+    """Load and cache the exact-tokenizer runtime once for the whole process"""
     global _RUNTIME
     global _LAST_PREPARE_FAILURE
 
@@ -137,7 +137,7 @@ def _load_runtime() -> TokenizerRuntime | None:
 
 
 class AsyncTokenCounter:
-    """Count tokens off the event loop with cache and in-flight de-duplication."""
+    """Count tokens off the event loop with cache and in-flight de-duplication"""
 
     def __init__(
         self,
@@ -156,11 +156,11 @@ class AsyncTokenCounter:
 
     @property
     def is_enabled(self) -> bool:
-        """Report whether exact token counting is configured."""
+        """Report whether exact token counting is configured"""
         return self._enabled
 
     async def count(self, text: str) -> int:
-        """Count tokens asynchronously while reusing cached work."""
+        """Count tokens asynchronously while reusing cached work"""
         if not self._enabled:
             raise RuntimeError("exact token counting is disabled")
 
@@ -204,7 +204,7 @@ class AsyncTokenCounter:
         return count
 
     def _count_sync(self, text: str, cancel_event: threading.Event) -> int:
-        """Run exact tokenization in a worker thread with cooperative cancellation."""
+        """Run exact tokenization in a worker thread with cooperative cancellation"""
         runtime = _load_runtime()
         if runtime is None:
             raise RuntimeError("exact token counting is not available")
@@ -225,7 +225,7 @@ class AsyncTokenCounter:
         return total
 
     def _count_piece(self, runtime: TokenizerRuntime, piece: str) -> int:
-        """Count one tokenizer regex piece and reuse the shared local cache."""
+        """Count one tokenizer regex piece and reuse the shared local cache"""
         key = _fingerprint_text(piece)
         with self._piece_cache_lock:
             cached = self._piece_cache.get(key)
