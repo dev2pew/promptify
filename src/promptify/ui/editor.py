@@ -50,6 +50,7 @@ try:
     from prompt_toolkit.document import Document
     from prompt_toolkit.formatted_text import (
         StyleAndTextTuples,
+        AnyFormattedText,
         fragment_list_width,
         to_formatted_text,
     )
@@ -164,13 +165,20 @@ HELP_TEXT_FALLBACK = (
     "[ general ]\n\n"
     "^[G] / [F1]                   : help\n"
     "^[F]                          : search\n"
+    "^[R]                          : replace\n"
     "[Alt] + [G]                   : jump to line\n"
     "[Alt] + [Z]                   : toggle word wrap\n"
     "^[S]                          : resolve\n"
     "^[Q]                          : abort\n\n"
     "[ search ]\n\n"
-    "[Enter]                       : next\n"
-    "^[R]                          : previous\n"
+    "[Enter] / [Shift] + [Enter]   : next / previous\n"
+    "[^/v]                         : search history\n"
+    "[F6] / [F7] / [F8]            : case / word / regex\n"
+    "[Esc]                         : close\n\n"
+    "[ replace ]\n\n"
+    "[Enter]                       : replace\n"
+    "^[Alt] + [Enter]              : replace all\n"
+    "^[F6]                         : preserve case\n"
     "[Esc]                         : close\n\n"
     "[ jump ]\n\n"
     "[Enter]                       : jump\n"
@@ -281,12 +289,20 @@ class EOFNewlineProcessor(Processor):
 
 
 @dataclass(frozen=True)
+class SearchMatch:
+    """Store one resolved search span in the active document"""
+
+    start: int
+    end: int
+
+
+@dataclass(frozen=True)
 class SearchHighlightState:
     """Cached search snapshot used for highlighting and status rendering"""
 
     query: str
-    matches: tuple[int, ...]
-    active_match: int | None
+    matches: tuple[SearchMatch, ...]
+    active_match: SearchMatch | None
     active_ordinal: int
 
 
@@ -310,7 +326,7 @@ class EditorIssue:
     fragment: str
 
 
-FocusTarget = Literal["main", "search", "jump", "help", "error", "quit"]
+FocusTarget = Literal["main", "search", "replace", "jump", "help", "error", "quit"]
 OverlayName = Literal["none", "help", "error", "quit"]
 
 
@@ -321,10 +337,31 @@ class EditorViewState:
     focus: FocusTarget
     main_cursor: int
     search_cursor: int
+    replace_cursor: int
     jump_cursor: int
     main_selection: SelectionState | None
     search_selection: SelectionState | None
+    replace_selection: SelectionState | None
     jump_selection: SelectionState | None
+
+
+@dataclass(slots=True)
+class SearchOptions:
+    """Track the live search and replace flags exposed by the widget"""
+
+    match_case: bool = False
+    match_whole_word: bool = False
+    regex: bool = False
+    preserve_case: bool = False
+
+    def copy(self) -> "SearchOptions":
+        """Create a detached snapshot for cache comparisons"""
+        return SearchOptions(
+            match_case=self.match_case,
+            match_whole_word=self.match_whole_word,
+            regex=self.regex,
+            preserve_case=self.preserve_case,
+        )
 
 
 def parse_jump_target(text: str) -> tuple[int, int] | None:
@@ -342,6 +379,25 @@ def parse_jump_target(text: str) -> tuple[int, int] | None:
 def build_jump_target(line: int, column: int) -> str:
     """Format a 1-based cursor location for jump-mode display and parsing"""
     return f":{line}:{column}"
+
+
+def _preserve_replacement_case(source: str, replacement: str) -> str:
+    """Mirror simple source casing patterns onto a replacement string"""
+    if not source or not replacement:
+        return replacement
+    if source.isupper():
+        return replacement.upper()
+    if source.islower():
+        return replacement.lower()
+    if source.istitle():
+        return replacement.title()
+    if len(source) == 1 and source.isalpha():
+        return replacement.upper() if source.isupper() else replacement.lower()
+    if source[0].isupper() and source[1:].islower():
+        head = replacement[:1].upper()
+        tail = replacement[1:].lower()
+        return head + tail
+    return replacement
 
 
 class SearchMatchProcessor(Processor):
@@ -365,11 +421,10 @@ class SearchMatchProcessor(Processor):
             transformation_input.lineno, 0
         )
         line_end = line_start + len(line_text)
-        query_len = len(state.query)
-
         ranges: list[tuple[int, int, str]] = []
-        for match_start in state.matches:
-            match_end = match_start + query_len
+        for match in state.matches:
+            match_start = match.start
+            match_end = match.end
             if match_end <= line_start:
                 continue
             if match_start >= line_end:
@@ -379,7 +434,7 @@ class SearchMatchProcessor(Processor):
             end = min(len(line_text), match_end - line_start)
             style = (
                 "class:search-match-active"
-                if state.active_match == match_start
+                if state.active_match == match
                 else "class:search-match"
             )
             ranges.append((start, end, style))
@@ -1208,12 +1263,15 @@ class InteractiveEditor:
         self._search_message_transient = False
         self._search_history: list[str] = []
         self._search_history_index = -1
+        self._search_history_draft = ""
+        self._search_history_navigation_active = False
         self._document_issue_cache_text_id = 0
         self._document_issue_cache_enabled = True
         self._document_issue_cache: tuple[EditorIssue, ...] = tuple()
         self.issue_mode_active = False
         self.issue_index = 0
         self.word_wrap_enabled = APP_SETTINGS.editor_behavior.word_wrap
+        self.search_options = SearchOptions()
 
         self.buffer = Buffer(
             document=Document(initial_text, cursor_position=0),
@@ -1292,25 +1350,28 @@ class InteractiveEditor:
             ),
         )
         self.search_visible = False
+        self.replace_visible = False
         self.search_message = ""
         self.search_buffer = Buffer(
             document=Document("", cursor_position=0),
             multiline=False,
         )
+        self.replace_buffer = Buffer(
+            document=Document("", cursor_position=0),
+            multiline=False,
+        )
         self._search_last_query = ""
         self._search_last_direction = 1
-        self._search_last_match = -1
+        self._search_last_match: SearchMatch | None = None
         self._search_cache_text_id = 0
         self._search_cache_cursor = -1
         self._search_cache_query = ""
+        self._search_cache_options = SearchOptions()
         self._search_cache_state: SearchHighlightState | None = None
         self.search_buffer.on_text_changed += self._handle_search_text_changed
+        self.replace_buffer.on_text_changed += self._handle_replace_text_changed
 
-        self.search_window = self._build_input_bar(
-            self.search_buffer,
-            self._get_search_label_text,
-            self._get_search_status_text,
-        )
+        self.search_window = self._build_search_widget()
         self.jump_visible = False
         self.jump_message = ""
         self.jump_buffer = Buffer(
@@ -1404,6 +1465,29 @@ class InteractiveEditor:
             style="class:search-bar",
         )
 
+    def _build_search_widget(self) -> HSplit:
+        """Build the shared VS Code-style search and replace widget"""
+        search_row = self._build_input_bar(
+            self.search_buffer,
+            self._get_search_label_text,
+            self._get_search_status_text,
+        )
+        replace_row = self._build_input_bar(
+            self.replace_buffer,
+            self._get_replace_label_text,
+            self._get_replace_status_text,
+        )
+        return HSplit(
+            [
+                search_row,
+                ConditionalContainer(
+                    content=replace_row,
+                    filter=Condition(lambda: self.replace_visible),
+                ),
+            ],
+            style="class:search-bar",
+        )
+
     def _build_style(self) -> Style:
         """Build the editor style map and fall back if config values are invalid"""
         try:
@@ -1427,6 +1511,8 @@ class InteractiveEditor:
                     "search-label": "bg:#1f1f1f #9fe9ff bold",
                     "search-input": "bg:#2d2d2d #ffffff",
                     "search-status": "bg:#1f1f1f #ffe09c",
+                    "search-toggle-on": "bg:#1f1f1f #5fd75f bold",
+                    "search-toggle-off": "bg:#1f1f1f #ff6b6b bold",
                     "search-match": "bg:#5d4a1d #fff0cb",
                     "search-match-active": "bg:#1f5d8e #f7fbff bold",
                     "current-line": "bg:#262a31",
@@ -1646,6 +1732,8 @@ class InteractiveEditor:
             return cast(FocusTarget, overlay)
         if self.jump_visible:
             return "jump"
+        if self.replace_visible:
+            return "replace"
         if self.search_visible:
             return "search"
         return "main"
@@ -1656,10 +1744,14 @@ class InteractiveEditor:
             focus=self._get_focus_target(),
             main_cursor=self.buffer.cursor_position,
             search_cursor=self.search_buffer.cursor_position,
+            replace_cursor=self.replace_buffer.cursor_position,
             jump_cursor=self.jump_buffer.cursor_position,
             main_selection=self._copy_selection_state(self.buffer.selection_state),
             search_selection=self._copy_selection_state(
                 self.search_buffer.selection_state
+            ),
+            replace_selection=self._copy_selection_state(
+                self.replace_buffer.selection_state
             ),
             jump_selection=self._copy_selection_state(self.jump_buffer.selection_state),
         )
@@ -1668,15 +1760,19 @@ class InteractiveEditor:
         """Restore editor input cursors plus selections from a snapshot"""
         self.buffer.cursor_position = state.main_cursor
         self.search_buffer.cursor_position = state.search_cursor
+        self.replace_buffer.cursor_position = state.replace_cursor
         self.jump_buffer.cursor_position = state.jump_cursor
         self._restore_selection_state(self.buffer, state.main_selection)
         self._restore_selection_state(self.search_buffer, state.search_selection)
+        self._restore_selection_state(self.replace_buffer, state.replace_selection)
         self._restore_selection_state(self.jump_buffer, state.jump_selection)
 
     def _focus_target(self, target: FocusTarget) -> None:
         """Route focus changes through one place for all editor surfaces"""
         if target == "search" and self.search_visible:
             self._focus(self.search_buffer)
+        elif target == "replace" and self.search_visible and self.replace_visible:
+            self._focus(self.replace_buffer)
         elif target == "jump" and self.jump_visible:
             self._focus(self.jump_buffer)
         elif target == "help" and self.help_visible:
@@ -1803,13 +1899,6 @@ class InteractiveEditor:
         """Clear jump status messages without touching the current query"""
         self.jump_message = ""
 
-    def _reset_search_navigation(self) -> None:
-        """Clear cached search navigation state after query or mode changes"""
-        self._search_last_query = ""
-        self._search_last_direction = 1
-        self._search_last_match = -1
-        self._search_cache_state = None
-
     def _get_current_mode_name(self) -> str:
         """Return the editor mode that currently owns the user's attention"""
         overlay = self._get_visible_overlay()
@@ -1887,7 +1976,8 @@ class InteractiveEditor:
             return get_string("toolbar_text_quit", "[Y/Enter/] quit | [N/Esc] cancel")
         if mode == "search":
             return get_string(
-                "toolbar_text_search", "[Enter] next | ^[R] prev | [Esc] close"
+                "toolbar_text_search",
+                "[Enter] next | ^[R] replace | [Esc] close",
             )
         if mode == "jump":
             return get_string("toolbar_text_jump", "[Enter] jump | [Esc] close")
@@ -1929,26 +2019,118 @@ class InteractiveEditor:
         del self._search_history[self.SEARCH_HISTORY_LIMIT :]
         self._search_history_index = -1
 
-    def _cycle_search_history(self) -> None:
-        """Rotate through recent search queries when search is already open"""
+    def cycle_search_history(self, direction: int) -> None:
+        """Move backward or forward through recent search queries"""
         if not self._search_history:
             return
-        next_index = (self._search_history_index + 1) % len(self._search_history)
-        if (
-            self.search_buffer.text
-            and len(self._search_history) > 1
-            and self._search_history[next_index] == self.search_buffer.text
-        ):
-            next_index = (next_index + 1) % len(self._search_history)
-        self._search_history_index = next_index
-        query = self._search_history[self._search_history_index]
-        self.search_buffer.document = Document(query, cursor_position=len(query))
+
+        if self._search_history_index < 0:
+            self._search_history_draft = self.search_buffer.text
+            self._search_history_index = 0 if direction < 0 else -1
+        else:
+            self._search_history_index -= direction
+
+        if self._search_history_index < 0:
+            self._search_history_index = -1
+            query = self._search_history_draft
+        elif self._search_history_index >= len(self._search_history):
+            self._search_history_index = len(self._search_history) - 1
+            query = self._search_history[self._search_history_index]
+        else:
+            query = self._search_history[self._search_history_index]
+
+        self._search_history_navigation_active = True
+        try:
+            self.search_buffer.document = Document(query, cursor_position=len(query))
+        finally:
+            self._search_history_navigation_active = False
 
     def _get_search_label_text(self) -> str:
         """Emphasize search mode with an always-visible header and count"""
         if not self.search_visible:
             return ""
         return " " + self.get_text("editor_search_label", "SEARCH") + " "
+
+    def _get_replace_label_text(self) -> str:
+        """Show the replace row label only while replace mode is open"""
+        if not self.search_visible or not self.replace_visible:
+            return ""
+        return " " + self.get_text("editor_replace_label", "REPLACE") + " "
+
+    def _append_toggle_fragment(
+        self,
+        fragments: StyleAndTextTuples,
+        *,
+        enabled: bool,
+        enabled_text: str,
+        disabled_text: str,
+        leading_space: bool = True,
+    ) -> None:
+        """Append one styled toggle chip to a formatted-text fragment list"""
+        if leading_space:
+            fragments.append(("", " "))
+        fragments.append(
+            (
+                "class:search-toggle-on" if enabled else "class:search-toggle-off",
+                enabled_text if enabled else disabled_text,
+            )
+        )
+
+    def _get_search_toggle_fragments(self) -> StyleAndTextTuples:
+        """Render the visible search mode chips as styled fragments"""
+        fragments: StyleAndTextTuples = []
+        self._append_toggle_fragment(
+            fragments,
+            enabled=self.search_options.match_case,
+            enabled_text=self.get_text("editor_search_toggle_case_on", "[Aa]"),
+            disabled_text=self.get_text("editor_search_toggle_case_off", "(Aa)"),
+            leading_space=False,
+        )
+        self._append_toggle_fragment(
+            fragments,
+            enabled=self.search_options.match_whole_word,
+            enabled_text=self.get_text("editor_search_toggle_word_on", "[Ab]"),
+            disabled_text=self.get_text("editor_search_toggle_word_off", "(Ab)"),
+        )
+        self._append_toggle_fragment(
+            fragments,
+            enabled=self.search_options.regex,
+            enabled_text=self.get_text("editor_search_toggle_regex_on", "[.*]"),
+            disabled_text=self.get_text("editor_search_toggle_regex_off", "(.*)"),
+        )
+        return fragments
+
+    def _get_replace_toggle_fragments(self) -> StyleAndTextTuples:
+        """Render the replace preserve-case chip as styled fragments"""
+        fragments: StyleAndTextTuples = []
+        self._append_toggle_fragment(
+            fragments,
+            enabled=self.search_options.preserve_case,
+            enabled_text=self.get_text(
+                "editor_replace_toggle_preserve_case_on", "[Preserve]"
+            ),
+            disabled_text=self.get_text(
+                "editor_replace_toggle_preserve_case_off", "(Preserve)"
+            ),
+            leading_space=False,
+        )
+        return fragments
+
+    def _join_status_fragments(
+        self,
+        left_text: str,
+        right_fragments: StyleAndTextTuples | None = None,
+    ) -> StyleAndTextTuples:
+        """Combine plain status text with styled toggle chips for the widget"""
+        fragments: StyleAndTextTuples = [("", " ")]
+        if left_text:
+            fragments.append(("", left_text))
+        if right_fragments:
+            if left_text:
+                fragments.append(("", "  "))
+            fragments.extend(right_fragments)
+        fragments.append(("", " "))
+        return fragments
 
     def _get_jump_label_text(self) -> str:
         """Render the jump bar label only while jump mode is visible"""
@@ -1998,34 +2180,39 @@ class InteractiveEditor:
                     self._token_estimate_busy = False
                     self.invalidate()
 
-    def _get_search_status_text(self) -> str:
+    def _get_search_status_text(self) -> AnyFormattedText:
         """Return search mode hints or the last search result message"""
         state = self._get_search_highlight_state()
+        toggles = self._get_search_toggle_fragments()
         if self.search_message:
-            return f" {self.search_message} "
+            return self._join_status_fragments(self.search_message, toggles)
         if state and state.query:
             if not state.matches:
-                return (
-                    " "
-                    + self.format_text(
+                return self._join_status_fragments(
+                    self.format_text(
                         "editor_search_status_count",
                         "{current} of {total}",
                         current=0,
                         total=0,
-                    )
-                    + " "
+                    ),
+                    toggles,
                 )
-            return (
-                " "
-                + self.format_text(
+            return self._join_status_fragments(
+                self.format_text(
                     "editor_search_status_count",
                     "{current} of {total}",
                     current=state.active_ordinal,
                     total=len(state.matches),
-                )
-                + " "
+                ),
+                toggles,
             )
-        return ""
+        return self._join_status_fragments("", toggles)
+
+    def _get_replace_status_text(self) -> AnyFormattedText:
+        """Return replace-row status chips while replace is visible"""
+        if not self.search_visible or not self.replace_visible:
+            return ""
+        return self._join_status_fragments("", self._get_replace_toggle_fragments())
 
     def _get_jump_status_text(self) -> str:
         """Return jump mode hints or validation feedback for the target input"""
@@ -2037,7 +2224,12 @@ class InteractiveEditor:
         """Clear stale search navigation state after query edits"""
         self._clear_search_message()
         self._reset_search_navigation()
-        self._search_history_index = -1
+        if not self._search_history_navigation_active:
+            self._search_history_index = -1
+        self.invalidate()
+
+    def _handle_replace_text_changed(self, _buffer: Buffer) -> None:
+        """Refresh the widget when replace content changes"""
         self.invalidate()
 
     def _handle_jump_text_changed(self, _buffer: Buffer) -> None:
@@ -2062,6 +2254,57 @@ class InteractiveEditor:
             self.jump_buffer.document,
         )
         self.jump_buffer.on_suggestion_set.fire()
+
+    def _invalidate_search_cache(self) -> None:
+        """Drop cached search results after any search mode change"""
+        self._search_cache_state = None
+        self._search_cache_text_id = 0
+        self._search_cache_cursor = -1
+        self._search_cache_query = ""
+
+    def _reset_search_navigation(self) -> None:
+        """Clear the last explicit search step anchor"""
+        self._search_last_query = ""
+        self._search_last_direction = 1
+        self._search_last_match = None
+        self._invalidate_search_cache()
+
+    def _set_search_option(self, name: str, value: bool) -> None:
+        """Apply one search flag and clear stale search state"""
+        if getattr(self.search_options, name) == value:
+            return
+        setattr(self.search_options, name, value)
+        self._clear_search_message()
+        self._reset_search_navigation()
+        self.invalidate()
+
+    def toggle_match_case(self) -> None:
+        """Toggle case-sensitive search mode"""
+        self._set_search_option("match_case", not self.search_options.match_case)
+
+    def toggle_match_whole_word(self) -> None:
+        """Toggle whole-word search mode"""
+        self._set_search_option(
+            "match_whole_word", not self.search_options.match_whole_word
+        )
+
+    def toggle_regex(self) -> None:
+        """Toggle regex search mode"""
+        self._set_search_option("regex", not self.search_options.regex)
+
+    def toggle_preserve_case(self) -> None:
+        """Toggle preserve-case replace mode"""
+        self._set_search_option("preserve_case", not self.search_options.preserve_case)
+
+    def _compile_search_pattern(self, query: str) -> re.Pattern[str] | None:
+        """Compile the current search query into a reusable pattern"""
+        if not query:
+            return None
+        body = query if self.search_options.regex else re.escape(query)
+        if self.search_options.match_whole_word:
+            body = rf"\b(?:{body})\b"
+        flags = 0 if self.search_options.match_case else re.IGNORECASE
+        return re.compile(body, flags)
 
     def _make_issue(
         self,
@@ -2250,30 +2493,40 @@ class InteractiveEditor:
             and self._search_cache_text_id == text_id
             and self._search_cache_query == query
             and self._search_cache_cursor == cursor
+            and self._search_cache_options == self.search_options
         ):
             return self._search_cache_state
 
         if not query:
             state = SearchHighlightState("", tuple(), None, 0)
         else:
-            matches: list[int] = []
-            start = 0
-            while True:
-                match_pos = text.find(query, start)
-                if match_pos == -1:
-                    break
-                matches.append(match_pos)
-                start = match_pos + 1
+            try:
+                pattern = self._compile_search_pattern(query)
+            except re.error as err:
+                self._set_search_message(str(err))
+                state = SearchHighlightState(query, tuple(), None, 0)
+                self._search_cache_text_id = text_id
+                self._search_cache_cursor = cursor
+                self._search_cache_query = query
+                self._search_cache_options = self.search_options.copy()
+                self._search_cache_state = state
+                return state
 
-            active_match = None
+            matches = (
+                tuple(
+                    SearchMatch(match.start(), match.end())
+                    for match in pattern.finditer(text)
+                    if match.start() != match.end()
+                )
+                if pattern is not None
+                else tuple()
+            )
+
+            active_match: SearchMatch | None = None
             active_ordinal = 0
             if matches:
                 cursor_match = next(
-                    (
-                        match
-                        for match in matches
-                        if match <= cursor < match + len(query)
-                    ),
+                    (match for match in matches if match.start <= cursor < match.end),
                     None,
                 )
                 if cursor_match is not None:
@@ -2285,24 +2538,28 @@ class InteractiveEditor:
                     active_match = self._search_last_match
                 else:
                     active_match = next(
-                        (match for match in matches if match >= cursor), matches[0]
+                        (match for match in matches if match.start >= cursor),
+                        matches[0],
                     )
 
                 active_ordinal = matches.index(active_match) + 1
 
-            state = SearchHighlightState(
-                query, tuple(matches), active_match, active_ordinal
-            )
+            state = SearchHighlightState(query, matches, active_match, active_ordinal)
 
         self._search_cache_text_id = text_id
         self._search_cache_cursor = cursor
         self._search_cache_query = query
+        self._search_cache_options = self.search_options.copy()
         self._search_cache_state = state
         return state
 
     def _focus_search(self) -> None:
         """Move input focus into the search field if an app is active"""
         self._focus_target("search")
+
+    def _focus_replace(self) -> None:
+        """Move input focus into the replace field if replace is visible"""
+        self._focus_target("replace")
 
     def _focus_main(self) -> None:
         """Restore input focus to the main editor buffer"""
@@ -2316,26 +2573,36 @@ class InteractiveEditor:
         self._clear_jump_message()
         self.search_visible = True
         self._clear_search_message()
-        self._search_cache_state = None
+        self._invalidate_search_cache()
         if self.search_buffer.text:
-            self._cycle_search_history()
+            self.search_buffer.cursor_position = len(self.search_buffer.text)
         elif self._search_history:
             query = self._search_history[0]
             self.search_buffer.document = Document(query, cursor_position=len(query))
-        self.search_buffer.cursor_position = len(self.search_buffer.text)
         self._focus_search()
 
     def close_search(self) -> None:
         """Hide the search bar and return focus to the editor"""
         self.search_visible = False
+        self.replace_visible = False
         self._clear_search_message()
         self._reset_search_navigation()
         self._focus_target("main")
+
+    def toggle_replace(self) -> None:
+        """Toggle the replace row beneath the active search field"""
+        self.open_search()
+        self.replace_visible = not self.replace_visible
+        if not self.replace_visible:
+            self._focus_search()
+            return
+        self._focus_replace()
 
     def open_jump(self) -> None:
         """Show the jump bar and prepare it for a line or line:column target"""
         self.note_user_activity()
         self.search_visible = False
+        self.replace_visible = False
         self._clear_search_message()
         self._reset_search_navigation()
         self.jump_visible = True
@@ -2443,21 +2710,21 @@ class InteractiveEditor:
         self.invalidate()
 
     def _find_search_match(
-        self, query: str, start: int, direction: int
-    ) -> tuple[int | None, bool]:
-        """Search forward or backward and report whether the result wrapped"""
-        text = self.buffer.text
+        self, matches: tuple[SearchMatch, ...], start: int, direction: int
+    ) -> tuple[SearchMatch | None, bool]:
+        """Search forward or backward across precomputed match spans"""
+        if not matches:
+            return None, False
         if direction > 0:
-            pos = text.find(query, max(0, start))
-            if pos != -1:
-                return pos, False
-            return (text.find(query), True) if query else (None, False)
+            for match in matches:
+                if match.start >= start:
+                    return match, False
+            return matches[0], True
 
-        bounded_start = min(max(start, 0), len(text))
-        pos = text.rfind(query, 0, bounded_start + len(query))
-        if pos != -1:
-            return pos, False
-        return (text.rfind(query), True) if query else (None, False)
+        for match in reversed(matches):
+            if match.start <= start:
+                return match, False
+        return matches[-1], True
 
     def search_step(self, direction: int) -> bool:
         """Move to the next or previous search match while keeping search open"""
@@ -2468,35 +2735,126 @@ class InteractiveEditor:
             )
             return False
 
-        repeated = (
-            query == self._search_last_query
-            and direction == self._search_last_direction
-            and self.buffer.cursor_position == self._search_last_match
-        )
-        start = self.buffer.cursor_position
-        if direction > 0 and repeated:
-            start += 1 if direction > 0 else -1
-        elif direction < 0:
-            start -= 1
+        try:
+            state = self._get_search_highlight_state()
+        except re.error as err:
+            self._set_search_message(str(err))
+            return False
 
-        match_pos, wrapped = self._find_search_match(query, start, direction)
-        if match_pos is None or match_pos < 0:
+        if state is None or not state.matches:
             self._set_search_message(
                 self.get_text("editor_search_not_found", "not found")
             )
             return False
 
-        self.buffer.cursor_position = match_pos
+        repeated = (
+            query == self._search_last_query
+            and direction == self._search_last_direction
+            and self._search_last_match is not None
+            and self.buffer.cursor_position == self._search_last_match.start
+        )
+        start = self.buffer.cursor_position
+        if direction > 0 and repeated and self._search_last_match is not None:
+            start = self._search_last_match.end
+        elif direction < 0:
+            start -= 1
+
+        match, wrapped = self._find_search_match(state.matches, start, direction)
+        if match is None:
+            self._set_search_message(
+                self.get_text("editor_search_not_found", "not found")
+            )
+            return False
+
+        self.buffer.cursor_position = match.start
         self._search_last_query = query
         self._search_last_direction = direction
-        self._search_last_match = match_pos
-        self._search_cache_state = None
+        self._search_last_match = match
+        self._invalidate_search_cache()
         self._remember_search_query(query)
         self._set_search_message(
             self.get_text("editor_search_wrapped", "wrapped") if wrapped else "",
             transient=wrapped,
         )
         return True
+
+    def replace_current(self) -> bool:
+        """Replace the active match and keep the replace widget open"""
+        state = self._get_search_highlight_state()
+        if state is None or not state.matches:
+            self._set_search_message(
+                self.get_text("editor_search_not_found", "not found")
+            )
+            return False
+
+        match = state.active_match or state.matches[0]
+        text = self.buffer.text
+        source = text[match.start : match.end]
+        replacement = self._expand_replacement(source, match)
+        self.buffer.text = text[: match.start] + replacement + text[match.end :]
+        self.buffer.cursor_position = match.start + len(replacement)
+        self._remember_search_query(self.search_buffer.text)
+        self._clear_search_message()
+        self._reset_search_navigation()
+        self.invalidate()
+        return True
+
+    def replace_all(self) -> int:
+        """Replace every current match and return the replacement count"""
+        query = self.search_buffer.text
+        if not query:
+            self._set_search_message(
+                self.get_text("editor_search_enter_query", "enter a query")
+            )
+            return 0
+
+        text = self.buffer.text
+        try:
+            pattern = self._compile_search_pattern(query)
+        except re.error as err:
+            self._set_search_message(str(err))
+            return 0
+        if pattern is None:
+            return 0
+
+        def _replace(match: re.Match[str]) -> str:
+            source = match.group(0)
+            replacement = (
+                match.expand(self.replace_buffer.text)
+                if self.search_options.regex
+                else self.replace_buffer.text
+            )
+            if self.search_options.preserve_case:
+                replacement = _preserve_replacement_case(source, replacement)
+            return replacement
+
+        new_text, count = pattern.subn(_replace, text)
+        if count <= 0:
+            self._set_search_message(
+                self.get_text("editor_search_not_found", "not found")
+            )
+            return 0
+
+        self.buffer.text = new_text
+        self.buffer.cursor_position = 0
+        self._remember_search_query(query)
+        self._clear_search_message()
+        self._reset_search_navigation()
+        self.invalidate()
+        return count
+
+    def _expand_replacement(self, source: str, match: SearchMatch) -> str:
+        """Build the replacement text for one concrete match span"""
+        replacement = self.replace_buffer.text
+        if self.search_options.regex:
+            pattern = self._compile_search_pattern(self.search_buffer.text)
+            if pattern is not None:
+                match_obj = pattern.search(self.buffer.text, match.start, match.end)
+                if match_obj is not None:
+                    replacement = match_obj.expand(replacement)
+        if self.search_options.preserve_case:
+            replacement = _preserve_replacement_case(source, replacement)
+        return replacement
 
     def activate_issue_mode(self, issues: tuple[EditorIssue, ...]) -> None:
         """Enter issue mode, jump to the first issue, and show the overlay"""

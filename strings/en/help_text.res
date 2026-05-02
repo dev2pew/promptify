@@ -2,6 +2,7 @@
 
 ^[G] / [F1]                   : help
 ^[F]                          : search
+^[R]                          : replace
 [Alt] + [G]                   : jump to line
 [Alt] + [Z]                   : toggle word wrap
 ^[S]                          : resolve
@@ -9,8 +10,16 @@
 
 [ search ]
 
-[Enter]                       : next
-^[R]                          : previous
+[Enter] / [Shift] + [Enter]   : next / previous
+[^/v]                         : search history
+[F6] / [F7] / [F8]            : case / word / regex
+[Esc]                         : close
+
+[ replace ]
+
+[Enter]                       : replace
+^[Alt] + [Enter]              : replace all
+^[F6]                         : preserve case
 [Esc]                         : close
 
 [ jump ]

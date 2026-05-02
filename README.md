@@ -30,7 +30,7 @@ also called legacy mode. `promptify` reads `legacy.md` from the selected case an
 a terminal editor powered by `prompt-toolkit`.
 
 - fuzzy completion for files, directories, trees, extensions, symbols, and `git` mentions;
-- custom search bar with match counts, wrap reporting, and session history;
+- VS Code-style search and replace widget with match counts, wrap reporting, search history, and search-mode toggles for case, whole-word, regex, and preserve-case replace;
 - jump-to-line input with `:line[:character]` and `:line,character` targets;
 - issue overlays for malformed mentions and unresolved references before save;
 - syntax highlighting, trailing whitespace marking, EOF newline indicators, active-line highlighting, and optional line numbers;
@@ -42,12 +42,18 @@ the in-app help screen is authoritative, but the main defaults are...
 
 - `Ctrl+G` / `F1`: help
 - `Ctrl+F`: search
+- `Ctrl+R`: toggle replace
 - `Alt+G`: jump to `:line[:character]` or `:line,character`
 - `Alt+Z`: toggle word wrap
 - `Ctrl+S`: resolve and save
 - `Ctrl+Q` / `F10`: abort with confirmation
+- `F6` / `F7` / `F8`: toggle match case, whole word, and regex while search is open
+- `Ctrl+F6`: toggle preserve-case replace while replace is open
+- `Up` / `Down`: search history while the search field is focused
+- `Enter` / `Shift+Enter`: next and previous search result while the search field is focused
+- `Enter` / `Ctrl+Alt+Enter`: replace current result or replace all while the replace field is focused
 - `Enter` / `Ctrl+N`: next issue while issue mode is open
-- `Ctrl+R` / `Ctrl+P`: previous search result or issue, depending on mode
+- `Ctrl+R` / `Ctrl+P`: previous issue while issue mode is open
 
 ##### MENTIONS
 

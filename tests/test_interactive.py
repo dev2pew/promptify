@@ -37,6 +37,13 @@ def _wrap_enabled(window: Any) -> bool:
     return bool(value)
 
 
+def _fragment_text(fragments: Any) -> str:
+    """Flatten formatted-text fragments into plain text for assertions"""
+    if isinstance(fragments, str):
+        return fragments
+    return "".join(text for _, text in fragments)
+
+
 async def test_interactive_bindings_register_supported_runtime_keys(app_components):
     """Keybindings should build cleanly and expose the runtime paste entry points"""
     context, resolver = app_components
@@ -51,6 +58,13 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "2", "~"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "6", "~"))
     assert bindings.get_bindings_for_keys((Keys.ControlF,))
+    assert bindings.get_bindings_for_keys((Keys.ControlR,))
+    assert bindings.get_bindings_for_keys((Keys.F6,))
+    assert bindings.get_bindings_for_keys((Keys.F7,))
+    assert bindings.get_bindings_for_keys((Keys.F8,))
+    assert bindings.get_bindings_for_keys((Keys.ControlF6,))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "2", "u"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "7", "u"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "g"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "z"))
     assert bindings.get_bindings_for_keys((Keys.F10,))
@@ -471,6 +485,7 @@ async def test_interactive_editor_search_step_moves_forward_and_backward(
     editor = InteractiveEditor(
         "alpha beta alpha gamma alpha", context.indexer, resolver
     )
+    editor.search_visible = True
     editor.search_buffer.text = "alpha"
 
     assert editor.search_step(1)
@@ -561,6 +576,108 @@ async def test_interactive_editor_runtime_search_selection_clears_on_navigation(
             await asyncio.wait_for(task, timeout=1.5)
 
 
+async def test_interactive_editor_runtime_search_widget_shortcuts_work(
+    app_components,
+):
+    """The live search widget should support history, toggles, and replace shortcuts"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha Alpha alpha", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            pipe_input.send_text("\x06")  # CTRL+F
+            pipe_input.send_text("alpha")
+            pipe_input.send_text("\r")
+
+            for _ in range(20):
+                if editor.buffer.cursor_position == 0:
+                    break
+                await asyncio.sleep(0.02)
+
+            pipe_input.send_text("\x1b[17~")  # F6
+            for _ in range(20):
+                if editor.search_options.match_case:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.search_options.match_case
+
+            pipe_input.send_text("\x12")  # CTRL+R
+            for _ in range(20):
+                if editor.replace_visible:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.replace_visible
+            assert get_app().current_buffer is editor.replace_buffer
+
+            pipe_input.send_text("\x1b[17;5~")  # CTRL+F6
+            for _ in range(20):
+                if editor.search_options.preserve_case:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.search_options.preserve_case
+
+            editor.close_search()
+            assert not editor.search_visible
+
+            editor.open_search()
+            editor.search_buffer.text = ""
+            pipe_input.send_text("\x1b[A")  # UP
+            for _ in range(20):
+                if editor.search_buffer.text == "alpha":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.search_buffer.text == "alpha"
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_runtime_replace_enter_and_ctrl_alt_enter(
+    app_components,
+):
+    """The live replace widget should map Enter and Ctrl+Alt+Enter correctly"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha alpha", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.open_search()
+            editor.search_buffer.text = "alpha"
+            editor.toggle_replace()
+            editor.replace_buffer.text = "omega"
+
+            pipe_input.send_text("\r")
+            for _ in range(20):
+                if editor.buffer.text == "omega alpha":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "omega alpha"
+
+            pipe_input.send_text("\x1b[13;7u")
+            for _ in range(20):
+                if editor.buffer.text == "omega omega":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "omega omega"
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
 async def test_interactive_editor_search_status_reports_active_match_counts(
     app_components,
 ):
@@ -575,7 +692,11 @@ async def test_interactive_editor_search_status_reports_active_match_counts(
     state = editor._get_search_highlight_state()
 
     assert state is not None
-    assert state.matches == (0, 11, 23)
+    assert tuple((match.start, match.end) for match in state.matches) == (
+        (0, 5),
+        (11, 16),
+        (23, 28),
+    )
     assert state.active_ordinal == 1
     assert editor._get_search_label_text() == (
         " " + get_string("editor_search_label", "SEARCH") + " "
@@ -583,9 +704,41 @@ async def test_interactive_editor_search_status_reports_active_match_counts(
     assert editor._get_mode_text() == (
         " [ " + get_string("editor_mode_search", "search") + " ] "
     )
-    assert editor._get_search_status_text().strip() == get_string(
-        "editor_search_status_count", "{current} of {total}"
-    ).format(current=1, total=3)
+    assert (
+        _fragment_text(editor._get_search_status_text())
+        .strip()
+        .startswith(
+            get_string("editor_search_status_count", "{current} of {total}").format(
+                current=1,
+                total=3,
+            )
+        )
+    )
+
+
+async def test_interactive_editor_search_toggle_fragments_use_on_off_styles(
+    app_components,
+):
+    """Search and replace chips should expose explicit on/off style classes"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha", context.indexer, resolver)
+    editor.search_visible = True
+    editor.replace_visible = True
+
+    search_fragments = cast(list[tuple[str, str]], editor._get_search_status_text())
+    replace_fragments = cast(list[tuple[str, str]], editor._get_replace_status_text())
+
+    assert ("class:search-toggle-off", "(Aa)") in search_fragments
+    assert ("class:search-toggle-off", "(Preserve)") in replace_fragments
+
+    editor.toggle_match_case()
+    editor.toggle_preserve_case()
+
+    search_fragments = cast(list[tuple[str, str]], editor._get_search_status_text())
+    replace_fragments = cast(list[tuple[str, str]], editor._get_replace_status_text())
+
+    assert ("class:search-toggle-on", "[Aa]") in search_fragments
+    assert ("class:search-toggle-on", "[Preserve]") in replace_fragments
 
 
 async def test_interactive_editor_search_reuses_session_history(app_components):
@@ -606,7 +759,120 @@ async def test_interactive_editor_search_reuses_session_history(app_components):
     assert editor.search_step(1)
 
     editor.open_search()
+    assert editor.search_buffer.text == "beta"
+
+
+async def test_interactive_editor_search_history_moves_with_up_and_down(
+    app_components,
+):
+    """Search history should move backward and forward without losing the draft query"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta gamma", context.indexer, resolver)
+    editor.search_visible = True
+
+    editor.search_buffer.text = "alpha"
+    assert editor.search_step(1)
+    editor.search_buffer.text = "beta"
+    assert editor.search_step(1)
+    editor.search_buffer.text = "draft"
+
+    editor.cycle_search_history(-1)
+    assert editor.search_buffer.text == "beta"
+
+    editor.cycle_search_history(-1)
     assert editor.search_buffer.text == "alpha"
+
+    editor.cycle_search_history(1)
+    assert editor.search_buffer.text == "beta"
+
+    editor.cycle_search_history(1)
+    assert editor.search_buffer.text == "draft"
+
+
+async def test_interactive_editor_search_toggles_affect_matching(app_components):
+    """Case, whole-word, and regex toggles should change the resolved match set"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha Alpha alphabet", context.indexer, resolver)
+    editor.search_visible = True
+    editor.search_buffer.text = "alpha"
+
+    state = editor._get_search_highlight_state()
+    assert state is not None
+    assert tuple((match.start, match.end) for match in state.matches) == (
+        (0, 5),
+        (6, 11),
+        (12, 17),
+    )
+
+    editor.toggle_match_case()
+    state = editor._get_search_highlight_state()
+    assert state is not None
+    assert tuple((match.start, match.end) for match in state.matches) == (
+        (0, 5),
+        (12, 17),
+    )
+
+    editor.toggle_match_whole_word()
+    state = editor._get_search_highlight_state()
+    assert state is not None
+    assert tuple((match.start, match.end) for match in state.matches) == ((0, 5),)
+
+    editor.toggle_regex()
+    editor.search_buffer.text = r"alp[a-z]+"
+    state = editor._get_search_highlight_state()
+    assert state is not None
+    assert tuple((match.start, match.end) for match in state.matches) == (
+        (0, 5),
+        (12, 20),
+    )
+
+
+async def test_interactive_editor_replace_current_and_all(app_components):
+    """Replace actions should honor focus-specific current and all behaviors"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta alpha", context.indexer, resolver)
+    editor.search_visible = True
+    editor.replace_visible = True
+    editor.search_buffer.text = "alpha"
+    editor.replace_buffer.text = "omega"
+
+    assert editor.search_step(1)
+    assert editor.replace_current()
+    assert editor.buffer.text == "omega beta alpha"
+
+    count = editor.replace_all()
+    assert count == 1
+    assert editor.buffer.text == "omega beta omega"
+
+
+async def test_interactive_editor_replace_preserve_case(app_components):
+    """Preserve-case replace should mirror simple case patterns from the match"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha ALPHA Alpha", context.indexer, resolver)
+    editor.search_visible = True
+    editor.replace_visible = True
+    editor.search_buffer.text = "alpha"
+    editor.replace_buffer.text = "omega"
+    editor.toggle_preserve_case()
+
+    count = editor.replace_all()
+    assert count == 3
+    assert editor.buffer.text == "omega OMEGA Omega"
+
+
+async def test_interactive_editor_replace_uses_regex_groups(app_components):
+    """Regex replace should expand match groups in the replacement text"""
+    context, resolver = app_components
+    editor = InteractiveEditor("abc-123 def-456", context.indexer, resolver)
+    editor.search_visible = True
+    editor.replace_visible = True
+    editor.toggle_regex()
+    editor.search_buffer.text = r"([a-z]+)-(\d+)"
+    editor.replace_buffer.text = r"\2:\1"
+
+    count = editor.replace_all()
+    assert count == 2
+    assert editor.buffer.text == "123:abc 456:def"
 
 
 async def test_interactive_editor_help_restores_search_cursor_and_selection(

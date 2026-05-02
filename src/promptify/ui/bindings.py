@@ -47,6 +47,10 @@ def setup_keybindings(editor) -> KeyBindings:
         return editor.quit_visible
 
     @Condition
+    def is_replace_visible() -> bool:
+        return editor.replace_visible
+
+    @Condition
     def has_completions_menu() -> bool:
         b = get_app().current_buffer
         return b.complete_state is not None and len(b.complete_state.completions) > 0
@@ -61,8 +65,10 @@ def setup_keybindings(editor) -> KeyBindings:
 
     editor_focus = has_focus(editor.buffer)
     search_focus = has_focus(editor.search_buffer)
+    replace_focus = has_focus(editor.replace_buffer)
     jump_focus = has_focus(editor.jump_buffer)
-    text_focus = editor_focus | search_focus | jump_focus
+    search_widget_focus = search_focus | replace_focus
+    text_focus = editor_focus | search_focus | replace_focus | jump_focus
 
     def get_home_position(document: Document) -> int:
         first_non_ws = document.get_start_of_line_position(after_whitespace=True)
@@ -100,12 +106,16 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.note_user_activity()
         editor.toggle_help()
 
-    @custom_bindings.add(
-        "c-f", filter=editor_focus | search_focus | jump_focus, eager=True
-    )
+    @custom_bindings.add("c-f", filter=text_focus, eager=True)
     def _search(event) -> None:
         """Open the custom search bar without entering prompt-toolkit search mode"""
         editor.open_search()
+
+    @custom_bindings.add("c-r", filter=editor_focus | search_widget_focus, eager=True)
+    def _replace(event) -> None:
+        """Toggle the replace row from the editor or search widget"""
+        editor.note_user_activity()
+        editor.toggle_replace()
 
     @custom_bindings.add("escape", "g", filter=text_focus, eager=True)
     def _jump(event) -> None:
@@ -199,7 +209,7 @@ def setup_keybindings(editor) -> KeyBindings:
     def _(event) -> None:
         event.current_buffer.cancel_completion()
 
-    @custom_bindings.add("escape", filter=search_focus)
+    @custom_bindings.add("escape", filter=search_widget_focus)
     def _close_search(event) -> None:
         editor.note_user_activity()
         editor.close_search()
@@ -210,10 +220,68 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.search_step(1)
         event.app.invalidate()
 
-    @custom_bindings.add("c-r", filter=search_focus)
-    def _search_previous(event) -> None:
+    @custom_bindings.add(
+        "escape",
+        "[",
+        "1",
+        "3",
+        ";",
+        "2",
+        "u",
+        filter=search_focus,
+    )
+    def _search_previous_shift(event) -> None:
         editor.note_user_activity()
         editor.search_step(-1)
+        event.app.invalidate()
+
+    @custom_bindings.add("up", filter=search_focus)
+    def _search_history_previous(event) -> None:
+        editor.note_user_activity()
+        editor.cycle_search_history(-1)
+        event.app.invalidate()
+
+    @custom_bindings.add("down", filter=search_focus)
+    def _search_history_next(event) -> None:
+        editor.note_user_activity()
+        editor.cycle_search_history(1)
+        event.app.invalidate()
+
+    @custom_bindings.add("f6", filter=search_widget_focus)
+    def _toggle_match_case(event) -> None:
+        editor.note_user_activity()
+        editor.toggle_match_case()
+        event.app.invalidate()
+
+    @custom_bindings.add("f7", filter=search_widget_focus)
+    def _toggle_match_whole_word(event) -> None:
+        editor.note_user_activity()
+        editor.toggle_match_whole_word()
+        event.app.invalidate()
+
+    @custom_bindings.add("f8", filter=search_widget_focus)
+    def _toggle_regex(event) -> None:
+        editor.note_user_activity()
+        editor.toggle_regex()
+        event.app.invalidate()
+
+    @custom_bindings.add("c-f6", filter=search_widget_focus & is_replace_visible)
+    def _toggle_preserve_case(event) -> None:
+        editor.note_user_activity()
+        editor.toggle_preserve_case()
+        event.app.invalidate()
+
+    @custom_bindings.add("enter", filter=replace_focus)
+    def _replace_current(event) -> None:
+        editor.note_user_activity()
+        editor.replace_current()
+        event.app.invalidate()
+
+    @custom_bindings.add("escape", "[", "1", "3", ";", "7", "u", filter=replace_focus)
+    def _replace_all(event) -> None:
+        """Handle Ctrl+Alt+Enter terminals that report modifyOtherKeys."""
+        editor.note_user_activity()
+        editor.replace_all()
         event.app.invalidate()
 
     @custom_bindings.add("escape", filter=jump_focus)
@@ -702,7 +770,7 @@ def setup_keybindings(editor) -> KeyBindings:
             cursor_row, cursor_col
         )
 
-    @custom_bindings.add("c-s", filter=~search_focus)
+    @custom_bindings.add("c-s", filter=~search_widget_focus)
     def _save(event) -> None:
         async def _do_save():
             editor.note_user_activity()
