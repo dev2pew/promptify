@@ -43,6 +43,7 @@ the in-app help screen is authoritative, but the main defaults are...
 - `Ctrl+G` / `F1`: help
 - `Ctrl+F`: search
 - `Alt+G`: jump to `:line[:character]` or `:line,character`
+- `Alt+Z`: toggle word wrap
 - `Ctrl+S`: resolve and save
 - `Ctrl+Q` / `F10`: abort with confirmation
 - `Enter` / `Ctrl+N`: next issue while issue mode is open
@@ -125,6 +126,7 @@ the full documented surface is in [.env.example](/C:/Users/lucky/Documents/vscod
 - exact tokenizer data stored under `data/o200k_base.tiktoken`, with automatic download if it is missing and safe fallback when the download is unavailable;
 - matching thresholds and completion tuning;
 - editor layout, line-number gutter, search history, bulk-paste tuning, and token refresh timing;
+- editor layout, line-number gutter, word wrap, search history, bulk-paste tuning, and token refresh timing;
 - full prompt-toolkit style overrides for the interactive theme.
 
 invalid values fall back safely to code defaults through [settings.py](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/core/settings.py:1).

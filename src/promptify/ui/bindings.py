@@ -112,6 +112,12 @@ def setup_keybindings(editor) -> KeyBindings:
         """Open the custom jump bar without colliding with built-in bindings"""
         editor.open_jump()
 
+    @custom_bindings.add("escape", "z", filter=editor_focus, eager=True)
+    def _toggle_word_wrap(event) -> None:
+        """Toggle runtime wrapping without colliding with undo"""
+        editor.note_user_activity()
+        editor.toggle_word_wrap()
+
     @custom_bindings.add("escape", filter=is_help_visible & ~is_quit_visible)
     @custom_bindings.add("enter", filter=is_help_visible & ~is_quit_visible)
     def _close_help_esc(event) -> None:

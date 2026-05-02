@@ -29,6 +29,14 @@ from promptify.utils.i18n import get_string
 pytestmark = pytest.mark.asyncio
 
 
+def _wrap_enabled(window: Any) -> bool:
+    """Normalize prompt-toolkit wrap flags that may be stored as filters or bools"""
+    value = window.wrap_lines
+    if callable(value):
+        return bool(value())
+    return bool(value)
+
+
 async def test_interactive_bindings_register_supported_runtime_keys(app_components):
     """Keybindings should build cleanly and expose the runtime paste entry points"""
     context, resolver = app_components
@@ -44,6 +52,7 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "6", "~"))
     assert bindings.get_bindings_for_keys((Keys.ControlF,))
     assert bindings.get_bindings_for_keys((Keys.Escape, "g"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "z"))
     assert bindings.get_bindings_for_keys((Keys.F10,))
 
 
@@ -423,7 +432,10 @@ async def test_interactive_editor_jump_defaults_to_current_cursor_target(
     )
     editor.open_jump()
 
-    suggestion = editor.jump_buffer.auto_suggest.get_suggestion(
+    auto_suggest = editor.jump_buffer.auto_suggest
+    assert auto_suggest is not None
+
+    suggestion = auto_suggest.get_suggestion(
         editor.jump_buffer, editor.jump_buffer.document
     )
 
@@ -775,6 +787,65 @@ async def test_interactive_editor_toolbar_and_token_status_follow_mode(
 
     editor._token_estimate_busy = True
     assert editor._get_token_status_text().endswith("* ")
+
+
+async def test_interactive_editor_word_wrap_follows_setting(
+    app_components, apply_settings_pass
+):
+    """The main editor window should respect the configured wrap default"""
+    enabled_pass = SettingsPass(
+        name="word-wrap-on",
+        env={
+            "PROMPTIFY_EDITOR_WORD_WRAP": "true",
+            "PROMPTIFY_TERMINAL_PROFILE": "auto",
+        },
+    )
+    apply_settings_pass(enabled_pass)
+    context, resolver = app_components
+    enabled_editor = InteractiveEditor("", context.indexer, resolver)
+
+    assert enabled_editor.word_wrap_enabled
+    assert _wrap_enabled(enabled_editor.main_window)
+
+    disabled_pass = SettingsPass(
+        name="word-wrap-off",
+        env={
+            "PROMPTIFY_EDITOR_WORD_WRAP": "false",
+            "PROMPTIFY_TERMINAL_PROFILE": "auto",
+        },
+    )
+    apply_settings_pass(disabled_pass)
+    disabled_editor = InteractiveEditor("", context.indexer, resolver)
+
+    assert not disabled_editor.word_wrap_enabled
+    assert not _wrap_enabled(disabled_editor.main_window)
+
+
+async def test_interactive_editor_toggle_word_wrap_updates_window_and_status(
+    app_components,
+):
+    """Toggling wrap should update the live window state and status copy"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha", context.indexer, resolver)
+
+    assert not editor.word_wrap_enabled
+    assert not _wrap_enabled(editor.main_window)
+
+    editor.toggle_word_wrap()
+
+    assert editor.word_wrap_enabled
+    assert _wrap_enabled(editor.main_window)
+    assert editor._passive_status == get_string(
+        "editor_word_wrap_enabled", "word wrap on"
+    )
+
+    editor.toggle_word_wrap()
+
+    assert not editor.word_wrap_enabled
+    assert not _wrap_enabled(editor.main_window)
+    assert editor._passive_status == get_string(
+        "editor_word_wrap_disabled", "word wrap off"
+    )
 
 
 async def test_interactive_editor_lexer_flags_incomplete_project_mentions(

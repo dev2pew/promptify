@@ -165,6 +165,7 @@ HELP_TEXT_FALLBACK = (
     "^[G] / [F1]                   : help\n"
     "^[F]                          : search\n"
     "[Alt] + [G]                   : jump to line\n"
+    "[Alt] + [Z]                   : toggle word wrap\n"
     "^[S]                          : resolve\n"
     "^[Q]                          : abort\n\n"
     "[ search ]\n\n"
@@ -1212,6 +1213,7 @@ class InteractiveEditor:
         self._document_issue_cache: tuple[EditorIssue, ...] = tuple()
         self.issue_mode_active = False
         self.issue_index = 0
+        self.word_wrap_enabled = APP_SETTINGS.editor_behavior.word_wrap
 
         self.buffer = Buffer(
             document=Document(initial_text, cursor_position=0),
@@ -1353,6 +1355,7 @@ class InteractiveEditor:
                 input_processors=processors,
             ),
             cursorline=True,
+            wrap_lines=to_filter(self.word_wrap_enabled),
             left_margins=(
                 [
                     NumberedMargin(relative=False, display_tildes=False),
@@ -1896,8 +1899,25 @@ class InteractiveEditor:
             return get_string("toolbar_text_help", "[Esc/Enter] close")
         return get_string(
             "toolbar_text_normal",
-            "^[G] help | ^[F] find | [Alt+G] jump",
+            "^[G] help | ^[F] find | [Alt+G] jump | [Alt+Z] wrap",
         )
+
+    def toggle_word_wrap(self) -> None:
+        """Flip main editor wrapping at runtime and surface the new mode briefly"""
+        self.word_wrap_enabled = not self.word_wrap_enabled
+        self.main_window.wrap_lines = to_filter(self.word_wrap_enabled)
+        self.set_passive_status(
+            self.get_text(
+                (
+                    "editor_word_wrap_enabled"
+                    if self.word_wrap_enabled
+                    else "editor_word_wrap_disabled"
+                ),
+                "word wrap on" if self.word_wrap_enabled else "word wrap off",
+            ),
+            transient=True,
+        )
+        self.invalidate()
 
     def _remember_search_query(self, query: str) -> None:
         """Keep a small in-memory history of search queries"""

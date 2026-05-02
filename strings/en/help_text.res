@@ -3,6 +3,7 @@
 ^[G] / [F1]                   : help
 ^[F]                          : search
 [Alt] + [G]                   : jump to line
+[Alt] + [Z]                   : toggle word wrap
 ^[S]                          : resolve
 ^[Q] / [F10]                  : abort
 

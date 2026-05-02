@@ -183,6 +183,7 @@ class EditorBehaviorSettings:
     token_update_interval: float
     show_help_on_start: bool
     show_line_numbers: bool
+    word_wrap: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -677,6 +678,12 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_EDITOR_SHOW_LINE_NUMBERS",
                 True,
+                warns,
+            ),
+            word_wrap=_parse_bool(
+                source_env,
+                "PROMPTIFY_EDITOR_WORD_WRAP",
+                False,
                 warns,
             ),
         ),

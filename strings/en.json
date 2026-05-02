@@ -86,6 +86,8 @@
     "editor_search_enter_query": "enter a query",
     "editor_search_not_found": "not found",
     "editor_search_wrapped": "wrapped",
+    "editor_word_wrap_enabled": "word wrap on",
+    "editor_word_wrap_disabled": "word wrap off",
     "editor_jump_label": "jump",
     "editor_jump_enter_target": "enter a line",
     "editor_jump_invalid_format": "use :line:char",
