@@ -30,7 +30,7 @@ also called legacy mode. `promptify` reads `legacy.md` from the selected case an
 a terminal editor powered by `prompt-toolkit`.
 
 - fuzzy completion for files, directories, trees, extensions, symbols, and `git` mentions;
-- VS Code-style search and replace widget with match counts, wrap reporting, search history, and search-mode toggles for case, whole-word, regex, and preserve-case replace;
+- modern IDE style search and replace widget with match counts, wrap reporting, search history, and search-mode toggles for case, whole-word, regex, and preserve-case replace;
 - jump-to-line input with `:line[:character]` and `:line,character` targets;
 - issue overlays for malformed mentions and unresolved references before save;
 - syntax highlighting, trailing whitespace marking, EOF newline indicators, active-line highlighting, and optional line numbers;
@@ -97,6 +97,7 @@ cases/
     ├── system.md
     ├── prompt.md
     └── legacy.md
+
 ```
 
 example `config.json`...
@@ -115,13 +116,14 @@ example `config.json`...
     "prompt": "prompt.md",
     "legacy": "legacy.md"
 }
+
 ```
 
 ## CONFIGURATION
 
 local preferences are loaded from `.env`. these settings are not treated as secrets in this repository.
 
-the full documented surface is in [.env.example](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/.env.example:1), including...
+the full documented surface is in [.env.example](.env.example), including...
 
 - runtime limits like max file size and concurrent reads;
 - output behavior such as clipboard copy and raw prompt saving;
@@ -135,7 +137,7 @@ the full documented surface is in [.env.example](/C:/Users/lucky/Documents/vscod
 - editor layout, line-number gutter, word wrap, search history, bulk-paste tuning, and token refresh timing;
 - full prompt-toolkit style overrides for the interactive theme.
 
-invalid values fall back safely to code defaults through [settings.py](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/core/settings.py:1).
+invalid values fall back safely to code defaults through [settings.py](src/promptify/core/settings.py).
 
 when `PROMPTIFY_TERMINAL_PROFILE=auto`, `promptify` detects common environments such as VS Code, Windows Terminal, and legacy `cmd.exe`. older `cmd.exe` sessions automatically switch to ASCII-safe borders, tree connectors, and EOF markers so UI chrome remains readable even without box-drawing glyph support. if you need the old classic Windows console compatibility profile, set `PROMPTIFY_TERMINAL_PROFILE=conhost` explicitly to keep prompt-toolkit full-screen mode off and mouse support disabled.
 
@@ -147,30 +149,35 @@ the project is unit-test driven and expects source changes to stay covered.
 - keep tests sandboxed and deterministic;
 - tests seed `PROMPTIFY_*` values from `.env.example` through `tests/_settings_master.py`, so repo-local `.env` changes do not shift test expectations;
 - settings-sensitive tests reuse the generated multi-pass matrix from `tests/_settings_master.py`; set `PROMPTIFY_TEST_PASS_COUNT` to change the pass count, which defaults to `4`;
-- preserve `basedpyright` cleanliness; the repo wraps it through `scripts/llc.*` and it is intentionally stricter than Pylance basic checking.
+- preserve `basedpyright` cleanliness; the repo wraps it through `scripts/c.*` and it is intentionally stricter than Pylance basic checking.
+- `scripts/c.(bat|sh)` also refresh the repo-root `problems.json` file with a compact grouped `basedpyright` report on each run, print a grouped issue-to-file summary across all collected diagnostics, and still use `summary.errorCount` as the wrapper pass/fail gate.
 
 run type checking...
 
 ```bash
-./scripts/llc.sh
+./scripts/c.sh
+
 ```
 
 or on Windows...
 
 ```powershell
-./scripts/llc.bat
+./scripts/c.bat
+
 ```
 
 run tests...
 
 ```bash
 uv run pytest -v
+
 ```
 
 or on Windows...
 
 ```powershell
-./scripts/llt.bat
+./scripts/t.bat
+
 ```
 
 format and lint...
@@ -178,12 +185,14 @@ format and lint...
 ```bash
 uv run ruff check --fix
 uv run ruff format
+
 ```
 
 or on Windows...
 
 ```powershell
-./scripts/llf.bat
+./scripts/f.bat
+
 ```
 
 ## INSTALL
@@ -193,24 +202,28 @@ or on Windows...
 
 ```bash
 uv sync
+
 ```
 
 run...
 
 ```bash
 uv run promptify
+
 ```
 
 or...
 
 ```powershell
-./scripts/llr.bat
+./scripts/r.bat
+
 ```
 
 module entry point...
 
 ```bash
 uv run python -m promptify
+
 ```
 
 ## GUARDS
@@ -225,11 +238,11 @@ uv run python -m promptify
 
 ## CONTRIBUTING
 
-automation and CLI agents should also follow [AGENTS.md](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/AGENTS.md:1).
+automation and CLI agents should also follow [AGENTS.md](AGENTS.md).
 
-the interactive editor implementation now lives under [`src/promptify/ui/editor/`](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/ui/editor/) with editor-neutral helpers under [`src/promptify/shared/`](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/shared/). keep new editor-only prompt-toolkit code local to the editor package and move reusable state or pure helpers into `shared/`.
+the interactive editor implementation now lives under [`src/promptify/ui/editor/`](src/promptify/ui/editor/) with editor-neutral helpers under [`src/promptify/shared/`](src/promptify/shared/). keep new editor-only prompt-toolkit code local to the editor package and move reusable state or pure helpers into `shared/`.
 
-repo maintenance helpers live under [`scripts/`](C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/scripts/). [`filter.ps1`](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/scripts/filter.ps1:1) prompts for the source and target git identity, refuses no-op rewrites, rewrites git author history using `git-filter-repo`, restores `origin`, force-pushes rewritten refs, and removes the generated `.mailmap-rewrite` file after the run.
+repo maintenance helpers live under [`scripts/`](C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/scripts/). [`f.ps1`](scripts/f.ps1) prompts for the source and target git identity, refuses no-op rewrites, rewrites git author history using `git-filter-repo`, restores `origin`, force-pushes rewritten refs, and removes the generated `.mailmap-rewrite` file after the run.
 
 ## DEMO
 

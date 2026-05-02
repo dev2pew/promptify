@@ -32,6 +32,11 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 
+[tool.basedpyright]
+pythonVersion = "3.13"
+venvPath = "."
+venv = ".venv"
+
 [project.scripts]
 promptify = "promptify.main:cli"
 

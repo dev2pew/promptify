@@ -9,10 +9,10 @@
 
 - Keep user-facing copy indexed from `strings/en.json`;
 - In source code, always use string lookups with an inline fallback;
-- Treat `strings/en.json` as the single source of truth for UI and message text, using resource references for large multiline blocks when needed;
+- Treat `strings/en.json` as the single source of truth for UI and message text, using resource references in `strings/<locale>/*.res` for large multiline blocks when needed;
 - Route new environment configuration through `src/promptify/core/settings.py`;
 - Invalid configuration values must never crash import-time startup. Fall back safely;
-- Preserve `basedpyright` cleanliness under the repo `llc` scripts; treat it as stricter than Pylance basic checking and fix issues rather than silencing them unless there is a clear compatibility reason;
+- Preserve `basedpyright` cleanliness under the repo `scripts/c.(bat|sh)` scripts; treat it as stricter than Pylance basic checking and fix issues rather than silencing them unless there is a clear compatibility reason;
 - Prefer shared helpers over repeated logic, especially in editor, resolver, and completion flows;
 - Prefer `src/promptify/shared/` for cross-cutting helpers reused across modules, and keep editor keybinding logic decomposed under `src/promptify/ui/keybinding/` instead of growing a single binding file;
 - Keep the interactive editor package-backed under `src/promptify/ui/editor/`; route editor-neutral state and pure helpers into `src/promptify/shared/editor_state.py` and `src/promptify/shared/editor_support.py` instead of re-growing a monolithic `editor.py`;
@@ -35,11 +35,10 @@
 
 ## TESTING RULES
 
-Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\.uv-cache'; ./scripts/llt.bat` to avoid requiring elevation.
-
+- Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\.uv-cache'; ./scripts/t.bat` to avoid requiring elevation;
 - Add or update unit tests for every behavioral change;
-- Run the repo type-check wrapper before finishing work:
-  `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\.uv-cache'; ./scripts/llc.bat`;
+- Run the repo type-check wrapper before finishing work using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\.uv-cache'; ./scripts/c.bat`;
+- `scripts/c.(bat|sh)` now refresh the repo-root `problems.json` file with a compact grouped `basedpyright` report on each run, print grouped issue-to-file output across all collected diagnostics for inspection, and treat `summary.errorCount` as the wrapper pass/fail gate; use that generated artifact for diagnostics instead of committing a stale snapshot;
 - Tests should assert localized text through `get_string(...)` instead of hardcoded copies when the value comes from `strings/en.json`;
 - Keep tests deterministic and sandboxed;
 - The test harness seeds `PROMPTIFY_*` values from `.env.example` through `tests/_settings_master.py` before importing application modules, so local `.env` tweaks must not influence test expectations;
@@ -61,7 +60,7 @@ Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs
 - `src/` is the application source of truth;
 - `data/` stores repo-local runtime assets that may be created or refreshed on demand, including the tokenizer model used by advanced token counting;
 - `tests/` should remain unit-focused and cover regressions;
-- `strings/en.json` centralizes user-facing strings and can reference locale-scoped resource files under `strings/en/` for large text blocks;
+- `strings/en.json` centralizes user-facing strings and can reference locale-scoped resource files under `strings/en/*.res` for large text blocks;
 - `.env.example` documents safe, non-secret local configuration and preference toggles;
 - scripts under `scripts/` should resolve the repo root from their own location so they keep working after directory moves or when launched from outside the repository root;
 - maintenance helpers under `scripts/` should prompt before destructive git actions, restore any required remotes automatically when possible, clean up generated temporary files when they are script-owned, and reject obvious no-op destructive operations;

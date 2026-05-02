@@ -6,6 +6,14 @@ data/
 outs/
 todos/
 
+# LSP CONFIG FILES
+pyrightconfig.json
+problems.json
+
+# TESTS
+problems.json
+bp-detail.json
+
 # Created by https://www.toptal.com/developers/gitignore/api/python,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,visualstudiocode
 
@@ -177,9 +185,6 @@ poetry.toml
 
 # ruff
 .ruff_cache/
-
-# LSP config files
-pyrightconfig.json
 
 ### VisualStudioCode ###
 .vscode/*
