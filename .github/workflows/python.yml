@@ -31,7 +31,7 @@ jobs:
         run: "uv sync"
 
       - name: "Lint"
-        run: "sh ./scripts/llf.sh --check"
+        run: "sh ./scripts/f.sh --check"
 
       - name: "Test"
-        run: "sh ./scripts/llt.sh"
+        run: "sh ./scripts/t.sh"
