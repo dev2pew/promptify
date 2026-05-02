@@ -215,6 +215,8 @@ uv run python -m promptify
 
 automation and CLI agents should also follow [AGENTS.md](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/AGENTS.md:1).
 
+the interactive editor implementation now lives under [`src/promptify/ui/editor/`](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/ui/editor/) with editor-neutral helpers under [`src/promptify/shared/`](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/shared/). keep new editor-only prompt-toolkit code local to the editor package and move reusable state or pure helpers into `shared/`.
+
 repo maintenance helpers live under [`scripts/`](C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/scripts/). [`filter.ps1`](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/scripts/filter.ps1:1) prompts for the source and target git identity, refuses no-op rewrites, rewrites git author history using `git-filter-repo`, restores `origin`, force-pushes rewritten refs, and removes the generated `.mailmap-rewrite` file after the run.
 
 ## DEMO

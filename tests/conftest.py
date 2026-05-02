@@ -150,6 +150,8 @@ def apply_settings_pass(monkeypatch):
             "promptify.core.resolver",
             "promptify.main",
             "promptify.ui.editor",
+            "promptify.ui.editor.runtime",
+            "promptify.ui.editor.view",
             "promptify.ui.logger",
             "promptify.ui.ui",
         )

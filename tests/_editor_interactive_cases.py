@@ -310,7 +310,7 @@ async def test_interactive_completion_menu_respects_available_width(app_componen
     app = type("AppStub", (), {"current_buffer": editor.buffer})()
 
     with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setattr("promptify.ui.editor.get_app", lambda: app)
+        monkeypatch.setattr("promptify.ui.editor.completion.get_app", lambda: app)
         assert control.preferred_width(24) == 24
         assert control.preferred_width(40) < control.preferred_width(80)
         assert control.preferred_width(80) <= 57
@@ -1023,7 +1023,7 @@ async def test_interactive_editor_erases_screen_when_done(app_components, monkey
         async def run_async(self):
             return None
 
-    monkeypatch.setattr("promptify.ui.editor.Application", FakeApplication)
+    monkeypatch.setattr("promptify.ui.editor.runtime.Application", FakeApplication)
 
     result = await editor.run_async()
 
