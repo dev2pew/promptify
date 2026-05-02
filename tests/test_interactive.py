@@ -12,11 +12,17 @@ from prompt_toolkit.document import Document
 from prompt_toolkit.input.defaults import create_pipe_input
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout.dimension import Dimension
+from prompt_toolkit.layout.margins import NumberedMargin
 from prompt_toolkit.output.base import DummyOutput
 from prompt_toolkit.selection import SelectionState
 
+from _settings_master import SettingsPass
 from promptify.ui.bindings import setup_keybindings
-from promptify.ui.editor import InteractiveEditor
+from promptify.ui.editor import (
+    InteractiveEditor,
+    VerticalSeparatorMargin,
+    parse_jump_target,
+)
 from promptify.core.terminal import detect_terminal_profile
 from promptify.utils.i18n import get_string
 
@@ -37,6 +43,7 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "2", "~"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "6", "~"))
     assert bindings.get_bindings_for_keys((Keys.ControlF,))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "g"))
     assert bindings.get_bindings_for_keys((Keys.F10,))
 
 
@@ -350,6 +357,100 @@ async def test_interactive_editor_runtime_search_opens_and_closes_cleanly(
             await asyncio.wait_for(task, timeout=1.5)
 
 
+async def test_parse_jump_target_accepts_supported_formats():
+    """Jump parsing should accept all documented line and column spellings"""
+    assert parse_jump_target(":1:13") == (1, 13)
+    assert parse_jump_target(":1,13") == (1, 13)
+    assert parse_jump_target(":1") == (1, 1)
+    assert parse_jump_target("1:13") is None
+    assert parse_jump_target("1") is None
+    assert parse_jump_target("line 1") is None
+
+
+async def test_interactive_editor_jump_moves_cursor_and_closes_on_success(
+    app_components,
+):
+    """Jump mode should move to the requested buffer location and then close"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha\nbeta\ngamma", context.indexer, resolver)
+    editor.open_jump()
+    editor.jump_buffer.text = "2:3"
+
+    assert editor.submit_jump()
+    assert not editor.jump_visible
+    assert editor.jump_buffer.text == ""
+    assert editor.buffer.document.cursor_position_row == 1
+    assert editor.buffer.document.cursor_position_col == 2
+
+
+async def test_interactive_editor_jump_rejects_invalid_targets(app_components):
+    """Jump mode should keep focus and expose localized validation feedback"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha\nbeta", context.indexer, resolver)
+    editor.open_jump()
+    editor.jump_buffer.text = "nope"
+
+    assert not editor.submit_jump()
+    assert editor.jump_visible
+    assert editor.jump_message == get_string(
+        "editor_jump_invalid_format",
+        "use :line[:char] or :line,char",
+    )
+
+    editor.jump_buffer.text = "9"
+    assert not editor.submit_jump()
+    assert editor.jump_message == get_string(
+        "editor_jump_line_out_of_range",
+        "line out of range",
+    )
+
+    editor.jump_buffer.text = "2:99"
+    assert not editor.submit_jump()
+    assert editor.jump_message == get_string(
+        "editor_jump_char_out_of_range",
+        "character out of range",
+    )
+
+
+async def test_interactive_editor_jump_defaults_to_current_cursor_target(
+    app_components,
+):
+    """An empty jump bar should suggest and accept the current cursor position"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha\nbeta", context.indexer, resolver)
+    editor.buffer.cursor_position = editor.buffer.document.translate_row_col_to_index(
+        1, 2
+    )
+    editor.open_jump()
+
+    suggestion = editor.jump_buffer.auto_suggest.get_suggestion(
+        editor.jump_buffer, editor.jump_buffer.document
+    )
+
+    assert suggestion is not None
+    assert suggestion.text == "2:3"
+    assert editor.submit_jump()
+    assert not editor.jump_visible
+    assert editor.buffer.document.cursor_position_row == 1
+    assert editor.buffer.document.cursor_position_col == 2
+
+
+async def test_interactive_editor_jump_clears_stale_text_between_sessions(
+    app_components,
+):
+    """Jump input should not persist between opens or after closing"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha\nbeta", context.indexer, resolver)
+    editor.open_jump()
+    editor.jump_buffer.text = "2"
+
+    editor.close_jump()
+    assert editor.jump_buffer.text == ""
+
+    editor.open_jump()
+    assert editor.jump_buffer.text == ""
+
+
 async def test_interactive_editor_search_step_moves_forward_and_backward(
     app_components,
 ):
@@ -659,11 +760,12 @@ async def test_interactive_editor_toolbar_and_token_status_follow_mode(
     context, resolver = app_components
     editor = InteractiveEditor("alpha", context.indexer, resolver)
 
-    assert "find" in editor._get_toolbar_text()
-    assert editor._get_token_status_text().endswith("  ")
-
     editor.search_visible = True
     assert "next" in editor._get_toolbar_text()
+
+    editor.search_visible = False
+    editor.jump_visible = True
+    assert "jump" in editor._get_toolbar_text()
 
     editor.quit_visible = True
     assert "cancel" in editor._get_toolbar_text()
@@ -829,3 +931,40 @@ async def test_interactive_editor_uses_ascii_eof_markers_for_legacy_cmd(
 
     assert processor.terminal_profile.eof_newline_present == "$"
     assert processor.terminal_profile.eof_newline_missing == "!"
+
+
+async def test_interactive_editor_line_number_gutter_follows_setting(
+    app_components, apply_settings_pass
+):
+    """The main editor window should only render numbered margins when enabled"""
+    enabled_pass = SettingsPass(
+        name="line-numbers-on",
+        env={
+            "PROMPTIFY_EDITOR_SHOW_LINE_NUMBERS": "true",
+            "PROMPTIFY_TERMINAL_PROFILE": "auto",
+        },
+    )
+    apply_settings_pass(enabled_pass)
+    context, resolver = app_components
+    enabled_editor = InteractiveEditor("", context.indexer, resolver)
+
+    assert any(
+        isinstance(margin, NumberedMargin)
+        for margin in enabled_editor.main_window.left_margins
+    )
+    assert any(
+        isinstance(margin, VerticalSeparatorMargin)
+        for margin in enabled_editor.main_window.left_margins
+    )
+
+    disabled_pass = SettingsPass(
+        name="line-numbers-off",
+        env={
+            "PROMPTIFY_EDITOR_SHOW_LINE_NUMBERS": "false",
+            "PROMPTIFY_TERMINAL_PROFILE": "auto",
+        },
+    )
+    apply_settings_pass(disabled_pass)
+    disabled_editor = InteractiveEditor("", context.indexer, resolver)
+
+    assert disabled_editor.main_window.left_margins == []

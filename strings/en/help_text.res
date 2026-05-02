@@ -2,6 +2,7 @@
 
 ^[G] / [F1]                   : help
 ^[F]                          : search
+[Alt] + [G]                   : jump to line
 ^[S]                          : resolve
 ^[Q] / [F10]                  : abort
 
@@ -9,6 +10,11 @@
 
 [Enter]                       : next
 ^[R]                          : previous
+[Esc]                         : close
+
+[ jump ]
+
+[Enter]                       : jump
 [Esc]                         : close
 
 [ issues ]

@@ -31,8 +31,9 @@ a terminal editor powered by `prompt-toolkit`.
 
 - fuzzy completion for files, directories, trees, extensions, symbols, and `git` mentions;
 - custom search bar with match counts, wrap reporting, and session history;
+- jump-to-line input with `:line[:character]` and `:line,character` targets;
 - issue overlays for malformed mentions and unresolved references before save;
-- syntax highlighting, trailing whitespace marking, EOF newline indicators, and active-line highlighting;
+- syntax highlighting, trailing whitespace marking, EOF newline indicators, active-line highlighting, and optional line numbers;
 - configurable layout, behavior, colors, and terminal compatibility through `.env`.
 
 ##### CONTROLS
@@ -41,6 +42,7 @@ the in-app help screen is authoritative, but the main defaults are...
 
 - `Ctrl+G` / `F1`: help
 - `Ctrl+F`: search
+- `Alt+G`: jump to `:line[:character]` or `:line,character`
 - `Ctrl+S`: resolve and save
 - `Ctrl+Q` / `F10`: abort with confirmation
 - `Enter` / `Ctrl+N`: next issue while issue mode is open
@@ -120,7 +122,7 @@ the full documented surface is in [.env.example](/C:/Users/lucky/Documents/vscod
 - terminal and menu rendering fallbacks, including `PROMPTIFY_TERMINAL_PROFILE` for legacy `cmd.exe`, raster-font consoles, or forced modern profiles;
 - watch mode selection;
 - matching thresholds and completion tuning;
-- editor layout, search history, bulk-paste tuning, and token refresh timing;
+- editor layout, line-number gutter, search history, bulk-paste tuning, and token refresh timing;
 - full prompt-toolkit style overrides for the interactive theme.
 
 invalid values fall back safely to code defaults through [settings.py](/C:/Users/lucky/Documents/vscode/python/tools/dirs/ai/promptify/src/promptify/core/settings.py:1).

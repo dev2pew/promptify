@@ -61,7 +61,8 @@ def setup_keybindings(editor) -> KeyBindings:
 
     editor_focus = has_focus(editor.buffer)
     search_focus = has_focus(editor.search_buffer)
-    text_focus = editor_focus | search_focus
+    jump_focus = has_focus(editor.jump_buffer)
+    text_focus = editor_focus | search_focus | jump_focus
 
     def get_home_position(document: Document) -> int:
         first_non_ws = document.get_start_of_line_position(after_whitespace=True)
@@ -99,10 +100,17 @@ def setup_keybindings(editor) -> KeyBindings:
         editor.note_user_activity()
         editor.toggle_help()
 
-    @custom_bindings.add("c-f", filter=editor_focus | search_focus, eager=True)
+    @custom_bindings.add(
+        "c-f", filter=editor_focus | search_focus | jump_focus, eager=True
+    )
     def _search(event) -> None:
         """Open the custom search bar without entering prompt-toolkit search mode"""
         editor.open_search()
+
+    @custom_bindings.add("escape", "g", filter=text_focus, eager=True)
+    def _jump(event) -> None:
+        """Open the custom jump bar without colliding with built-in bindings"""
+        editor.open_jump()
 
     @custom_bindings.add("escape", filter=is_help_visible & ~is_quit_visible)
     @custom_bindings.add("enter", filter=is_help_visible & ~is_quit_visible)
@@ -200,6 +208,17 @@ def setup_keybindings(editor) -> KeyBindings:
     def _search_previous(event) -> None:
         editor.note_user_activity()
         editor.search_step(-1)
+        event.app.invalidate()
+
+    @custom_bindings.add("escape", filter=jump_focus)
+    def _close_jump(event) -> None:
+        editor.note_user_activity()
+        editor.close_jump()
+
+    @custom_bindings.add("enter", filter=jump_focus)
+    def _submit_jump(event) -> None:
+        editor.note_user_activity()
+        editor.submit_jump()
         event.app.invalidate()
 
     @custom_bindings.add("c-a", filter=text_focus)

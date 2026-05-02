@@ -4,7 +4,6 @@ import sys
 import datetime
 from typing import Any
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit import print_formatted_text, HTML
@@ -13,26 +12,9 @@ from prompt_toolkit.styles import Style
 
 from ..core.settings import APP_SETTINGS
 from ..utils.i18n import get_string
+from .suggestions import AUTO_SUGGESTION_STYLE, PrefixSuggestion
 
-_AUTO_SUGGESTION_STYLE = "#888888 bg:default noreverse noitalic nounderline noblink"
-
-
-class PrefixSuggestion(AutoSuggest):
-    """Show the remainder of a default value while the input stays on its prefix"""
-
-    def __init__(self, value: str):
-        self.value = value
-
-    def get_suggestion(self, _buffer: Any, document: Any) -> Suggestion | None:
-        """Return the unmatched suffix when the current input matches the prefix"""
-        typed = document.text
-        if not self.value or not self.value.startswith(typed):
-            return None
-
-        remainder = self.value[len(typed) :]
-        if not remainder:
-            return None
-        return Suggestion(remainder)
+_AUTO_SUGGESTION_STYLE = AUTO_SUGGESTION_STYLE
 
 
 class Logger:
@@ -49,7 +31,7 @@ class Logger:
         self.verbosity = verbosity
         self.include_timestamp = include_timestamp
         self._session: PromptSession[str] | None = None
-        self._input_style = Style.from_dict({"auto-suggestion": _AUTO_SUGGESTION_STYLE})
+        self._input_style = Style.from_dict({"auto-suggestion": AUTO_SUGGESTION_STYLE})
         self._input_bindings = self._build_input_bindings()
 
     def _build_input_bindings(self) -> KeyBindings:

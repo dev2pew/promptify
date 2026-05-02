@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, Literal, cast
 
 from .logger import log
+from .suggestions import AUTO_SUGGESTION_STYLE, PrefixSuggestion
 from ..core.indexer import ProjectIndexer
 from ..core.resolver import PromptResolver
 from ..core.mods import (
@@ -42,7 +43,7 @@ try:
     )
     from prompt_toolkit.layout.layout import Layout
     from prompt_toolkit.layout.dimension import Dimension
-    from prompt_toolkit.layout.margins import ScrollbarMargin
+    from prompt_toolkit.layout.margins import Margin, NumberedMargin, ScrollbarMargin
     from prompt_toolkit.data_structures import Point
     from prompt_toolkit.buffer import Buffer
     from prompt_toolkit.document import Document
@@ -62,6 +63,8 @@ try:
         to_filter,
     )
     from prompt_toolkit.layout.processors import (
+        AppendAutoSuggestion,
+        BeforeInput,
         HighlightMatchingBracketProcessor,
         Processor,
         Transformation,
@@ -155,15 +158,20 @@ except ImportError:
 
 MENTION_SCAN_PATTERN = r"<@(?:\\.|[^>\n])+(?:>|$)|\[@[^\]\n]*(?:\]|$)"
 HELP_TOKEN_PATTERN = r"(<@(?:\\.|[^>\n])+>|\[@project\])|(\^?\[[^\]\n]+\])"
+JUMP_TARGET_PATTERN = re.compile(r"^:(?P<line>\d+)(?:(?:[:,])(?P<column>\d+))?$")
 HELP_TEXT_FALLBACK = (
     "[ general ]\n\n"
     "^[G] / [F1]                   : help\n"
     "^[F]                          : search\n"
+    "[Alt] + [G]                   : jump to line\n"
     "^[S]                          : resolve\n"
     "^[Q]                          : abort\n\n"
     "[ search ]\n\n"
     "[Enter]                       : next\n"
     "^[R]                          : previous\n"
+    "[Esc]                         : close\n\n"
+    "[ jump ]\n\n"
+    "[Enter]                       : jump\n"
     "[Esc]                         : close\n\n"
     "[ issues ]\n\n"
     "[Enter] / ^[N]                : next\n"
@@ -300,7 +308,7 @@ class EditorIssue:
     fragment: str
 
 
-FocusTarget = Literal["main", "search", "help", "error", "quit"]
+FocusTarget = Literal["main", "search", "jump", "help", "error", "quit"]
 OverlayName = Literal["none", "help", "error", "quit"]
 
 
@@ -311,8 +319,27 @@ class EditorViewState:
     focus: FocusTarget
     main_cursor: int
     search_cursor: int
+    jump_cursor: int
     main_selection: SelectionState | None
     search_selection: SelectionState | None
+    jump_selection: SelectionState | None
+
+
+def parse_jump_target(text: str) -> tuple[int, int] | None:
+    """Parse a 1-based line and optional character target from the jump bar"""
+    match = JUMP_TARGET_PATTERN.fullmatch(text.strip())
+    if match is None:
+        return None
+
+    line = int(match.group("line"))
+    column_text = match.group("column")
+    column = 1 if column_text is None else int(column_text)
+    return line, column
+
+
+def build_jump_target(line: int, column: int) -> str:
+    """Format a 1-based cursor location for jump-mode display and parsing"""
+    return f":{line}:{column}"
 
 
 class SearchMatchProcessor(Processor):
@@ -425,6 +452,19 @@ class ActiveLineProcessor(Processor):
                 )
             )
         return Transformation(fragments)
+
+
+class VerticalSeparatorMargin(Margin):
+    """Render a one-column separator between the gutter and editor content"""
+
+    def __init__(self, terminal_profile: TerminalProfile):
+        self._separator = terminal_profile.border.vertical
+
+    def get_width(self, get_ui_content: Callable[[], UIContent]) -> int:
+        return 1
+
+    def create_margin(self, window_render_info, width: int, height: int):
+        return [("class:editor-frame.border", (self._separator + "\n") * height)]
 
 
 if HAS_PYGMENTS:
@@ -1263,26 +1303,28 @@ class InteractiveEditor:
         self._search_cache_state: SearchHighlightState | None = None
         self.search_buffer.on_text_changed += self._handle_search_text_changed
 
-        self.search_window = VSplit(
-            [
-                Window(
-                    content=FormattedTextControl(self._get_search_label_text),
-                    style="class:search-label",
-                    width=Dimension(preferred=18),
-                ),
-                Window(
-                    content=BufferControl(buffer=self.search_buffer),
-                    style="class:search-input",
-                    height=1,
-                ),
-                Window(
-                    content=FormattedTextControl(self._get_search_status_text),
-                    style="class:search-status",
-                    align=WindowAlign.RIGHT,
-                ),
+        self.search_window = self._build_input_bar(
+            self.search_buffer,
+            self._get_search_label_text,
+            self._get_search_status_text,
+        )
+        self.jump_visible = False
+        self.jump_message = ""
+        self.jump_buffer = Buffer(
+            document=Document("", cursor_position=0),
+            multiline=False,
+            auto_suggest=PrefixSuggestion(self._get_jump_default_text),
+        )
+        self.jump_buffer.on_text_changed += self._handle_jump_text_changed
+
+        self.jump_window = self._build_input_bar(
+            self.jump_buffer,
+            self._get_jump_label_text,
+            self._get_jump_status_text,
+            input_processors=[
+                BeforeInput(":", style="class:search-label"),
+                AppendAutoSuggestion(style="class:auto-suggestion"),
             ],
-            height=1,
-            style="class:search-bar",
         )
 
         self.lexer = (
@@ -1310,16 +1352,60 @@ class InteractiveEditor:
                 input_processors=processors,
             ),
             cursorline=True,
+            left_margins=(
+                [
+                    NumberedMargin(relative=False, display_tildes=False),
+                    VerticalSeparatorMargin(self.terminal_profile),
+                ]
+                if APP_SETTINGS.editor_behavior.show_line_numbers
+                else []
+            ),
         )
         self.completions_menu = ResponsiveCompletionsMenu(
             max_height=self.COMPLETION_MENU_MAX_HEIGHT,
             scroll_offset=self.COMPLETION_MENU_SCROLL_OFFSET,
         )
 
+    def _build_input_bar(
+        self,
+        buffer: Buffer,
+        get_label_text: Callable[[], str],
+        get_status_text: Callable[[], str],
+        *,
+        input_processors: list[Processor] | None = None,
+    ) -> VSplit:
+        """Build the shared single-line chrome used by search and jump inputs"""
+        return VSplit(
+            [
+                Window(
+                    content=FormattedTextControl(get_label_text),
+                    style="class:search-label",
+                    width=Dimension(preferred=18),
+                ),
+                Window(
+                    content=BufferControl(
+                        buffer=buffer,
+                        input_processors=input_processors or [],
+                    ),
+                    style="class:search-input",
+                    height=1,
+                ),
+                Window(
+                    content=FormattedTextControl(get_status_text),
+                    style="class:search-status",
+                    align=WindowAlign.RIGHT,
+                ),
+            ],
+            height=1,
+            style="class:search-bar",
+        )
+
     def _build_style(self) -> Style:
         """Build the editor style map and fall back if config values are invalid"""
         try:
-            return Style.from_dict(APP_SETTINGS.theme.styles)
+            styles = dict(APP_SETTINGS.theme.styles)
+            styles.setdefault("auto-suggestion", AUTO_SUGGESTION_STYLE)
+            return Style.from_dict(styles)
         except Exception:
             return Style.from_dict(
                 {
@@ -1359,6 +1445,7 @@ class InteractiveEditor:
                     "help-key": "fg:#ffff00",
                     "trailing-whitespace": "bg:#ff0000",
                     "eof-newline": "fg:#ff0000",
+                    "auto-suggestion": AUTO_SUGGESTION_STYLE,
                 }
             )
 
@@ -1553,33 +1640,41 @@ class InteractiveEditor:
         overlay = self._get_visible_overlay()
         if overlay != "none":
             return cast(FocusTarget, overlay)
+        if self.jump_visible:
+            return "jump"
         if self.search_visible:
             return "search"
         return "main"
 
     def _capture_view_state(self) -> EditorViewState:
-        """Snapshot editor and search cursors plus selections for later restore"""
+        """Snapshot editor input cursors plus selections for later restore"""
         return EditorViewState(
             focus=self._get_focus_target(),
             main_cursor=self.buffer.cursor_position,
             search_cursor=self.search_buffer.cursor_position,
+            jump_cursor=self.jump_buffer.cursor_position,
             main_selection=self._copy_selection_state(self.buffer.selection_state),
             search_selection=self._copy_selection_state(
                 self.search_buffer.selection_state
             ),
+            jump_selection=self._copy_selection_state(self.jump_buffer.selection_state),
         )
 
     def _restore_view_state(self, state: EditorViewState) -> None:
-        """Restore editor and search cursors plus selections from a snapshot"""
+        """Restore editor input cursors plus selections from a snapshot"""
         self.buffer.cursor_position = state.main_cursor
         self.search_buffer.cursor_position = state.search_cursor
+        self.jump_buffer.cursor_position = state.jump_cursor
         self._restore_selection_state(self.buffer, state.main_selection)
         self._restore_selection_state(self.search_buffer, state.search_selection)
+        self._restore_selection_state(self.jump_buffer, state.jump_selection)
 
     def _focus_target(self, target: FocusTarget) -> None:
         """Route focus changes through one place for all editor surfaces"""
         if target == "search" and self.search_visible:
             self._focus(self.search_buffer)
+        elif target == "jump" and self.jump_visible:
+            self._focus(self.jump_buffer)
         elif target == "help" and self.help_visible:
             self._focus(self.help_window)
         elif target == "error" and self.err_visible:
@@ -1668,6 +1763,9 @@ class InteractiveEditor:
             self.search_message = ""
             self._search_message_transient = False
             changed = True
+        if self.jump_message:
+            self.jump_message = ""
+            changed = True
         if self._passive_status_transient and self._passive_status:
             self._passive_status = ""
             self._passive_status_transient = False
@@ -1692,6 +1790,15 @@ class InteractiveEditor:
         self.search_message = ""
         self._search_message_transient = False
 
+    def _set_jump_message(self, message: str) -> None:
+        """Update the jump status message shown in the shared input bar chrome"""
+        self.jump_message = message
+        self.invalidate()
+
+    def _clear_jump_message(self) -> None:
+        """Clear jump status messages without touching the current query"""
+        self.jump_message = ""
+
     def _reset_search_navigation(self) -> None:
         """Clear cached search navigation state after query or mode changes"""
         self._search_last_query = ""
@@ -1710,6 +1817,8 @@ class InteractiveEditor:
             return self.get_text("editor_mode_issue", "issue")
         if overlay == "error":
             return self.get_text("editor_mode_err", "error")
+        if self.jump_visible:
+            return self.get_text("editor_mode_jump", "jump")
         if self.search_visible:
             return self.get_text("editor_mode_search", "search")
         return self.get_text("editor_mode_normal", "normal")
@@ -1776,13 +1885,18 @@ class InteractiveEditor:
             return get_string(
                 "toolbar_text_search", "[Enter] next | ^[R] prev | [Esc] close"
             )
+        if mode == "jump":
+            return get_string("toolbar_text_jump", "[Enter] jump | [Esc] close")
         if mode == "issue":
             return get_string(
                 "toolbar_text_issue", "[N/Enter] next | ^[P/R] prev | [Esc] close"
             )
         if mode == "help":
             return get_string("toolbar_text_help", "[Esc/Enter] close")
-        return get_string("toolbar_text_normal", "^[G] help | ^[F] find")
+        return get_string(
+            "toolbar_text_normal",
+            "^[G] help | ^[F] find | [Alt+G] jump",
+        )
 
     def _remember_search_query(self, query: str) -> None:
         """Keep a small in-memory history of search queries"""
@@ -1814,6 +1928,26 @@ class InteractiveEditor:
         if not self.search_visible:
             return ""
         return " " + self.get_text("editor_search_label", "SEARCH") + " "
+
+    def _get_jump_label_text(self) -> str:
+        """Render the jump bar label only while jump mode is visible"""
+        if not self.jump_visible:
+            return ""
+        return " " + self.get_text("editor_jump_label", "JUMP") + " "
+
+    def _get_jump_default_text(self) -> str:
+        """Expose the current cursor location as the jump bar's inline suggestion"""
+        return build_jump_target(
+            self.buffer.document.cursor_position_row + 1,
+            self.buffer.document.cursor_position_col + 1,
+        )[1:]
+
+    def _normalize_jump_target_text(self, text: str) -> str:
+        """Normalize raw jump input into the mandatory-colon form used by parsing"""
+        suffix = text.strip()
+        if suffix.startswith(":"):
+            suffix = suffix[1:]
+        return ":" + suffix if suffix else ""
 
     async def _update_tokens_loop(self):
         """Update token counts asynchronously using debounced estimation"""
@@ -1869,11 +2003,22 @@ class InteractiveEditor:
             )
         return ""
 
+    def _get_jump_status_text(self) -> str:
+        """Return jump mode hints or validation feedback for the target input"""
+        if self.jump_message:
+            return f" {self.jump_message} "
+        return ""
+
     def _handle_search_text_changed(self, _buffer: Buffer) -> None:
         """Clear stale search navigation state after query edits"""
         self._clear_search_message()
         self._reset_search_navigation()
         self._search_history_index = -1
+        self.invalidate()
+
+    def _handle_jump_text_changed(self, _buffer: Buffer) -> None:
+        """Clear stale jump validation once the requested target changes"""
+        self._clear_jump_message()
         self.invalidate()
 
     def _handle_buffer_text_changed(self, _buffer: Buffer) -> None:
@@ -1882,6 +2027,17 @@ class InteractiveEditor:
         self._document_issue_cache = tuple()
         if self.issue_mode_active:
             self.deactivate_issue_mode()
+
+    def _refresh_jump_suggestion(self) -> None:
+        """Recompute the jump bar suggestion from the live main-editor cursor"""
+        auto_suggest = self.jump_buffer.auto_suggest
+        if auto_suggest is None:
+            return
+        self.jump_buffer.suggestion = auto_suggest.get_suggestion(
+            self.jump_buffer,
+            self.jump_buffer.document,
+        )
+        self.jump_buffer.on_suggestion_set.fire()
 
     def _make_issue(
         self,
@@ -2131,6 +2287,9 @@ class InteractiveEditor:
     def open_search(self) -> None:
         """Show the search bar and prepare it for immediate input"""
         self.note_user_activity()
+        self.jump_visible = False
+        self.jump_buffer.document = Document("", cursor_position=0)
+        self._clear_jump_message()
         self.search_visible = True
         self._clear_search_message()
         self._search_cache_state = None
@@ -2148,6 +2307,73 @@ class InteractiveEditor:
         self._clear_search_message()
         self._reset_search_navigation()
         self._focus_target("main")
+
+    def open_jump(self) -> None:
+        """Show the jump bar and prepare it for a line or line:column target"""
+        self.note_user_activity()
+        self.search_visible = False
+        self._clear_search_message()
+        self._reset_search_navigation()
+        self.jump_visible = True
+        self.jump_buffer.document = Document("", cursor_position=0)
+        self._clear_jump_message()
+        self._refresh_jump_suggestion()
+        self._focus_target("jump")
+        self.invalidate()
+
+    def close_jump(self) -> None:
+        """Hide the jump bar and return focus to the editor"""
+        self.jump_visible = False
+        self.jump_buffer.document = Document("", cursor_position=0)
+        self._clear_jump_message()
+        self._focus_target("main")
+
+    def submit_jump(self) -> bool:
+        """Jump to the requested line and optional character position"""
+        raw_target = self._normalize_jump_target_text(self.jump_buffer.text)
+        if not raw_target:
+            raw_target = build_jump_target(
+                self.buffer.document.cursor_position_row + 1,
+                self.buffer.document.cursor_position_col + 1,
+            )
+
+        parsed = parse_jump_target(raw_target)
+        if parsed is None:
+            self._set_jump_message(
+                self.get_text(
+                    "editor_jump_invalid_format",
+                    "use :line[:char] or :line,char",
+                )
+            )
+            return False
+
+        line, column = parsed
+        document = self.buffer.document
+        if line < 1 or line > document.line_count:
+            self._set_jump_message(
+                self.get_text("editor_jump_line_out_of_range", "line out of range")
+            )
+            return False
+
+        line_text = document.lines[line - 1]
+        max_column = len(line_text) + 1
+        if column < 1 or column > max_column:
+            self._set_jump_message(
+                self.get_text(
+                    "editor_jump_char_out_of_range",
+                    "character out of range",
+                )
+            )
+            return False
+
+        self.buffer.cursor_position = document.translate_row_col_to_index(
+            line - 1,
+            column - 1,
+        )
+        self._search_cache_state = None
+        self.close_jump()
+        self.invalidate()
+        return True
 
     def open_help(self) -> None:
         """Show the help overlay and focus it"""
@@ -2412,6 +2638,10 @@ class InteractiveEditor:
                 ConditionalContainer(
                     content=self.search_window,
                     filter=Condition(lambda: self.search_visible),
+                ),
+                ConditionalContainer(
+                    content=self.jump_window,
+                    filter=Condition(lambda: self.jump_visible),
                 ),
                 bottom_toolbar,
             ]

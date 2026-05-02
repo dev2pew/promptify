@@ -182,6 +182,7 @@ class EditorBehaviorSettings:
     search_history_limit: int
     token_update_interval: float
     show_help_on_start: bool
+    show_line_numbers: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -669,6 +670,12 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_EDITOR_SHOW_HELP_ON_START",
                 False,
+                warns,
+            ),
+            show_line_numbers=_parse_bool(
+                source_env,
+                "PROMPTIFY_EDITOR_SHOW_LINE_NUMBERS",
+                True,
                 warns,
             ),
         ),

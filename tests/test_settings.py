@@ -13,6 +13,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
             "PROMPTIFY_COPY_OUTPUT_TO_CLIPBOARD": "false",
             "PROMPTIFY_SAVE_RAW_OUTPUT": "no",
             "PROMPTIFY_EDITOR_SHOW_HELP_ON_START": "yes",
+            "PROMPTIFY_EDITOR_SHOW_LINE_NUMBERS": "off",
             "PROMPTIFY_THEME_TOPBAR": "bg:#000000 #ffffff",
             "PROMPTIFY_INDEX_WATCH_MODE": "polling",
             "PROMPTIFY_LOG_COLOR_INFO": "ansigreen",
@@ -25,6 +26,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
     assert not settings.app_behavior.copy_output_to_clipboard
     assert not settings.app_behavior.save_raw_output
     assert settings.editor_behavior.show_help_on_start
+    assert not settings.editor_behavior.show_line_numbers
     assert settings.theme.styles["topbar"] == "bg:#000000 #ffffff"
     assert settings.indexer.watch_mode == "polling"
     assert settings.logger.info_color == "ansigreen"
