@@ -204,6 +204,7 @@ class IndexerSettings:
 @dataclass(frozen=True, slots=True)
 class ResolverSettings:
     git_estimate_cache_ttl: float
+    advanced_tokenizer_enabled: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -751,7 +752,13 @@ def build_settings(
                 5.0,
                 warns,
                 minimum=0.0,
-            )
+            ),
+            advanced_tokenizer_enabled=_parse_bool(
+                source_env,
+                "PROMPTIFY_ADVANCED_TOKENIZER",
+                True,
+                warns,
+            ),
         ),
         theme=ThemeSettings(styles=_build_theme_styles(source_env, warns)),
     )

@@ -2,11 +2,13 @@
 
 import re
 import asyncio
+from hashlib import blake2b
 
 from .context import ProjectContext, get_comment_syntax
 from .mods import ModRegistry
 from .mods import split_file_query_and_range
 from .settings import APP_SETTINGS
+from .token_counter import AsyncTokenCounter
 from ..utils.i18n import get_string
 
 
@@ -25,6 +27,11 @@ class PromptResolver:
             self.registry.build()
         self._estimate_cache: dict[tuple[str, str, int], int] = {}
         self._git_estimate_cache: dict[str, tuple[float, int]] = {}
+        self._advanced_count_cache: dict[tuple[bytes, int], int] = {}
+        self._resolved_token_match_cache: dict[tuple[str, str, int], str] = {}
+        self._token_counter = AsyncTokenCounter(
+            APP_SETTINGS.resolver.advanced_tokenizer_enabled
+        )
 
     def _get_registry_pattern(self) -> re.Pattern[str]:
         """Return the compiled mod regex, building it if needed"""
@@ -200,6 +207,93 @@ class PromptResolver:
 
         return int((base_len + added_len) // 3.2)
 
+    async def count_tokens(self, text: str) -> int:
+        """Count tokens using the configured exact or heuristic strategy."""
+        if not self._token_counter.is_enabled:
+            return await self.estimate_tokens(text)
+
+        revision = self.context.indexer.revision
+        cache_key = (self._fingerprint_text(text), revision)
+        cached = self._advanced_count_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        rendered = await self._resolve_matches_once(text)
+        try:
+            count = await self._token_counter.count(rendered)
+        except RuntimeError:
+            count = int(len(rendered) // 3.2)
+        self._advanced_count_cache[cache_key] = count
+        if len(self._advanced_count_cache) > 32:
+            oldest = next(iter(self._advanced_count_cache))
+            self._advanced_count_cache.pop(oldest, None)
+        return count
+
+    def _fingerprint_text(self, text: str) -> bytes:
+        """Create a compact cache key for rendered-token counts."""
+        return blake2b(text.encode("utf-8"), digest_size=16).digest()
+
+    async def _resolve_matches_once(self, text: str) -> str:
+        """Resolve a single user-facing pass for exact token counting."""
+        matches = list(self._get_registry_pattern().finditer(text))
+        if not matches:
+            return text
+        return await self._replace_matches(
+            text, matches, self._process_match_for_tokens
+        )
+
+    async def _process_match_for_tokens(self, match: re.Match[str]) -> str:
+        """Resolve token-count mentions through a cache for unchanged expansions."""
+        try:
+            mod, text = self.registry.get_mod_and_text(match)
+        except Exception:
+            return match.group(0)
+
+        if mod.name == "mod_git":
+            return await self._process_match(match)
+
+        cache_key = (mod.name, text, self.context.indexer.revision)
+        cached = self._resolved_token_match_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        resolved = await mod.resolve(text, self.context)
+        self._resolved_token_match_cache[cache_key] = resolved
+        if len(self._resolved_token_match_cache) > 128:
+            oldest = next(iter(self._resolved_token_match_cache))
+            self._resolved_token_match_cache.pop(oldest, None)
+        return resolved
+
+    async def _replace_matches(
+        self,
+        text: str,
+        matches: list[re.Match[str]],
+        resolver,
+    ) -> str:
+        """Resolve matches concurrently and stitch them back into the text."""
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(resolver(m)) for m in matches]
+
+        replacements = [t.result() for t in tasks]
+        return self._apply_replacements(text, matches, replacements)
+
+    def _apply_replacements(
+        self,
+        text: str,
+        matches: list[re.Match[str]],
+        replacements: list[str],
+    ) -> str:
+        """Join replacement segments without rebuilding the matching logic."""
+        parts: list[str] = []
+        last_idx = 0
+        for m, repl in zip(matches, replacements):
+            parts.append(text[last_idx : m.start()])
+            parts.append(repl)
+            last_idx = m.end()
+
+        parts.append(text[last_idx:])
+        return "".join(parts)
+
     async def resolve_system(self, text: str, seen: set[str] | None = None) -> str:
         """Resolve system templates recursively with loop protection"""
         if seen is None:
@@ -222,41 +316,11 @@ class PromptResolver:
             resolved_content = await self._process_match(m)
             return await self.resolve_system(resolved_content, branch_seen)
 
-        async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(_resolve_and_recurse(m)) for m in matches]
-
-        replacements = [t.result() for t in tasks]
-
-        parts: list[str] = []
-        last_idx = 0
-        for m, repl in zip(matches, replacements):
-            parts.append(text[last_idx : m.start()])
-            parts.append(repl)
-            last_idx = m.end()
-
-        parts.append(text[last_idx:])
-        return "".join(parts)
+        return await self._replace_matches(text, matches, _resolve_and_recurse)
 
     async def resolve_user(self, text: str) -> str:
         """Resolve user text in a single pass"""
-        matches = list(self._get_registry_pattern().finditer(text))
-        if not matches:
-            return text
-
-        async with asyncio.TaskGroup() as tg:
-            tasks = [tg.create_task(self._process_match(m)) for m in matches]
-
-        replacements = [t.result() for t in tasks]
-
-        parts: list[str] = []
-        last_idx = 0
-        for m, repl in zip(matches, replacements):
-            parts.append(text[last_idx : m.start()])
-            parts.append(repl)
-            last_idx = m.end()
-
-        parts.append(text[last_idx:])
-        return "".join(parts)
+        return await self._resolve_matches_once(text)
 
     async def _process_match(self, match: re.Match) -> str:
         """Delegate a single regex match to the corresponding mod"""

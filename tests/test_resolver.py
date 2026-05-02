@@ -1,5 +1,7 @@
 """Tests for the mention resolution engine"""
 
+import asyncio
+
 import pytest
 from promptify.utils.i18n import get_string
 from promptify.ui.editor import CustomPromptLexer
@@ -102,4 +104,72 @@ async def test_estimate_tokens_caches_expensive_tree_lookups(
     second = await resolver.estimate_tokens("<@tree:src>")
 
     assert first == second
+    assert calls == 1
+
+
+async def test_count_tokens_uses_exact_resolved_text(app_components, monkeypatch):
+    """Advanced token counting should tokenize the resolved prompt content."""
+    _, resolver = app_components
+    captured: list[str] = []
+
+    async def fake_count(text: str) -> int:
+        captured.append(text)
+        return 77
+
+    monkeypatch.setattr(resolver._token_counter, "count", fake_count)
+
+    result = await resolver.count_tokens("prefix <@file:app.py> suffix")
+
+    assert result == 77
+    assert captured
+    assert captured[0].startswith("prefix - `app.py`")
+    assert "print('This is line 1')" in captured[0]
+    assert captured[0].endswith(" suffix")
+
+
+async def test_count_tokens_falls_back_to_heuristic_when_advanced_disabled(
+    app_components, monkeypatch
+):
+    """The simple-mode toggle should preserve the legacy estimator path."""
+    _, resolver = app_components
+    monkeypatch.setattr(resolver._token_counter, "_enabled", False)
+
+    calls = 0
+    original = resolver.estimate_tokens
+
+    async def wrapped(text: str) -> int:
+        nonlocal calls
+        calls += 1
+        return await original(text)
+
+    monkeypatch.setattr(resolver, "estimate_tokens", wrapped)
+
+    result = await resolver.count_tokens("<@tree:src>")
+
+    assert result > 0
+    assert calls == 1
+
+
+async def test_count_tokens_reuses_cached_mention_expansions(
+    app_components, monkeypatch
+):
+    """Small edits outside mentions should not re-resolve unchanged mentions."""
+    _, resolver = app_components
+    calls = 0
+    original = resolver.context.get_file_content
+
+    async def wrapped(query: str, range_str: str | None = None) -> str:
+        nonlocal calls
+        calls += 1
+        return await original(query, range_str)
+
+    monkeypatch.setattr(resolver.context, "get_file_content", wrapped)
+    monkeypatch.setattr(
+        resolver._token_counter, "count", lambda _text: asyncio.sleep(0, result=1)
+    )
+
+    first = await resolver.count_tokens("alpha <@file:app.py>")
+    second = await resolver.count_tokens("beta <@file:app.py>")
+
+    assert first == second == 1
     assert calls == 1

@@ -3,6 +3,7 @@
 import re
 import sys
 import asyncio
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Callable, Iterable, Literal, cast
 
@@ -1958,13 +1959,16 @@ class InteractiveEditor:
             if self.result is not None:
                 break
 
+            if not self.expensive_checks_enabled():
+                continue
+
             current_text = self.buffer.text
             if current_text != last_text:
                 last_text = current_text
                 self._token_estimate_busy = True
                 self.invalidate()
                 try:
-                    new_count = await self.resolver.estimate_tokens(current_text)
+                    new_count = await self.resolver.count_tokens(current_text)
                     if new_count != last_count:
                         self.token_count = new_count
                         last_count = new_count
@@ -2705,8 +2709,13 @@ class InteractiveEditor:
         self._focus_target(self._get_focus_target())
 
         token_task = asyncio.create_task(self._update_tokens_loop())
-        await app.run_async()
-        token_task.cancel()
+        try:
+            await app.run_async()
+        finally:
+            token_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await token_task
+            self._token_estimate_busy = False
 
         return self.result
 

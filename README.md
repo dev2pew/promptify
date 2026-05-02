@@ -121,6 +121,8 @@ the full documented surface is in [.env.example](/C:/Users/lucky/Documents/vscod
 - logger prefixes, colors, verbosity, and timestamps;
 - terminal and menu rendering fallbacks, including `PROMPTIFY_TERMINAL_PROFILE` for legacy `cmd.exe`, raster-font consoles, or forced modern profiles;
 - watch mode selection;
+- advanced real-token counting toggle with automatic fallback to the legacy heuristic estimator;
+- exact tokenizer data stored under `data/o200k_base.tiktoken`, with automatic download if it is missing and safe fallback when the download is unavailable;
 - matching thresholds and completion tuning;
 - editor layout, line-number gutter, search history, bulk-paste tuning, and token refresh timing;
 - full prompt-toolkit style overrides for the interactive theme.

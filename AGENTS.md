@@ -16,7 +16,20 @@
 - Prefer shared helpers over repeated logic, especially in editor, resolver, and completion flows;
 - Reuse existing code and helpers before adding new logic; do not reinvent the wheel;
 - Preserve terminal compatibility across modern terminals, classic Windows console hosts, and legacy `cmd.exe`; avoid assuming Unicode box-drawing support or safe full-screen behavior everywhere;
+- Treat performance as a correctness concern in editor, resolver, and token-counting code paths; avoid changes that add eager startup work, repeated full-buffer scans, or unnecessary background churn;
 - Match the existing codebase style for structure, naming, localization, and user-facing tone when adding or changing code.
+
+## TOKEN COUNTING RULES
+
+- The advanced token counter is editor-facing only. Do not add exact token-count work to CLI, menu, case selection, or other non-editor flows unless explicitly required;
+- Resolver construction must stay cheap. Do not eagerly load or parse the tokenizer model during `PromptResolver` or token-counter initialization;
+- The exact tokenizer model lives at `data/o200k_base.tiktoken`;
+- If the model file is missing, the code may download it on demand; if download fails or the network is unavailable, token counting must fall back safely to the legacy heuristic estimator;
+- Token counting must never make startup or import-time network calls;
+- Reuse shared caches before adding new token logic. Preserve the existing design where unchanged mention expansions and unchanged token pieces can be reused across edits;
+- When editing the token path, prefer incremental or chunk-aware reuse over re-tokenizing the entire rendered prompt after every small text change;
+- Background token work must stop when the interactive editor exits. Do not leave token-count tasks running after save, quit, or return to non-editor screens;
+- Changes in this area must be careful about cancellation, offline behavior, and large-project responsiveness.
 
 ## TESTING RULES
 
@@ -27,6 +40,8 @@ Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs
 - Keep tests deterministic and sandboxed;
 - The test harness seeds `PROMPTIFY_*` values from `.env.example` through `tests/_settings_master.py` before importing application modules, so local `.env` tweaks must not influence test expectations;
 - Settings-sensitive tests should reuse the generated passes from `tests/_settings_master.py` instead of hardcoding layout or render defaults; set `PROMPTIFY_TEST_PASS_COUNT` to control the number of generated passes, with a default of `4`;
+- Prefer repo-local test artifacts over OS temp directories when the environment may restrict `%TEMP%` access;
+- Token-counter tests must cover lazy loading, offline/download failure fallback, and cache-reuse behavior, not only happy-path exact counts;
 - Run formatting and the full pytest wrapper before finishing work.
 
 ## EDITING RULES
@@ -40,6 +55,7 @@ Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs
 ## PROJECT HABITS
 
 - `src/` is the application source of truth;
+- `data/` stores repo-local runtime assets that may be created or refreshed on demand, including the tokenizer model used by advanced token counting;
 - `tests/` should remain unit-focused and cover regressions;
 - `strings/en.json` centralizes user-facing strings and can reference locale-scoped resource files under `strings/en/` for large text blocks;
 - `.env.example` documents safe, non-secret local configuration and preference toggles;
