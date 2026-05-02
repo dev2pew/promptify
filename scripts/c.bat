@@ -1,8 +1,8 @@
 @ECHO OFF
 TITLE %~n0
 
-SET "ROOT=%~dp0"
-SET "RES=%~dp0data"
+SET "ROOT=%~dp0.."
+SET "RES=%ROOT%\data"
 
 IF NOT EXIST "%RES%" (
     MKDIR "%RES%"

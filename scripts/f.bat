@@ -11,11 +11,11 @@ IF "%~1"=="--check" (
 IF "%CHECK_ONLY%"=="1" GOTO :CHECK
 
 ECHO [i] linting and fixing...
-uv.exe run ruff check --fix src/ tests/ %*
+uv.exe run ruff check --fix scripts/ src/ tests/ %*
 IF ERRORLEVEL 1 GOTO :DONE
 
 ECHO [i] formatting...
-uv.exe run ruff format src/ tests/ %*
+uv.exe run ruff format scripts/ src/ tests/ %*
 IF ERRORLEVEL 1 GOTO :DONE
 
 ECHO [+] all done.
@@ -23,11 +23,11 @@ GOTO :DONE
 
 :CHECK
 ECHO [i] linting...
-uv.exe run ruff check src/ tests/ %*
+uv.exe run ruff check scripts/ src/ tests/ %*
 IF ERRORLEVEL 1 GOTO :DONE
 
 ECHO [i] checking formatting...
-uv.exe run ruff format --check src/ tests/ %*
+uv.exe run ruff format --check scripts/ src/ tests/ %*
 IF ERRORLEVEL 1 GOTO :DONE
 
 ECHO [+] all done.

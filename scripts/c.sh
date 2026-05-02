@@ -17,7 +17,7 @@ DATA_DIR="$REPO_ROOT/data"
 mkdir -p "$DATA_DIR"
 
 OUTPUT_FILE="$DATA_DIR/problems.json"
-RAW_OUTPUT_FILE=$(mktemp "${TMPDIR:-/tmp}/promptify-llc.XXXXXX.json")
+RAW_OUTPUT_FILE=$(mktemp "${TMPDIR:-/tmp}/promptify-llc.XXXXXX")
 trap 'rm -f "$RAW_OUTPUT_FILE"' EXIT
 
 UV_BIN=uv
@@ -38,7 +38,7 @@ if pwd -W >/dev/null 2>&1; then
     REPORT_REPO_ROOT=$(pwd -W)
 fi
 
-if "$UV_BIN" run python "$SCRIPT_DIR/llc_report.py" "$RAW_OUTPUT_FILE" "$OUTPUT_FILE" "$REPORT_REPO_ROOT"; then
+if "$UV_BIN" run python "$SCRIPT_DIR/c.py" "$RAW_OUTPUT_FILE" "$OUTPUT_FILE" "$REPORT_REPO_ROOT"; then
     exit 0
 fi
 

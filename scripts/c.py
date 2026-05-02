@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 import sys
 from collections import defaultdict
+from json import JSONDecodeError
 from pathlib import Path
 from pathlib import PureWindowsPath
 from typing import Any
+from urllib.parse import unquote
+from urllib.parse import urlparse
 
 
 def _summary_from_report(report: dict[str, Any]) -> dict[str, int | float]:
@@ -44,11 +47,55 @@ def _diagnostic_severity(diagnostic: dict[str, Any]) -> str:
     return "unknown"
 
 
+def _file_uri_to_path(path_value: str) -> str:
+    if not path_value.startswith("file:"):
+        return path_value
+
+    parsed = urlparse(path_value)
+    path = unquote(parsed.path)
+
+    if parsed.netloc:
+        return f"//{parsed.netloc}{path}"
+
+    if len(path) >= 4 and path[0] == "/" and path[2] == ":":
+        return path[1:]
+
+    return path
+
+
 def _normalize_compare_path(path_value: str) -> str:
-    normalized = path_value.replace("\\", "/")
+    normalized = _file_uri_to_path(path_value).replace("\\", "/")
     if len(normalized) >= 2 and normalized[1] == ":":
         return normalized.lower()
     return normalized
+
+
+def _is_repo_root(path: Path) -> bool:
+    return (path / "src").is_dir() and (path / "tests").is_dir()
+
+
+def _resolve_repo_root(repo_root_value: str) -> str:
+    requested = Path(repo_root_value).expanduser()
+
+    candidates = [
+        requested,
+        requested.parent,
+        Path.cwd(),
+        Path.cwd().parent,
+    ]
+
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if _is_repo_root(resolved):
+            return str(resolved)
+
+    try:
+        return str(requested.resolve())
+    except OSError:
+        return str(requested)
 
 
 def _repo_root_compare_prefixes(repo_root: str) -> tuple[str, ...]:
@@ -69,21 +116,24 @@ def _diagnostic_file(diagnostic: dict[str, Any], repo_root: str) -> str | None:
     file_value = diagnostic.get("file")
     if not isinstance(file_value, str) or not file_value:
         return None
-    file_path = Path(file_value)
+
+    decoded_file_value = _file_uri_to_path(file_value)
+    file_path = Path(decoded_file_value)
+
     try:
         return file_path.resolve().relative_to(Path(repo_root).resolve()).as_posix()
     except (OSError, ValueError):
         pass
 
-    normalized_file = _normalize_compare_path(file_value)
+    normalized_file = _normalize_compare_path(decoded_file_value)
     for prefix in _repo_root_compare_prefixes(repo_root):
         if normalized_file == prefix:
             return "."
         if normalized_file.startswith(prefix + "/"):
             return normalized_file[len(prefix) + 1 :]
 
-    if len(file_value) >= 2 and file_value[1] == ":":
-        return PureWindowsPath(file_value).as_posix()
+    if len(decoded_file_value) >= 2 and decoded_file_value[1] == ":":
+        return PureWindowsPath(decoded_file_value).as_posix()
     return file_path.as_posix()
 
 
@@ -93,11 +143,14 @@ def _build_issues(
 ) -> list[dict[str, Any]]:
     files_by_issue: dict[tuple[str, str], set[str]] = defaultdict(set)
     counts_by_issue: dict[tuple[str, str], int] = defaultdict(int)
+
     for diagnostic in diagnostics:
         issue_type = _diagnostic_issue_type(diagnostic)
         severity = _diagnostic_severity(diagnostic)
         issue_key = (issue_type, severity)
+
         counts_by_issue[issue_key] += 1
+
         file_path = _diagnostic_file(diagnostic, repo_root)
         if file_path is not None:
             files_by_issue[issue_key].add(file_path)
@@ -117,7 +170,34 @@ def _build_issues(
 
 
 def _load_report(raw_path: Path) -> dict[str, Any]:
-    return json.loads(raw_path.read_text(encoding="utf-8"))
+    try:
+        raw_text = raw_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(
+            f"could not read basedpyright JSON report: {raw_path}"
+        ) from exc
+
+    if not raw_text.strip():
+        raise ValueError(
+            "basedpyright did not produce JSON output. "
+            "This usually means basedpyright failed before writing --outputjson. "
+            "Check that the wrapper script runs from the project root containing src/ and tests/."
+        )
+
+    try:
+        report = json.loads(raw_text)
+    except JSONDecodeError as exc:
+        preview = raw_text[:500].replace("\r", "\\r").replace("\n", "\\n")
+        raise ValueError(
+            "basedpyright produced invalid JSON output "
+            f"at line {exc.lineno}, column {exc.colno}: {exc.msg}. "
+            f"Output preview: {preview!r}"
+        ) from exc
+
+    if not isinstance(report, dict):
+        raise ValueError("basedpyright JSON output must be an object.")
+
+    return report
 
 
 def _write_compact_report(
@@ -125,6 +205,8 @@ def _write_compact_report(
     summary: dict[str, int | float],
     issues: list[dict[str, Any]],
 ) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     compact_report = {"summary": summary, "issues": issues}
     output_path.write_text(
         json.dumps(compact_report, ensure_ascii=True, separators=(",", ":")),
@@ -144,6 +226,7 @@ def _print_console_summary(
         f" info={summary['informationCount']}"
         f" time={summary['timeInSec']:.3f}s"
     )
+
     if not issues:
         print("no issues.")
         return
@@ -154,9 +237,11 @@ def _print_console_summary(
             f"{index}. `{issue['type']}`"
             f" ({issue['severity']}, {issue['diagnosticCount']} diagnostics, {file_count} files)"
         )
+
         if file_count == 0:
             print("- <no-file-diagnostic>.")
             continue
+
         for file_index, file_path in enumerate(issue["files"], start=1):
             suffix = "." if file_index == file_count else ";"
             print(f"- {file_path}{suffix}")
@@ -165,25 +250,43 @@ def _print_console_summary(
 def main() -> int:
     if len(sys.argv) not in {3, 4}:
         print(
-            "usage: llc_report.py <raw-report-path> <output-path> [repo-root]",
+            f"usage: {Path(sys.argv[0]).name} <raw-report-path> <output-path> [repo-root]",
             file=sys.stderr,
         )
         return 2
 
     raw_path = Path(sys.argv[1])
     output_path = Path(sys.argv[2])
-    repo_root = sys.argv[3] if len(sys.argv) >= 4 else str(Path.cwd().resolve())
+    repo_root = _resolve_repo_root(
+        sys.argv[3] if len(sys.argv) >= 4 else str(Path.cwd())
+    )
 
-    report = _load_report(raw_path)
+    try:
+        report = _load_report(raw_path)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
     summary = _summary_from_report(report)
+
     diagnostics = report.get("generalDiagnostics", [])
     if not isinstance(diagnostics, list):
         diagnostics = []
+
     issues = _build_issues(
         [diagnostic for diagnostic in diagnostics if isinstance(diagnostic, dict)],
         repo_root,
     )
-    _write_compact_report(output_path, summary, issues)
+
+    try:
+        _write_compact_report(output_path, summary, issues)
+    except OSError as exc:
+        print(
+            f"error: could not write compact report: {output_path}: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
     _print_console_summary(summary, issues)
     return int(summary["errorCount"])
 
