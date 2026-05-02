@@ -89,7 +89,7 @@ def test_ensure_model_file_downloads_when_missing(monkeypatch):
         path.write_text("model", encoding="utf-8")
         return True
 
-    monkeypatch.setattr(token_counter_module, "_LAST_PREPARE_FAILURE", 0.0)
+    monkeypatch.setattr(token_counter_module, "_last_prepare_failure_at", 0.0)
     monkeypatch.setattr(token_counter_module, "_download_model_file", fake_download)
 
     try:
@@ -104,7 +104,7 @@ def test_ensure_model_file_returns_false_after_failed_download(monkeypatch):
     """When the download fails, exact mode should fall back instead of crashing"""
     target = Path("tests/.model-download-fail/data/o200k_base.tiktoken")
 
-    monkeypatch.setattr(token_counter_module, "_LAST_PREPARE_FAILURE", 0.0)
+    monkeypatch.setattr(token_counter_module, "_last_prepare_failure_at", 0.0)
     monkeypatch.setattr(
         token_counter_module, "_download_model_file", lambda _path: False
     )

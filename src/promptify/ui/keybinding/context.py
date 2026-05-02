@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING
 
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
-from prompt_toolkit.filters.base import FilterOrBool
+from prompt_toolkit.filters.base import Filter, FilterOrBool
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
+from prompt_toolkit.keys import Keys
 
 if TYPE_CHECKING:
     from ..editor import InteractiveEditor
@@ -28,19 +29,19 @@ class EditorBindingContext:
 
     editor: InteractiveEditor
     bindings: KeyBindings
-    editor_focus: FilterOrBool
-    search_focus: FilterOrBool
-    replace_focus: FilterOrBool
-    jump_focus: FilterOrBool
-    search_widget_focus: FilterOrBool
-    text_focus: FilterOrBool
-    is_help_visible: FilterOrBool
-    is_err_visible: FilterOrBool
-    is_issue_mode_active: FilterOrBool
-    is_quit_visible: FilterOrBool
-    is_replace_visible: FilterOrBool
-    has_completions_menu: FilterOrBool
-    is_completion_selected: FilterOrBool
+    editor_focus: Filter
+    search_focus: Filter
+    replace_focus: Filter
+    jump_focus: Filter
+    search_widget_focus: Filter
+    text_focus: Filter
+    is_help_visible: Filter
+    is_err_visible: Filter
+    is_issue_mode_active: Filter
+    is_quit_visible: Filter
+    is_replace_visible: Filter
+    has_completions_menu: Filter
+    is_completion_selected: Filter
     detect_indent_style: IndentDetector
     get_home_position: HomePositionGetter
     start_selection: SelectionStarter
@@ -48,7 +49,7 @@ class EditorBindingContext:
 
     def bind(
         self,
-        *keys: object,
+        *keys: Keys | str,
         filter: FilterOrBool = True,
         eager: bool = False,
         note_activity: bool = False,

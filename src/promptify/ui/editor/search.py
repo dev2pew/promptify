@@ -3,17 +3,58 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-from ...shared.editor_state import SearchHighlightState, SearchMatch
+from ...shared.editor_state import FocusTarget, SearchHighlightState, SearchMatch
 from ...shared.editor_support import (
     build_jump_target,
     parse_jump_target,
     preserve_replacement_case,
 )
+from ...shared.editor_state import SearchOptions
 from ._imports import Buffer, Document
 
+if TYPE_CHECKING:
 
-class EditorSearchMixin:
+    class _EditorSearchHost:
+        SEARCH_HISTORY_LIMIT: int
+        _search_history: list[str]
+        _search_history_index: int
+        _search_history_draft: str
+        _search_history_navigation_active: bool
+        _search_last_query: str
+        _search_last_direction: int
+        _search_last_match: SearchMatch | None
+        _search_cache_text_id: int
+        _search_cache_cursor: int
+        _search_cache_query: str
+        _search_cache_options: SearchOptions
+        _search_cache_state: SearchHighlightState | None
+        search_visible: bool
+        replace_visible: bool
+        jump_visible: bool
+        search_options: SearchOptions
+        search_buffer: Buffer
+        replace_buffer: Buffer
+        jump_buffer: Buffer
+        buffer: Buffer
+
+        def invalidate(self) -> None: ...
+        def note_user_activity(self) -> None: ...
+        def get_text(self, key: str, default: str) -> str: ...
+        def _clear_search_message(self) -> None: ...
+        def _clear_jump_message(self) -> None: ...
+        def _set_search_message(self, message: str, transient: bool = True) -> None: ...
+        def _set_jump_message(self, message: str) -> None: ...
+        def _focus_target(self, target: FocusTarget) -> None: ...
+        def _normalize_jump_target_text(self, text: str) -> str: ...
+else:
+
+    class _EditorSearchHost:
+        pass
+
+
+class EditorSearchMixin(_EditorSearchHost):
     """Provide search, replace, jump, and token-count refresh behavior."""
 
     def _remember_search_query(self, query: str) -> None:

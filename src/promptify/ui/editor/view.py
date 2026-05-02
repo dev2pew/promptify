@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import promptify.core.settings as settings_module
 
+from ...shared.editor_state import EditorIssue, SearchHighlightState, SearchOptions
 from ...shared.editor_support import build_jump_target
 from ...utils.i18n import get_string
 from ..suggestions import AUTO_SUGGESTION_STYLE
@@ -28,15 +29,52 @@ from ._imports import (
     to_filter,
 )
 
+if TYPE_CHECKING:
 
-class EditorViewMixin:
+    class _EditorViewHost:
+        terminal_profile: Any
+        token_count: int
+        word_wrap_enabled: bool
+        search_visible: bool
+        replace_visible: bool
+        jump_visible: bool
+        help_visible: bool
+        issue_mode_active: bool
+        issue_index: int
+        search_options: SearchOptions
+        search_message: str
+        jump_message: str
+        _search_message_transient: bool
+        _passive_status: str
+        _passive_status_transient: bool
+        _token_estimate_busy: bool
+        _document_issue_cache: tuple[EditorIssue, ...]
+        buffer: Buffer
+        search_buffer: Buffer
+        replace_buffer: Buffer
+        jump_buffer: Buffer
+        help_buffer: Buffer
+        main_window: Any
+
+        def invalidate(self) -> None: ...
+        def expensive_checks_enabled(self) -> bool: ...
+        def get_document_issues(self) -> tuple[EditorIssue, ...]: ...
+        def _get_visible_overlay(self) -> str: ...
+        def _get_search_highlight_state(self) -> SearchHighlightState | None: ...
+else:
+
+    class _EditorViewHost:
+        pass
+
+
+class EditorViewMixin(_EditorViewHost):
     """Provide shared view builders, status text, and small UI helpers."""
 
     def _build_input_bar(
         self,
         buffer: Buffer,
         get_label_text: Callable[[], str],
-        get_status_text: Callable[[], str],
+        get_status_text: Callable[[], AnyFormattedText],
         *,
         input_processors: list[Processor] | None = None,
     ) -> VSplit:

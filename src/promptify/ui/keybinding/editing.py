@@ -6,7 +6,9 @@ import asyncio
 import re
 import time
 
+from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.filters import has_selection
+from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.selection import SelectionState
 
@@ -14,7 +16,7 @@ from ...core.context import get_comment_syntax
 from .context import EditorBindingContext
 
 
-def _get_selected_row_range(buffer) -> tuple[int, int]:
+def _get_selected_row_range(buffer: Buffer) -> tuple[int, int]:
     """Return the inclusive selected row range or the current row"""
     document = buffer.document
     if buffer.selection_state:
@@ -33,20 +35,20 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     """Register bindings for editing, selection, cursor movement, and save"""
 
     @ctx.bind("c-a", filter=ctx.text_focus)
-    def _select_all(event) -> None:
+    def _select_all(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
         buffer.selection_state = SelectionState(original_cursor_position=0)
         buffer.cursor_position = len(buffer.text)
 
     @ctx.bind("c-c", filter=ctx.text_focus)
-    def _copy(event) -> None:
+    def _copy(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
         if buffer.selection_state:
             data = buffer.copy_selection()
             event.app.clipboard.set_data(data)
 
     @ctx.bind("c-x", filter=ctx.text_focus)
-    def _cut(event) -> None:
+    def _cut(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
         if buffer.selection_state:
             data = buffer.cut_selection()
@@ -54,7 +56,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             buffer.selection_state = None
 
     @ctx.bind("c-v", filter=ctx.text_focus)
-    def _paste(event) -> None:
+    def _paste(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
         data = event.app.clipboard.get_data()
         if data and data.text:
@@ -62,66 +64,66 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
 
     @ctx.bind("s-insert", filter=ctx.text_focus)
     @ctx.bind("c-s-insert", filter=ctx.text_focus)
-    def _paste_system_clipboard(event) -> None:
+    def _paste_system_clipboard(event: KeyPressEvent) -> None:
         ctx.schedule_system_clipboard_paste()
 
     @ctx.bind("escape", "[", "2", ";", "2", "~", filter=ctx.text_focus)
     @ctx.bind("escape", "[", "2", ";", "6", "~", filter=ctx.text_focus)
-    def _paste_system_clipboard_xterm_insert(event) -> None:
+    def _paste_system_clipboard_xterm_insert(event: KeyPressEvent) -> None:
         ctx.schedule_system_clipboard_paste()
 
     @ctx.bind(Keys.BracketedPaste, filter=ctx.text_focus)
-    def _paste_terminal_payload(event) -> None:
+    def _paste_terminal_payload(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
         text = event.data.replace("\r\n", "\n").replace("\r", "\n")
         ctx.editor.paste_text(buffer, text)
 
     @ctx.bind("c-z", filter=ctx.text_focus)
-    def _undo(event) -> None:
+    def _undo(event: KeyPressEvent) -> None:
         event.app.current_buffer.undo()
 
     @ctx.bind("c-y", filter=ctx.text_focus, eager=True)
-    def _redo(event) -> None:
+    def _redo(event: KeyPressEvent) -> None:
         event.app.current_buffer.redo()
 
     @ctx.bind("home", filter=ctx.text_focus, note_activity=True)
-    def _home(event) -> None:
+    def _home(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         buffer.cursor_position += ctx.get_home_position(buffer.document)
 
     @ctx.bind("end", filter=ctx.text_focus, note_activity=True)
-    def _end(event) -> None:
+    def _end(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         buffer.cursor_position += buffer.document.get_end_of_line_position()
 
     @ctx.bind("pageup", filter=ctx.editor_focus)
-    def _pageup(event) -> None:
+    def _pageup(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         buffer.cursor_position += buffer.document.get_cursor_up_position(count=15)
 
     @ctx.bind("pagedown", filter=ctx.editor_focus)
-    def _pagedown(event) -> None:
+    def _pagedown(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         buffer.cursor_position += buffer.document.get_cursor_down_position(count=15)
 
     @ctx.bind("c-home", filter=ctx.text_focus, note_activity=True)
-    def _c_home(event) -> None:
+    def _c_home(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         buffer.cursor_position = 0
 
     @ctx.bind("c-end", filter=ctx.text_focus, note_activity=True)
-    def _c_end(event) -> None:
+    def _c_end(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         buffer.cursor_position = len(buffer.text)
 
     @ctx.bind("c-left", filter=ctx.text_focus)
-    def _c_left(event) -> None:
+    def _c_left(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         position = buffer.document.find_previous_word_beginning()
@@ -130,7 +132,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         )
 
     @ctx.bind("c-right", filter=ctx.text_focus)
-    def _c_right(event) -> None:
+    def _c_right(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         position = buffer.document.find_next_word_beginning()
@@ -140,43 +142,43 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             buffer.cursor_position = len(buffer.text)
 
     @ctx.bind("s-home", filter=ctx.text_focus)
-    def _s_home(event) -> None:
+    def _s_home(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         buffer.cursor_position += ctx.get_home_position(buffer.document)
 
     @ctx.bind("s-end", filter=ctx.text_focus)
-    def _s_end(event) -> None:
+    def _s_end(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_end_of_line_position()
 
     @ctx.bind("s-pageup", filter=ctx.editor_focus)
-    def _s_pageup(event) -> None:
+    def _s_pageup(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_cursor_up_position(count=15)
 
     @ctx.bind("s-pagedown", filter=ctx.editor_focus)
-    def _s_pagedown(event) -> None:
+    def _s_pagedown(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_cursor_down_position(count=15)
 
     @ctx.bind("s-c-home", filter=ctx.text_focus)
-    def _s_c_home(event) -> None:
+    def _s_c_home(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         buffer.cursor_position = 0
 
     @ctx.bind("s-c-end", filter=ctx.text_focus)
-    def _s_c_end(event) -> None:
+    def _s_c_end(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         buffer.cursor_position = len(buffer.text)
 
     @ctx.bind("s-c-left", filter=ctx.text_focus)
-    def _s_c_left(event) -> None:
+    def _s_c_left(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         position = buffer.document.find_previous_word_beginning()
@@ -185,7 +187,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         )
 
     @ctx.bind("s-c-right", filter=ctx.text_focus)
-    def _s_c_right(event) -> None:
+    def _s_c_right(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         position = buffer.document.find_next_word_beginning()
@@ -195,7 +197,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             buffer.cursor_position = len(buffer.text)
 
     @ctx.bind("c-w", filter=ctx.text_focus)
-    def _delete_previous_word(event) -> None:
+    def _delete_previous_word(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         if buffer.selection_state:
             buffer.cut_selection()
@@ -209,7 +211,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             buffer.delete_before_cursor(count=buffer.cursor_position)
 
     @ctx.bind("c-delete", filter=ctx.text_focus)
-    def _delete_next_word(event) -> None:
+    def _delete_next_word(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         if buffer.selection_state:
             buffer.cut_selection()
@@ -224,13 +226,13 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
 
     @ctx.bind("backspace", filter=ctx.text_focus & has_selection)
     @ctx.bind("delete", filter=ctx.text_focus & has_selection)
-    def _delete_selection(event) -> None:
+    def _delete_selection(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.cut_selection()
         buffer.selection_state = None
 
     @ctx.bind("<any>", filter=ctx.text_focus & has_selection)
-    def _type_over_selection(event) -> None:
+    def _type_over_selection(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         if event.data and event.data.isprintable():
             buffer.cut_selection()
@@ -243,7 +245,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     last_enter_time = [0.0]
 
     @ctx.bind("enter", filter=ctx.editor_focus & ~ctx.has_completions_menu)
-    def _smart_enter(event) -> None:
+    def _smart_enter(event: KeyPressEvent) -> None:
         now = time.time()
         is_paste = (now - last_enter_time[0]) < 0.05
         last_enter_time[0] = now
@@ -269,7 +271,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         buffer.insert_text("\n" + indent)
 
     @ctx.bind("tab", filter=ctx.editor_focus & ~ctx.has_completions_menu)
-    def _tab(event) -> None:
+    def _tab(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
         indent_str = ctx.detect_indent_style(document)
@@ -292,7 +294,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         buffer.insert_text(indent_str)
 
     @ctx.bind("s-tab", filter=ctx.editor_focus & ~ctx.has_completions_menu)
-    def _s_tab(event) -> None:
+    def _s_tab(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
         indent_str = ctx.detect_indent_style(document)
@@ -329,7 +331,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind(
         "left", filter=ctx.text_focus & ~ctx.has_completions_menu, note_activity=True
     )
-    def _left(event) -> None:
+    def _left(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         if buffer.cursor_position > 0:
@@ -340,21 +342,21 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         filter=ctx.text_focus & ~ctx.has_completions_menu,
         note_activity=True,
     )
-    def _right(event) -> None:
+    def _right(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         if buffer.cursor_position < len(buffer.text):
             buffer.cursor_position += 1
 
     @ctx.bind("s-left", filter=ctx.text_focus & ~ctx.has_completions_menu)
-    def _s_left(event) -> None:
+    def _s_left(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         if buffer.cursor_position > 0:
             buffer.cursor_position -= 1
 
     @ctx.bind("s-right", filter=ctx.text_focus & ~ctx.has_completions_menu)
-    def _s_right(event) -> None:
+    def _s_right(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         if buffer.cursor_position < len(buffer.text):
@@ -363,7 +365,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind(
         "up", filter=ctx.editor_focus & ~ctx.has_completions_menu, note_activity=True
     )
-    def _up(event) -> None:
+    def _up(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         buffer.cursor_position += buffer.document.get_cursor_up_position(count=1)
@@ -373,13 +375,13 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         filter=ctx.editor_focus & ~ctx.has_completions_menu,
         note_activity=True,
     )
-    def _down(event) -> None:
+    def _down(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.selection_state = None
         buffer.cursor_position += buffer.document.get_cursor_down_position(count=1)
 
     @ctx.bind("escape", "up", filter=ctx.editor_focus & ~ctx.has_completions_menu)
-    def _move_line_up(event) -> None:
+    def _move_line_up(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
         row = document.cursor_position_row
@@ -393,7 +395,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             )
 
     @ctx.bind("escape", "down", filter=ctx.editor_focus & ~ctx.has_completions_menu)
-    def _move_line_down(event) -> None:
+    def _move_line_down(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
         row = document.cursor_position_row
@@ -407,7 +409,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             )
 
     @ctx.bind("c-_", filter=ctx.editor_focus)
-    def _toggle_comment(event) -> None:
+    def _toggle_comment(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
         lines_before = document.lines[: document.cursor_position_row]
@@ -476,7 +478,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         )
 
     @ctx.bind("c-s", filter=~ctx.search_widget_focus)
-    def _save(event) -> None:
+    def _save(event: KeyPressEvent) -> None:
         async def _do_save() -> None:
             ctx.editor.note_user_activity()
             issues = await ctx.editor.collect_save_issues()
@@ -493,5 +495,5 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
 
     @ctx.bind("c-q")
     @ctx.bind("f10")
-    def _quit(event) -> None:
+    def _quit(event: KeyPressEvent) -> None:
         ctx.editor.open_quit_confirm()

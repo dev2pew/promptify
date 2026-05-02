@@ -2,7 +2,7 @@
 TITLE %~n0
 
 PUSHD "%~dp0.."
-uv.exe run "promptify" %*
+uvx.exe --from basedpyright basedpyright "src\" "tests\"
 SET "EXIT_CODE=%ERRORLEVEL%"
 POPD
 

@@ -2,13 +2,44 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ...shared.editor_state import EditorViewState, FocusTarget, OverlayName
 from ._imports import Buffer, SelectionState, get_app
 
+if TYPE_CHECKING:
 
-class EditorOverlayMixin:
+    class _EditorOverlayHost:
+        _overlay_visibility: dict[OverlayName, bool]
+        _overlay_restore_focus: dict[OverlayName, FocusTarget]
+        _overlay_suspended: dict[OverlayName, OverlayName]
+        _overlay_view_state: dict[OverlayName, EditorViewState | None]
+        search_visible: bool
+        replace_visible: bool
+        jump_visible: bool
+        issue_mode_active: bool
+        _help_search_anchor: int
+        _help_issue_anchor: int
+        result: str | None
+        buffer: Buffer
+        search_buffer: Buffer
+        replace_buffer: Buffer
+        jump_buffer: Buffer
+        help_window: Any
+        err_window: Any
+        quit_window: Any
+        main_window: Any
+        quit_buffer: Buffer
+
+        def _set_help_cursor(self, position: int) -> None: ...
+        def note_user_activity(self) -> None: ...
+else:
+
+    class _EditorOverlayHost:
+        pass
+
+
+class EditorOverlayMixin(_EditorOverlayHost):
     """Provide shared overlay visibility, focus, and restore behavior."""
 
     def _copy_selection_state(

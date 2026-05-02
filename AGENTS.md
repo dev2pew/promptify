@@ -12,7 +12,7 @@
 - Treat `strings/en.json` as the single source of truth for UI and message text, using resource references for large multiline blocks when needed;
 - Route new environment configuration through `src/promptify/core/settings.py`;
 - Invalid configuration values must never crash import-time startup. Fall back safely;
-- Preserve Pylance basic type-checking cleanliness;
+- Preserve `basedpyright` cleanliness under the repo `llc` scripts; treat it as stricter than Pylance basic checking and fix issues rather than silencing them unless there is a clear compatibility reason;
 - Prefer shared helpers over repeated logic, especially in editor, resolver, and completion flows;
 - Prefer `src/promptify/shared/` for cross-cutting helpers reused across modules, and keep editor keybinding logic decomposed under `src/promptify/ui/keybinding/` instead of growing a single binding file;
 - Keep the interactive editor package-backed under `src/promptify/ui/editor/`; route editor-neutral state and pure helpers into `src/promptify/shared/editor_state.py` and `src/promptify/shared/editor_support.py` instead of re-growing a monolithic `editor.py`;
@@ -38,13 +38,15 @@
 Test using `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\.uv-cache'; ./scripts/llt.bat` to avoid requiring elevation.
 
 - Add or update unit tests for every behavioral change;
+- Run the repo type-check wrapper before finishing work:
+  `$env:UV_CACHE_DIR='C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\.uv-cache'; ./scripts/llc.bat`;
 - Tests should assert localized text through `get_string(...)` instead of hardcoded copies when the value comes from `strings/en.json`;
 - Keep tests deterministic and sandboxed;
 - The test harness seeds `PROMPTIFY_*` values from `.env.example` through `tests/_settings_master.py` before importing application modules, so local `.env` tweaks must not influence test expectations;
 - Settings-sensitive tests should reuse the generated passes from `tests/_settings_master.py` instead of hardcoding layout or render defaults; set `PROMPTIFY_TEST_PASS_COUNT` to control the number of generated passes, with a default of `4`;
 - Prefer repo-local test artifacts over OS temp directories when the environment may restrict `%TEMP%` access;
 - Token-counter tests must cover lazy loading, offline/download failure fallback, and cache-reuse behavior, not only happy-path exact counts;
-- Run formatting and the full pytest wrapper before finishing work.
+- Run formatting, the stricter `basedpyright` wrapper, and the full pytest wrapper before finishing work.
 
 ## EDITING RULES
 

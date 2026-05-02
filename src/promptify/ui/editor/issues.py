@@ -3,13 +3,49 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING, Any
 
-from ...shared.editor_state import EditorIssue
+from ...shared.editor_state import EditorIssue, SearchHighlightState
 from ...utils.i18n import get_string
 from ._imports import Document
 
+if TYPE_CHECKING:
 
-class EditorIssuesMixin:
+    class _EditorIssuesHost:
+        issue_mode_active: bool
+        issue_index: int
+        _document_issue_cache_text_id: int
+        _document_issue_cache_enabled: bool
+        _document_issue_cache: tuple[EditorIssue, ...]
+        _search_cache_state: SearchHighlightState | None
+        buffer: Any
+        lexer: Any
+        indexer: Any
+        err_message: str
+        err_buffer: Any
+
+        def expensive_checks_enabled(self) -> bool: ...
+        def get_text(self, key: str, default: str) -> str: ...
+        def format_text(self, key: str, default: str, /, **values: object) -> str: ...
+        def invalidate(self) -> None: ...
+        def _hide_overlay(
+            self, overlay: str, *, restore_view: bool = False
+        ) -> None: ...
+        def _show_overlay(
+            self,
+            overlay: str,
+            *,
+            restore_focus: object = None,
+            preserve_view: bool = False,
+        ) -> str: ...
+        def _focus_target(self, target: object) -> None: ...
+else:
+
+    class _EditorIssuesHost:
+        pass
+
+
+class EditorIssuesMixin(_EditorIssuesHost):
     """Provide document issue collection plus issue-mode navigation."""
 
     def _handle_buffer_text_changed(self, _buffer) -> None:

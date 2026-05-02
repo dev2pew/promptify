@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, TypeGuard, cast
 
 import aiofiles
 
 
-def _is_plain_int(value: object) -> bool:
+def _is_plain_int(value: object) -> TypeGuard[int]:
     """Treat bools as invalid even though Python models them as ints"""
     return isinstance(value, int) and not isinstance(value, bool)
 
@@ -27,10 +29,11 @@ class AppState:
         """Normalize untrusted JSON payloads into a typed application state"""
         if not isinstance(payload, dict):
             return cls()
+        payload_map = cast(Mapping[str, Any], payload)
 
-        lastcase_index = payload.get("lastcase_index")
-        raw_paths = payload.get("paths")
-        raw_modes = payload.get("modes")
+        lastcase_index = payload_map.get("lastcase_index")
+        raw_paths = payload_map.get("paths")
+        raw_modes = payload_map.get("modes")
         paths = (
             {str(key): str(value) for key, value in raw_paths.items()}
             if isinstance(raw_paths, dict)

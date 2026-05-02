@@ -9,17 +9,22 @@ from hashlib import blake2b
 from pathlib import Path
 import threading
 import time
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Protocol
 from urllib.error import URLError
 from urllib.request import urlopen
 
-try:
-    import regex
-    import tiktoken
+if TYPE_CHECKING:
     from tiktoken import Encoding
-    from tiktoken.load import load_tiktoken_bpe
+
+try:
+    import regex as regex_module
+    import tiktoken as tiktoken_module
+    from tiktoken.load import load_tiktoken_bpe as load_tiktoken_bpe_impl
 except ImportError:
-    regex = None
-    tiktoken = None
+    regex_module = None
+    tiktoken_module = None
+    load_tiktoken_bpe_impl = None
 
 _DEFAULT_CACHE_SIZE = 64
 _DEFAULT_PIECE_CACHE_SIZE = 8192
@@ -50,7 +55,15 @@ class TokenizerRuntime:
     """Prepared exact-tokenizer state shared across resolver instances"""
 
     encoding: Encoding
-    piece_pattern: regex.Pattern[str]
+    piece_pattern: _PiecePattern
+
+
+class _MatchLike(Protocol):
+    def group(self, group: int = 0, /) -> str: ...
+
+
+class _PiecePattern(Protocol):
+    def finditer(self, text: str, /) -> Iterable[_MatchLike]: ...
 
 
 class _CountCancelled(Exception):
@@ -58,8 +71,8 @@ class _CountCancelled(Exception):
 
 
 _RUNTIME_LOCK = threading.Lock()
-_RUNTIME: TokenizerRuntime | None = None
-_LAST_PREPARE_FAILURE = 0.0
+_runtime_cache: TokenizerRuntime | None = None
+_last_prepare_failure_at = 0.0
 
 
 def _fingerprint_text(text: str) -> bytes:
@@ -88,52 +101,56 @@ def _download_model_file(path: Path) -> bool:
 
 def _ensure_model_file(path: Path) -> bool:
     """Ensure the exact-tokenizer model file exists, downloading it on demand"""
-    global _LAST_PREPARE_FAILURE
+    global _last_prepare_failure_at
 
     if path.is_file():
         return True
 
     now = time.monotonic()
-    if now - _LAST_PREPARE_FAILURE < _MODEL_RETRY_COOLDOWN_SECONDS:
+    if now - _last_prepare_failure_at < _MODEL_RETRY_COOLDOWN_SECONDS:
         return False
 
     if _download_model_file(path):
         return True
 
-    _LAST_PREPARE_FAILURE = now
+    _last_prepare_failure_at = now
     return False
 
 
 def _load_runtime() -> TokenizerRuntime | None:
     """Load and cache the exact-tokenizer runtime once for the whole process"""
-    global _RUNTIME
-    global _LAST_PREPARE_FAILURE
+    global _runtime_cache
+    global _last_prepare_failure_at
 
-    if _RUNTIME is not None:
-        return _RUNTIME
-    if tiktoken is None or regex is None:
+    if _runtime_cache is not None:
+        return _runtime_cache
+    if (
+        tiktoken_module is None
+        or regex_module is None
+        or load_tiktoken_bpe_impl is None
+    ):
         return None
 
     with _RUNTIME_LOCK:
-        if _RUNTIME is not None:
-            return _RUNTIME
+        if _runtime_cache is not None:
+            return _runtime_cache
         if not _ensure_model_file(_O200K_ENCODING_PATH):
             return None
         try:
-            mergeable_ranks = load_tiktoken_bpe(str(_O200K_ENCODING_PATH))
-            _RUNTIME = TokenizerRuntime(
-                encoding=Encoding(
+            mergeable_ranks = load_tiktoken_bpe_impl(str(_O200K_ENCODING_PATH))
+            _runtime_cache = TokenizerRuntime(
+                encoding=tiktoken_module.Encoding(
                     name="o200k_base",
                     pat_str=_O200K_PATTERN,
                     mergeable_ranks=mergeable_ranks,
                     special_tokens=_O200K_SPECIAL_TOKENS,
                 ),
-                piece_pattern=regex.compile(_O200K_PATTERN),
+                piece_pattern=regex_module.compile(_O200K_PATTERN),
             )
         except Exception:
-            _LAST_PREPARE_FAILURE = time.monotonic()
+            _last_prepare_failure_at = time.monotonic()
             return None
-        return _RUNTIME
+        return _runtime_cache
 
 
 class AsyncTokenCounter:
