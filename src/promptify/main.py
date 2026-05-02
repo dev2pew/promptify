@@ -158,7 +158,7 @@ class App:
 
     async def run(self) -> None:
         """Run the main application flow"""
-        print(get_string("welcome", "welcome to promptify"))
+        print(get_string("welcome", "promptify"))
 
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
         if not cases:

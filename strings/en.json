@@ -1,8 +1,8 @@
 {
-    "welcome": ">>> welcome to promptify ---",
+    "welcome": "@res:welcome.res",
     "no_cases": "no cases found in 'cases/' directory",
     "root_dir_shows": "'self.root_dir' shows '{path}'",
-    "available_cases": "\n[available cases]",
+    "available_cases": "[available cases]",
     "select_case": "select case",
     "operation_cancelled": "operation cancelled",
     "invalid_selection": "invalid selection",
