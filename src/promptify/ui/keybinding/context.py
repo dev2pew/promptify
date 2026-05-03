@@ -21,6 +21,7 @@ type IndentDetector = Callable[[Document], str]
 type HomePositionGetter = Callable[[Document], int]
 type SelectionStarter = Callable[[Buffer], None]
 type PasteScheduler = Callable[[], None]
+type CopyScheduler = Callable[[str], None]
 
 
 class EditorBindingHost(Protocol):
@@ -174,6 +175,7 @@ class EditorBindingContext:
     get_home_position: HomePositionGetter
     start_selection: SelectionStarter
     schedule_system_clipboard_paste: PasteScheduler
+    schedule_system_clipboard_copy: CopyScheduler
 
     def bind(
         self,

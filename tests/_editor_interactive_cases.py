@@ -55,6 +55,8 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.ControlV,))
     assert bindings.get_bindings_for_keys((Keys.ShiftInsert,))
     assert bindings.get_bindings_for_keys((Keys.ControlShiftInsert,))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "6", "7", ";", "6", "u"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "8", "6", ";", "6", "u"))
     assert bindings.get_bindings_for_keys((Keys.BracketedPaste,))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "2", "~"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "2", ";", "6", "~"))
@@ -1711,12 +1713,16 @@ async def test_interactive_editor_runtime_ctrl_a_backspace_clears_multicursors(
             await asyncio.wait_for(task, timeout=1.5)
 
 
-async def test_interactive_editor_runtime_cut_paste_prefers_internal_clipboard(
-    app_components,
+async def test_interactive_editor_runtime_clipboard_shortcuts_are_distinct(
+    app_components, monkeypatch
 ):
-    """Ctrl+V and Ctrl+Shift+V should paste the editor clipboard after Ctrl+X"""
+    """Ctrl+C/V should stay internal while Ctrl+Shift+C/V use the system clipboard"""
     context, resolver = app_components
     editor = InteractiveEditor("alpha beta", context.indexer, resolver)
+    copied_to_system: list[str] = []
+
+    monkeypatch.setattr("promptify.ui.bindings.pyperclip.paste", lambda: "system paste")
+    monkeypatch.setattr("promptify.ui.bindings.pyperclip.copy", copied_to_system.append)
 
     with create_pipe_input() as pipe_input:
         with create_app_session(input=pipe_input, output=DummyOutput()):
@@ -1730,7 +1736,7 @@ async def test_interactive_editor_runtime_cut_paste_prefers_internal_clipboard(
                     break
                 await asyncio.sleep(0.02)
 
-            get_app().clipboard.set_data(ClipboardData("system clipboard"))
+            get_app().clipboard.set_data(ClipboardData("prompt-toolkit clipboard"))
             pipe_input.send_text("\x16")  # CTRL+V
             for _ in range(20):
                 if editor.buffer.text == "alpha beta":
@@ -1740,14 +1746,37 @@ async def test_interactive_editor_runtime_cut_paste_prefers_internal_clipboard(
             assert editor.buffer.text == "alpha beta"
 
             pipe_input.send_text("\x01")  # CTRL+A
-            pipe_input.send_text("\x18")  # CTRL+X
+            pipe_input.send_text("\x1b[67;6u")  # CTRL+SHIFT+C modifyOtherKeys
+            for _ in range(20):
+                if copied_to_system == ["alpha beta"]:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert copied_to_system == ["alpha beta"]
+
+            pipe_input.send_text("\x01")  # CTRL+A
+            pipe_input.send_text("\x7f")  # BACKSPACE
             for _ in range(20):
                 if editor.buffer.text == "":
                     break
                 await asyncio.sleep(0.02)
 
-            get_app().clipboard.set_data(ClipboardData("system clipboard"))
             pipe_input.send_text("\x1b[86;6u")  # CTRL+SHIFT+V modifyOtherKeys
+            for _ in range(20):
+                if editor.buffer.text == "system paste":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "system paste"
+
+            pipe_input.send_text("\x01")  # CTRL+A
+            pipe_input.send_text("\x7f")  # BACKSPACE
+            for _ in range(20):
+                if editor.buffer.text == "":
+                    break
+                await asyncio.sleep(0.02)
+
+            pipe_input.send_text("\x16")  # CTRL+V
             for _ in range(20):
                 if editor.buffer.text == "alpha beta":
                     break

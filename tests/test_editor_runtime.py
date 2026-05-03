@@ -89,6 +89,6 @@ test_interactive_editor_multicursor_delete_previous_word_stays_coherent = (
 test_interactive_editor_runtime_ctrl_a_backspace_clears_multicursors = (
     cases.test_interactive_editor_runtime_ctrl_a_backspace_clears_multicursors
 )
-test_interactive_editor_runtime_cut_paste_prefers_internal_clipboard = (
-    cases.test_interactive_editor_runtime_cut_paste_prefers_internal_clipboard
+test_interactive_editor_runtime_clipboard_shortcuts_are_distinct = (
+    cases.test_interactive_editor_runtime_clipboard_shortcuts_are_distinct
 )

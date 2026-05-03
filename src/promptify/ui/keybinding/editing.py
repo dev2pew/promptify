@@ -19,6 +19,7 @@ from .sequences import (
     CTRL_ALT_UP,
     CTRL_SHIFT_ALT_DOWN,
     CTRL_SHIFT_ALT_UP,
+    CTRL_SHIFT_C,
     CTRL_SHIFT_V,
 )
 
@@ -72,18 +73,26 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         buffer.selection_state = SelectionState(original_cursor_position=0)
         buffer.cursor_position = len(buffer.text)
 
-    @ctx.bind("c-c", filter=editable_text_focus)
-    def _copy(event: KeyPressEvent) -> None:
-        buffer = event.app.current_buffer
+    def _get_selected_text_for_clipboard(buffer: Buffer) -> str:
         if buffer is ctx.editor.buffer:
             copied = ctx.editor.copy_selected_text_at_cursors()
             if copied is not None:
-                ctx.editor.set_internal_clipboard_text(copied)
-                return
+                return copied
         if buffer.selection_state:
-            data = buffer.copy_selection()
-            ctx.editor.set_internal_clipboard_text(data.text)
-            event.app.clipboard.set_data(data)
+            return buffer.copy_selection().text
+        return ""
+
+    @ctx.bind("c-c", filter=editable_text_focus)
+    def _copy(event: KeyPressEvent) -> None:
+        text = _get_selected_text_for_clipboard(event.app.current_buffer)
+        if text:
+            ctx.editor.set_internal_clipboard_text(text)
+
+    @ctx.bind_sequences(CTRL_SHIFT_C, filter=editable_text_focus)
+    def _copy_system_clipboard(event: KeyPressEvent) -> None:
+        text = _get_selected_text_for_clipboard(event.app.current_buffer)
+        if text:
+            ctx.schedule_system_clipboard_copy(text)
 
     @ctx.bind("c-x", filter=editable_text_focus, eager=True)
     def _cut(event: KeyPressEvent) -> None:
@@ -96,20 +105,16 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         if buffer.selection_state:
             data = buffer.cut_selection()
             ctx.editor.set_internal_clipboard_text(data.text)
-            event.app.clipboard.set_data(data)
             buffer.selection_state = None
 
     @ctx.bind("c-v", filter=editable_text_focus)
-    @ctx.bind_sequences(CTRL_SHIFT_V, filter=editable_text_focus)
     def _paste(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
         text = ctx.editor.get_internal_clipboard_text()
-        if not text:
-            data = event.app.clipboard.get_data()
-            text = data.text if data and data.text else ""
         if text:
             ctx.editor.paste_text(buffer, text)
 
+    @ctx.bind_sequences(CTRL_SHIFT_V, filter=editable_text_focus)
     @ctx.bind("s-insert", filter=editable_text_focus)
     @ctx.bind("c-s-insert", filter=editable_text_focus)
     def _paste_system_clipboard(event: KeyPressEvent) -> None:

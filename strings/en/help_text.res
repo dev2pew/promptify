@@ -79,6 +79,7 @@
 
 ^[Z/Y]                        : undo / redo
 ^[C/X/V]                      : copy / cut / paste
+^[Shift] + [C/V]              : copy / paste (sys)
 
 [Tab]                         : indent / autocomplete
 [Shift] + [Tab]               : unindent

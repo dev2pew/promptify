@@ -34,6 +34,11 @@ CTRL_SHIFT_ALT_DOWN: tuple[KeySequence, ...] = (
 )
 
 
+CTRL_SHIFT_C: tuple[KeySequence, ...] = (
+    (Keys.Escape, "[", "6", "7", ";", "6", "u"),
+    (Keys.Escape, "[", "9", "9", ";", "6", "u"),
+)
+
 CTRL_SHIFT_V: tuple[KeySequence, ...] = (
     (Keys.Escape, "[", "8", "6", ";", "6", "u"),
     (Keys.Escape, "[", "1", "1", "8", ";", "6", "u"),

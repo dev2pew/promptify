@@ -111,6 +111,20 @@ def setup_keybindings(editor: EditorBindingHost) -> KeyBindings:
 
         _ = asyncio.create_task(_do_paste())
 
+    def _schedule_system_clipboard_copy(text: str) -> None:
+        if not text:
+            return
+
+        async def _do_copy() -> None:
+            try:
+                await asyncio.to_thread(pyperclip.copy, text)
+            except Exception:
+                editor.set_passive_status(
+                    editor.get_text("clipboard_unavailable", "clipboard unavailable")
+                )
+
+        _ = asyncio.create_task(_do_copy())
+
     ctx = EditorBindingContext(
         editor=editor,
         bindings=custom_bindings,
@@ -132,6 +146,7 @@ def setup_keybindings(editor: EditorBindingHost) -> KeyBindings:
         get_home_position=get_home_position,
         start_selection=_start_sel,
         schedule_system_clipboard_paste=_schedule_system_clipboard_paste,
+        schedule_system_clipboard_copy=_schedule_system_clipboard_copy,
     )
     register_dialog_bindings(ctx)
     register_editing_bindings(ctx)
