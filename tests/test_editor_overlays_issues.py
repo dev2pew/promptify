@@ -1,4 +1,4 @@
-"""Overlay and issue-mode regression entrypoints for the modular editor package."""
+"""Overlay and issue-mode regression entrypoints for the modular editor package"""
 
 import pytest
 

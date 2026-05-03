@@ -16,6 +16,15 @@ def _is_plain_int(value: object) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+async def _write_text_atomic(path: Path, text: str) -> None:
+    """Write text to disk through a temporary file, then replace atomically"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f"{path.name}.tmp")
+    async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
+        await f.write(text)
+    temp_path.replace(path)
+
+
 @dataclass(slots=True)
 class AppState:
     """Mutable in-memory representation of persisted application state"""
@@ -94,6 +103,46 @@ class AppState:
 
 
 @dataclass(slots=True, frozen=True)
+class EditorSessionState:
+    """Represent the restorable interactive-editor session snapshot"""
+
+    case_dir: str
+    target_path: str
+    prompt_text: str
+    version: int = 1
+
+    @classmethod
+    def from_payload(cls, payload: object) -> EditorSessionState | None:
+        """Normalize an untrusted restore payload into a typed session state"""
+        if not isinstance(payload, dict):
+            return None
+        payload_map = cast(Mapping[str, Any], payload)
+        case_dir = payload_map.get("case_dir")
+        target_path = payload_map.get("target_path")
+        prompt_text = payload_map.get("prompt_text")
+        version = payload_map.get("version", 1)
+        if not isinstance(case_dir, str) or not isinstance(target_path, str):
+            return None
+        if not isinstance(prompt_text, str) or not _is_plain_int(version):
+            return None
+        return cls(
+            case_dir=case_dir,
+            target_path=target_path,
+            prompt_text=prompt_text,
+            version=version,
+        )
+
+    def to_payload(self) -> dict[str, object]:
+        """Serialize the editor restore payload into JSON-safe data"""
+        return {
+            "version": self.version,
+            "case_dir": self.case_dir,
+            "target_path": self.target_path,
+            "prompt_text": self.prompt_text,
+        }
+
+
+@dataclass(slots=True, frozen=True)
 class AppStateStore:
     """Load and save persisted application state from disk"""
 
@@ -111,6 +160,39 @@ class AppStateStore:
 
     async def save(self, state: AppState) -> None:
         """Write the given state back to disk"""
-        self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        async with aiofiles.open(self.state_file, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(state.to_payload(), indent=4))
+        await _write_text_atomic(
+            self.state_file,
+            json.dumps(state.to_payload(), indent=4),
+        )
+
+
+@dataclass(slots=True, frozen=True)
+class EditorSessionStateStore:
+    """Load, save, and remove the restorable editor session snapshot"""
+
+    state_file: Path
+
+    async def load(self) -> EditorSessionState | None:
+        """Load the current editor session restore payload when present"""
+        if not self.state_file.exists():
+            return None
+        try:
+            async with aiofiles.open(self.state_file, "r", encoding="utf-8") as f:
+                payload = json.loads(await f.read())
+        except Exception:
+            return None
+        return EditorSessionState.from_payload(payload)
+
+    async def save(self, state: EditorSessionState) -> None:
+        """Persist the latest editor session restore payload"""
+        await _write_text_atomic(
+            self.state_file,
+            json.dumps(state.to_payload(), indent=4),
+        )
+
+    async def delete(self) -> None:
+        """Remove the persisted editor session restore payload if it exists"""
+        try:
+            self.state_file.unlink(missing_ok=True)
+        except Exception:
+            pass

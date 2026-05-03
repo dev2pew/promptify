@@ -1305,3 +1305,86 @@ async def test_interactive_editor_line_number_gutter_follows_setting(
     disabled_editor = InteractiveEditor("", context.indexer, resolver)
 
     assert disabled_editor.main_window.left_margins == []
+
+
+async def test_interactive_editor_vertical_motion_keeps_sticky_column(app_components):
+    """Up and down movement should preserve the preferred column across short lines"""
+    context, resolver = app_components
+    editor = InteractiveEditor("abcdef\nab\nabcdef", context.indexer, resolver)
+    editor.buffer.cursor_position = editor.buffer.document.translate_row_col_to_index(
+        0, 5
+    )
+
+    editor.move_cursors_vertical(1)
+    assert editor.buffer.document.cursor_position_row == 1
+    assert editor.buffer.document.cursor_position_col == 2
+
+    editor.move_cursors_vertical(1)
+    assert editor.buffer.document.cursor_position_row == 2
+    assert editor.buffer.document.cursor_position_col == 5
+
+
+async def test_interactive_editor_vertical_multi_cursor_add_and_clear(app_components):
+    """Vertical cursor cloning should preserve the primary cursor and clear cleanly"""
+    context, resolver = app_components
+    editor = InteractiveEditor("line 1\nline 2\nline 3", context.indexer, resolver)
+    editor.buffer.cursor_position = editor.buffer.document.translate_row_col_to_index(
+        2, 0
+    )
+
+    assert editor.add_vertical_cursor(-1)
+    assert editor.add_vertical_cursor(-1)
+
+    carets = editor.get_multi_cursor_render_carets()
+    rows = sorted(
+        editor.buffer.document.translate_index_to_position(caret.position)[0]
+        for caret in carets
+    )
+    assert rows == [0, 1, 2]
+    assert sum(1 for caret in carets if caret.is_primary) == 1
+
+    editor.clear_multi_cursors()
+    assert editor.get_multi_cursor_render_carets() == ()
+
+
+async def test_interactive_editor_select_occurrences_respects_search_toggles(
+    app_components,
+):
+    """Occurrence selection should follow case and whole-word toggles but stay literal"""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "line 1\nLine 2\nlinea 3\nline 4", context.indexer, resolver
+    )
+    editor.buffer.cursor_position = 0
+    editor.search_options.match_case = True
+    editor.search_options.match_whole_word = True
+
+    assert editor.select_next_occurrence()
+    assert editor.select_next_occurrence()
+
+    ranges = sorted(
+        caret.range_key for caret in editor.get_multi_cursor_render_carets()
+    )
+    assert ranges == [(0, 4), (22, 26)]
+
+    assert editor.select_all_occurrences()
+    ranges = sorted(
+        caret.range_key for caret in editor.get_multi_cursor_render_carets()
+    )
+    assert ranges == [(0, 4), (22, 26)]
+
+
+async def test_interactive_editor_scroll_view_keeps_cursor_position(app_components):
+    """Scroll-only movement should adjust the window without moving the cursor"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha\nbeta\ngamma", context.indexer, resolver)
+    editor.main_window.render_info = cast(
+        Any,
+        type("RenderInfoStub", (), {"content_height": 100, "window_height": 10})(),
+    )
+    start = editor.buffer.cursor_position
+
+    editor.scroll_view(1, count=15)
+
+    assert editor.main_window.vertical_scroll == 15
+    assert editor.buffer.cursor_position == start

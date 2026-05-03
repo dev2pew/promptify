@@ -1,4 +1,4 @@
-"""Interactive editor runtime class and app assembly."""
+"""Interactive editor runtime class and app assembly"""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from ...shared.editor_state import (
     SearchMatch,
     SearchOptions,
 )
+from ...shared.state import EditorSessionState, EditorSessionStateStore
 from ...shared.editor_support import HELP_TEXT_FALLBACK
 from ...utils.i18n import get_string
 from ..bindings import setup_keybindings
@@ -51,13 +52,16 @@ from ._imports import (
     get_app,
 )
 from .completion import MentionCompleter, ResponsiveCompletionsMenu
+from .controls import EditorBufferControl
 from .issues import EditorIssuesMixin
 from .lexers import CustomPromptLexer, HelpLexer
+from .multicursor import EditorMultiCursorMixin
 from .overlays import EditorOverlayMixin
 from .processors import (
     ActiveLineProcessor,
     EOFNewlineProcessor,
     HighlightTrailingWhitespaceProcessor,
+    MultiCursorProcessor,
     SearchMatchProcessor,
     VerticalSeparatorMargin,
 )
@@ -69,10 +73,11 @@ from .view import EditorViewMixin
 class InteractiveEditor(
     EditorIssuesMixin,
     EditorSearchMixin,
+    EditorMultiCursorMixin,
     EditorOverlayMixin,
     EditorViewMixin,
 ):
-    """Manage the core prompt-toolkit terminal editor."""
+    """Manage the core prompt-toolkit terminal editor"""
 
     def __init__(
         self,
@@ -81,6 +86,8 @@ class InteractiveEditor(
         resolver: PromptResolver,
         show_help: bool | None = None,
         terminal_profile: TerminalProfile | None = None,
+        session_store: EditorSessionStateStore | None = None,
+        session_state: EditorSessionState | None = None,
     ):
         settings = settings_module.APP_SETTINGS
         if show_help is None:
@@ -140,6 +147,13 @@ class InteractiveEditor(
         self.issue_index = 0
         self.word_wrap_enabled = settings.editor_behavior.word_wrap
         self.search_options = SearchOptions()
+        self._multi_carets = []
+        self._multi_cursor_owned_search = False
+        self._multi_cursor_occurrence_query = ""
+        self._multi_cursor_last_vertical_direction = 0
+        self.session_store = session_store
+        self.session_state = session_state
+        self._pending_session_flush = False
 
         self.buffer = Buffer(
             document=Document(initial_text, cursor_position=0),
@@ -151,6 +165,7 @@ class InteractiveEditor(
             complete_while_typing=Condition(self.should_complete_while_typing),
         )
         self.buffer.on_text_changed += self._handle_buffer_text_changed
+        self.buffer.on_text_changed += self._handle_editor_session_text_changed
         self.result: str | None = None
 
         help_text = get_string("help_text", HELP_TEXT_FALLBACK)
@@ -273,12 +288,14 @@ class InteractiveEditor(
             EOFNewlineProcessor(self.terminal_profile),
             ActiveLineProcessor(),
             SearchMatchProcessor(self._get_search_highlight_state),
+            MultiCursorProcessor(self.get_multi_cursor_render_carets),
         ]
         self.main_window = Window(
-            content=BufferControl(
+            content=EditorBufferControl(
                 buffer=self.buffer,
                 lexer=self.lexer,
                 input_processors=processors,
+                on_mouse_down=self.reset_multi_cursors_for_mouse,
             ),
             cursorline=True,
             wrap_lines=to_filter(self.word_wrap_enabled),
@@ -296,8 +313,32 @@ class InteractiveEditor(
             scroll_offset=self.COMPLETION_MENU_SCROLL_OFFSET,
         )
 
+    def _handle_editor_session_text_changed(self, _buffer: Buffer) -> None:
+        """Persist the latest unsaved editor snapshot after each text change"""
+        if self.session_store is None or self.session_state is None:
+            return
+        if self._pending_session_flush:
+            return
+        session_store = self.session_store
+        session_state = self.session_state
+        self._pending_session_flush = True
+
+        async def _flush() -> None:
+            try:
+                await session_store.save(
+                    EditorSessionState(
+                        case_dir=session_state.case_dir,
+                        target_path=session_state.target_path,
+                        prompt_text=self.buffer.text,
+                    )
+                )
+            finally:
+                self._pending_session_flush = False
+
+        _ = asyncio.create_task(_flush())
+
     async def _update_tokens_loop(self) -> None:
-        """Update token counts asynchronously using debounced estimation."""
+        """Update token counts asynchronously using debounced estimation"""
         last_text: str | None = None
         last_count = 0
         while True:
@@ -324,7 +365,15 @@ class InteractiveEditor(
                     self.invalidate()
 
     async def run_async(self) -> str | None:
-        """Run the full-screen editor."""
+        """Run the full-screen editor"""
+        if self.session_store is not None and self.session_state is not None:
+            await self.session_store.save(
+                EditorSessionState(
+                    case_dir=self.session_state.case_dir,
+                    target_path=self.session_state.target_path,
+                    prompt_text=self.buffer.text,
+                )
+            )
         settings = settings_module.APP_SETTINGS
         default_bindings = load_key_bindings()
         custom_bindings = setup_keybindings(self)
@@ -408,7 +457,7 @@ class InteractiveEditor(
 
     @override
     def expensive_checks_enabled(self) -> bool:
-        """Skip redraw-time validation while a bulk edit is still settling."""
+        """Skip redraw-time validation while a bulk edit is still settling"""
         try:
             now = asyncio.get_running_loop().time()
         except RuntimeError:
@@ -416,18 +465,18 @@ class InteractiveEditor(
         return now >= self._bulk_mode_until
 
     def should_complete_while_typing(self) -> bool:
-        """Run fuzzy completion only when the cursor is inside an active mention."""
+        """Run fuzzy completion only when the cursor is inside an active mention"""
         if not self.expensive_checks_enabled():
             return False
         return self.should_complete(self.buffer.document)
 
     def should_complete(self, document: Document) -> bool:
-        """Gate autocomplete so normal prose and pastes do not trigger fuzzy search."""
+        """Gate autocomplete so normal prose and pastes do not trigger fuzzy search"""
         tail = document.text_before_cursor[-256:]
         return bool(re.search(r"(<@[^>\n]*)|(\[@[^\]\n]*)$", tail))
 
     def start_bulk_edit(self, inserted_text: str) -> None:
-        """Temporarily relax completion and validation after large pastes."""
+        """Temporarily relax completion and validation after large pastes"""
         if len(inserted_text) < self.BULK_EDIT_SIZE_THRESHOLD:
             return
         loop = asyncio.get_running_loop()
@@ -447,8 +496,10 @@ class InteractiveEditor(
         _ = asyncio.create_task(_refresh_after_pause())
 
     def paste_text(self, buffer: Buffer, text: str) -> None:
-        """Apply pasted text through the fast bulk-edit path."""
+        """Apply pasted text through the fast bulk-edit path"""
         if not text:
+            return
+        if buffer is self.buffer and self.paste_text_at_cursors(text):
             return
         buffer.save_to_undo_stack()
         if buffer.selection_state:

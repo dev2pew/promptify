@@ -1,4 +1,4 @@
-"""Shared editor-neutral helpers and constants."""
+"""Shared editor-neutral helpers and constants"""
 
 from __future__ import annotations
 
@@ -11,77 +11,79 @@ HELP_TOKEN_PATTERN = r"(<@(?:\\.|[^>\n])+>|\[@project\])|(\^?\[[^\]\n]+\])"
 JUMP_TARGET_PATTERN = re.compile(r"^:(?P<line>\d+)(?:(?:[:,])(?P<column>\d+))?$")
 HELP_TEXT_FALLBACK = (
     "[ general ]\n\n"
-    "^[G] / [F1]                   : help\n"
-    "^[F]                          : search\n"
-    "^[R]                          : replace\n"
-    "[Alt] + [G]                   : jump to line\n"
-    "[Alt] + [Z]                   : toggle word wrap\n"
-    "^[S]                          : resolve\n"
-    "^[Q]                          : abort\n\n"
+    "^[G] / [F1]                   : help"
+    "^[F]                          : search"
+    "^[R]                          : replace"
+    "^[S]                          : resolve\n\n"
+    "^[^/v]                        : scroll view"
+    "[Alt] + [G]                   : jump to line"
+    "[Alt] + [Z]                   : word wrap\n\n"
+    "[Esc]                         : close pane"
+    "^[Q] / [F10]                  : abort\n\n"
     "[ search ]\n\n"
-    "[Enter] / [Shift] + [Enter]   : next / previous\n"
-    "[^/v]                         : search history\n"
-    "[F6] / [F7] / [F8]            : case / word / regex\n"
-    "[Esc]                         : close\n\n"
+    "[Enter]                       : next"
+    "[Shift] + [Enter]             : previous"
+    "[^/v]                         : history"
+    "[F6] / [F7] / [F8]            : case / word / regex\n\n"
     "[ replace ]\n\n"
-    "[Enter]                       : replace\n"
-    "^[Alt] + [Enter]              : replace all\n"
-    "^[F6]                         : preserve case\n"
-    "[Esc]                         : close\n\n"
+    "[Enter]                       : replace"
+    "^[Alt] + [Enter]              : replace all"
+    "^[F6]                         : preserve case\n\n"
     "[ jump ]\n\n"
-    "[Enter]                       : jump\n"
-    "[Esc]                         : close\n\n"
+    "[Enter]                       : jump\n\n"
     "[ issues ]\n\n"
-    "[Enter] / ^[N]                : next\n"
-    "^[R] / ^[P]                   : previous\n"
-    "[Esc]                         : close\n\n"
+    "[Enter] / ^[N]                : next"
+    "^[R] / ^[P]                   : previous\n\n"
     "[ autocomplete mentions ]\n\n"
-    "<@file:path>                  : file\n"
-    "<@file:path:range>            : sliced file\n\n"
-    "            first n           : head\n"
-    "            last n            : tail\n"
-    "            n-m               : ranged\n"
-    "            #n                : single\n\n"
-    "<@dir:path>                   : directory\n"
-    "<@tree:path>                  : tree view\n"
-    "<@tree:path:level>            : set depth\n"
-    "<@ext:list>                   : type\n"
-    "<@symbol:path:name>           : symbol\n"
-    "<@git:diff>                   : work tree diff\n"
-    "<@git:diff:path>              : work tree file diff\n"
-    "<@git:status>                 : work tree status\n"
-    "<@git:log>                    : recent log (20)\n"
-    "<@git:log:count>              : set length\n"
-    "<@git:history>                : recent log w/diff (5)\n"
-    "<@git:history:count>          : set length\n"
-    "<@git:[branch]:subcommand>    : set branch-scope\n"
-    "<@git:[branch]:diff:path>     : ex.\n"
-    "<@git:[branch]:log:count>     : ex.\n"
-    "<@git:[branch]:history:count> : ex.\n"
+    "<@file:path>                  : file"
+    "<@symbol:path:name>           : symbol\n\n"
+    "<@file:path:range>            : slice file"
+    "            first n           : head"
+    "            last n            : tail"
+    "            n-m               : ranged"
+    "#n                : single\n\n"
+    "<@dir:path>                   : directory\n\n"
+    "<@tree:path>                  : tree"
+    "<@tree:path:level>            : set depth\n\n"
+    "<@ext:list>                   : type\n\n"
+    "<@git:diff>                   : work tree diff"
+    "<@git:diff:path>              : work tree file diff\n\n"
+    "<@git:status>                 : work tree status\n\n"
+    "<@git:log>                    : recent log (20)"
+    "<@git:log:count>              : set length\n\n"
+    "<@git:history>                : recent log w/diff (5)"
+    "<@git:history:count>          : set length\n\n"
+    "<@git:[branch]:subcommand>    : set branch-scope"
+    "<@git:[branch]:diff:path>     : ex."
+    "<@git:[branch]:log:count>     : ex."
+    "<@git:[branch]:history:count> : ex.\n\n"
     "[@project]                    : project structure\n\n"
     "[ editing ]\n\n"
-    "^[A]                          : select all\n"
-    "[Shift]                       : select\n"
-    "^[Z/Y]                        : undo / redo\n"
-    "^[C/X/V]                      : copy / cut / paste\n"
-    "[Tab]                         : indent / autocomplete\n"
-    "[Shift] + [Tab]               : unindent\n"
-    "[Alt]   + [^/v]               : shift cursor\n"
-    "^[/]                          : comment out\n"
-    "^[W/Del]                      : delete previous / next\n"
-    "[Enter]                       : newline / accept\n\n"
+    "[Shift]                       : select"
+    "^[A]                          : select all"
+    "^[D]                          : select next occurrence"
+    "^[Shift] + [L]                : select all occurrences\n\n"
+    "^[Z/Y]                        : undo / redo"
+    "^[C/X/V]                      : copy / cut / paste\n\n"
+    "[Tab]                         : indent / autocomplete"
+    "[Shift] + [Tab]               : unindent\n\n"
+    "[Alt] + [^/v]                 : shift up / down\n\n"
+    "^[/]                          : comment out"
+    "^[W/Del]                      : delete previous / next\n\n"
+    "^[Alt] + [^/v]                : cursor above / below"
+    "^[Shift] + [Alt] + [^/v]      : cursor expand / shrink\n\n"
     "[ navigation ]\n\n"
-    "[^/v/</>]                     : move\n"
-    "^[^/v/</>]                    : next / previous\n"
-    "[Home/End]                    : start / end\n"
-    "^[Home/End]                   : file start / end\n"
-    "^[PgUp/PgDn]                  : up / down (15x)\n\n"
-    "press [Enter], [F1] or ^[G] to close\n"
+    "[^/v/</>]                     : move"
+    "^[^/v/</>]                    : next / previous"
+    "[Home/End]                    : start / end"
+    "^[Home/End]                   : file start / end"
+    "^[PgUp/PgDn]                  : up / down (15)\n\n"
+    "press [Enter], [F1] or ^[G] to close"
 )
 
 
 def fragment_text(fragment: tuple[object, ...]) -> str:
-    """Read prompt-toolkit fragments that may carry an optional third field."""
+    """Read prompt-toolkit fragments that may carry an optional third field"""
     if len(fragment) < 2 or not isinstance(fragment[1], str):
         return ""
     return fragment[1]
@@ -90,7 +92,7 @@ def fragment_text(fragment: tuple[object, ...]) -> str:
 def flatten_fragments_to_chars(
     fragments: Sequence[tuple[object, ...]],
 ) -> list[tuple[str, str]]:
-    """Flatten fragments into style and character pairs for safe rewrites."""
+    """Flatten fragments into style and character pairs for safe rewrites"""
     chars: list[tuple[str, str]] = []
     for fragment in fragments:
         style = cast(str, fragment[0])
@@ -105,7 +107,7 @@ def append_original_token_range(
     start: int,
     end: int,
 ) -> None:
-    """Restore a style-preserving token slice from flattened character data."""
+    """Restore a style-preserving token slice from flattened character data"""
     curr_style = ""
     curr_text: list[str] = []
     for index in range(start, end):
@@ -123,7 +125,7 @@ def append_original_token_range(
 
 
 def parse_jump_target(text: str) -> tuple[int, int] | None:
-    """Parse a 1-based line and optional character target from the jump bar."""
+    """Parse a 1-based line and optional character target from the jump bar"""
     match = JUMP_TARGET_PATTERN.fullmatch(text.strip())
     if match is None:
         return None
@@ -134,12 +136,12 @@ def parse_jump_target(text: str) -> tuple[int, int] | None:
 
 
 def build_jump_target(line: int, column: int) -> str:
-    """Format a 1-based cursor location for jump-mode display and parsing."""
+    """Format a 1-based cursor location for jump-mode display and parsing"""
     return f":{line}:{column}"
 
 
 def preserve_replacement_case(source: str, replacement: str) -> str:
-    """Mirror simple source casing patterns onto a replacement string."""
+    """Mirror simple source casing patterns onto a replacement string"""
     if not source or not replacement:
         return replacement
     if source.isupper():

@@ -1,4 +1,4 @@
-"""Lexer, completion, and layout regression entrypoints for the modular editor package."""
+"""Lexer, completion, and layout regression entrypoints for the modular editor package"""
 
 import pytest
 

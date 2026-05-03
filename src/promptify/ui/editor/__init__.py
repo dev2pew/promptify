@@ -1,4 +1,4 @@
-"""Stable public editor import surface backed by modular editor submodules."""
+"""Stable public editor import surface backed by modular editor submodules"""
 
 from ...shared.editor_support import build_jump_target, parse_jump_target
 from ._imports import Application, get_app

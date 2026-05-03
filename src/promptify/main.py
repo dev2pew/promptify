@@ -19,7 +19,13 @@ from .core.resolver import PromptResolver
 from .core.mods import ModRegistry
 from .core.cli import CLIConfig, parse_cli_args
 from .core.settings import APP_SETTINGS, consume_settings_warns
-from .shared.state import AppState, AppStateStore
+from .shared.state import (
+    AppState,
+    AppStateStore,
+    EditorSessionState,
+    EditorSessionStateStore,
+)
+from .ui.dialogs import ask_yes_no_modal
 from .ui.editor import InteractiveEditor
 from .utils.i18n import get_string
 
@@ -47,6 +53,11 @@ class App:
         """Return a state store bound to the current data directory"""
         return AppStateStore(self.data_dir / "state.json")
 
+    @property
+    def editor_session_store(self) -> EditorSessionStateStore:
+        """Return the persistent restore store for unsaved editor sessions"""
+        return EditorSessionStateStore(self.data_dir / "state.dat")
+
     async def get_state(self) -> AppState:
         """Load persisted application state from disk"""
         return await self.state_store.load()
@@ -54,6 +65,16 @@ class App:
     async def save_state(self, state: AppState) -> None:
         """Persist application state to disk"""
         await self.state_store.save(state)
+
+    async def prompt_restore_editor_session(self) -> bool:
+        """Ask whether a pending interactive-editor session should be restored"""
+        return await ask_yes_no_modal(
+            title=get_string("restore_session_title", "restore session"),
+            text=get_string(
+                "restore_session_prompt",
+                "an unsaved interactive editor session was found.\n\nrestore it now?",
+            ),
+        )
 
     async def get_last_path(self, case_name: str, state: AppState) -> str:
         """Return the last target path used for a given case"""
@@ -106,6 +127,70 @@ class App:
         """Return the output directory name for a case"""
         return case.case_dir.name
 
+    async def build_runtime(
+        self,
+        case: CaseConfig,
+        target_dir: Path,
+    ) -> tuple[ProjectIndexer, PromptResolver]:
+        """Create the shared indexer and resolver used by both launch paths"""
+        has_git = shutil.which("git") is not None
+        has_git_folder = (target_dir / ".git").exists()
+        if not has_git:
+            log.warn(get_string("git_not_found", "git executable not found"))
+        if not has_git_folder:
+            log.warn(
+                get_string("no_git_folder", "not found - .git").format(path=target_dir)
+            )
+
+        indexer = ProjectIndexer(target_dir, case)
+        await indexer.build_index()
+        indexer.start_watching()
+
+        context = ProjectContext(
+            target_dir,
+            case,
+            cast(ProjectIndexer, indexer),
+            has_git=has_git and has_git_folder,
+        )
+        registry = ModRegistry()
+        registry.register_defaults()
+        resolver = PromptResolver(context, cast(ModRegistry, registry))
+        return indexer, resolver
+
+    async def maybe_restore_editor_session(self) -> bool:
+        """Restore a pending editor session before showing the menu wizard"""
+        session = await self.editor_session_store.load()
+        if session is None:
+            return False
+        if not await self.prompt_restore_editor_session():
+            await self.editor_session_store.delete()
+            return False
+
+        case_dir = Path(session.case_dir)
+        target_dir = Path(session.target_path)
+        if not case_dir.is_dir() or not target_dir.is_dir():
+            await self.editor_session_store.delete()
+            log.warn(
+                get_string(
+                    "restore_session_invalid",
+                    "saved editor session is no longer valid and was discarded",
+                )
+            )
+            return False
+
+        case = CaseConfig(case_dir)
+        indexer, resolver = await self.build_runtime(case, target_dir)
+        try:
+            await self.run_interactive_mode(
+                case,
+                resolver,
+                indexer,
+                initial_text=session.prompt_text,
+            )
+        finally:
+            indexer.stop_watching()
+        return True
+
     async def save_output(
         self, case: CaseConfig, content: str, raw_content: str | None = None
     ) -> None:
@@ -141,6 +226,14 @@ class App:
 
     async def run(self) -> None:
         """Run the main application flow"""
+        if (
+            self.cli_config.case is None
+            and self.cli_config.path is None
+            and self.cli_config.mode is None
+            and await self.maybe_restore_editor_session()
+        ):
+            return
+
         print(get_string("welcome", "promptify"))
 
         cases = [d for d in self.cases_dir.iterdir() if d.is_dir()]
@@ -250,29 +343,7 @@ class App:
             await self.save_last_case_index(selected_case_index, state)
         await self.save_last_path(case.name, str(target_dir), state)
 
-        # SETUP PROJECT ENGINE
-        has_git = shutil.which("git") is not None
-        has_git_folder = (target_dir / ".git").exists()
-        if not has_git:
-            log.warn(get_string("git_not_found", "git executable not found"))
-        if not has_git_folder:
-            log.warn(
-                get_string("no_git_folder", "not found - .git").format(path=target_dir)
-            )
-
-        indexer = ProjectIndexer(target_dir, case)
-        await indexer.build_index()
-        indexer.start_watching()
-
-        context = ProjectContext(
-            target_dir,
-            case,
-            cast(ProjectIndexer, indexer),
-            has_git=has_git and has_git_folder,
-        )
-        registry = ModRegistry()
-        registry.register_defaults()
-        resolver = PromptResolver(context, cast(ModRegistry, registry))
+        indexer, resolver = await self.build_runtime(case, target_dir)
 
         # MODE SELECTION
         mode = None
@@ -357,20 +428,33 @@ class App:
         await self.save_output(case, resolved_content)
 
     async def run_interactive_mode(
-        self, case: CaseConfig, resolver: PromptResolver, indexer: ProjectIndexer
+        self,
+        case: CaseConfig,
+        resolver: PromptResolver,
+        indexer: ProjectIndexer,
+        *,
+        initial_text: str | None = None,
     ) -> None:
         """Launch the interactive prompt-toolkit editor"""
         prompt_path = case.case_dir / case.prompt_file
-        initial_text = ""
-        if prompt_path.exists():
+        if initial_text is None:
+            initial_text = ""
+        if not initial_text and prompt_path.exists():
             async with aiofiles.open(prompt_path, "r", encoding="utf-8") as f:
                 initial_text = await f.read()
 
+        session_state = EditorSessionState(
+            case_dir=str(case.case_dir.resolve()),
+            target_path=str(indexer.target_dir.resolve()),
+            prompt_text=initial_text,
+        )
         editor = InteractiveEditor(
             initial_text,
             indexer,
             resolver,
             show_help=APP_SETTINGS.editor_behavior.show_help_on_start,
+            session_store=self.editor_session_store,
+            session_state=session_state,
         )
         edited_text = await editor.run_async()
 
@@ -381,6 +465,7 @@ class App:
         log.normal(get_string("resolving_mentions", "resolving mentions"))
         final_output = await resolver.resolve_user(edited_text)
         await self.save_output(case, final_output, raw_content=edited_text)
+        await self.editor_session_store.delete()
 
 
 def cli():

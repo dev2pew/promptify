@@ -1,4 +1,4 @@
-"""Shared test-only type aliases for pytest fixtures and helpers."""
+"""Shared test-only type aliases for pytest fixtures and helpers"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from ._settings_master import SettingsPass
 
 
 class SandboxPaths(TypedDict):
-    """Concrete path mapping returned by the sandbox fixture."""
+    """Concrete path mapping returned by the sandbox fixture"""
 
     root: Path
     demo: Path

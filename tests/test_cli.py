@@ -12,6 +12,7 @@ from promptify.core.cli import parse_cli_args, CLIConfig, extract_help_from_docs
 from promptify.core.config import CaseConfig
 from promptify.core.settings import build_settings
 from promptify.main import App
+from promptify.shared.state import EditorSessionState, EditorSessionStateStore
 from promptify.ui.logger import (
     Logger,
     PrefixSuggestion,
@@ -367,3 +368,85 @@ async def test_save_output_respects_behavior_toggles(test_sandbox, monkeypatch):
     parent_dir = app.outs_dir / test_sandbox["case"].name
     assert list(parent_dir.rglob("*.md"))
     assert not list(parent_dir.rglob("*.raw"))
+
+
+@pytest.mark.asyncio
+async def test_editor_session_state_store_round_trips(test_sandbox):
+    """Unsaved editor session snapshots should round-trip through state.dat"""
+    store = EditorSessionStateStore(test_sandbox["root"] / "data" / "state.dat")
+    state = EditorSessionState(
+        case_dir=str(test_sandbox["case"]),
+        target_path=str(test_sandbox["demo"]),
+        prompt_text="draft prompt",
+    )
+
+    await store.save(state)
+    loaded = await store.load()
+
+    assert loaded == state
+
+
+@pytest.mark.asyncio
+async def test_app_maybe_restore_editor_session_uses_saved_prompt(
+    test_sandbox, monkeypatch
+):
+    """Restore should reopen the editor with the persisted unsaved prompt text"""
+    app = App()
+    app.data_dir = test_sandbox["root"] / "data"
+    state = EditorSessionState(
+        case_dir=str(test_sandbox["case"]),
+        target_path=str(test_sandbox["demo"]),
+        prompt_text="draft restore",
+    )
+    await app.editor_session_store.save(state)
+    captured: dict[str, object] = {}
+
+    async def fake_prompt_restore() -> bool:
+        return True
+
+    async def fake_build_runtime(case: CaseConfig, target_dir):
+        class FakeIndexer:
+            def __init__(self, path):
+                self.target_dir = path
+
+            def stop_watching(self) -> None:
+                captured["stopped"] = True
+
+        captured["case"] = case
+        captured["target_dir"] = target_dir
+        return FakeIndexer(target_dir), object()
+
+    async def fake_run_interactive_mode(case, resolver, indexer, *, initial_text=None):
+        captured["initial_text"] = initial_text
+
+    monkeypatch.setattr(app, "prompt_restore_editor_session", fake_prompt_restore)
+    monkeypatch.setattr(app, "build_runtime", fake_build_runtime)
+    monkeypatch.setattr(app, "run_interactive_mode", fake_run_interactive_mode)
+
+    assert await app.maybe_restore_editor_session() is True
+    assert captured["initial_text"] == "draft restore"
+    assert captured["stopped"] is True
+
+
+@pytest.mark.asyncio
+async def test_app_maybe_restore_editor_session_discards_rejected_snapshot(
+    test_sandbox, monkeypatch
+):
+    """Declining restore should delete the pending snapshot and continue normally"""
+    app = App()
+    app.data_dir = test_sandbox["root"] / "data"
+    await app.editor_session_store.save(
+        EditorSessionState(
+            case_dir=str(test_sandbox["case"]),
+            target_path=str(test_sandbox["demo"]),
+            prompt_text="draft restore",
+        )
+    )
+
+    async def fake_prompt_restore() -> bool:
+        return False
+
+    monkeypatch.setattr(app, "prompt_restore_editor_session", fake_prompt_restore)
+
+    assert await app.maybe_restore_editor_session() is False
+    assert await app.editor_session_store.load() is None

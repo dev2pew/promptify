@@ -3,76 +3,93 @@
 ^[G] / [F1]                   : help
 ^[F]                          : search
 ^[R]                          : replace
-[Alt] + [G]                   : jump to line
-[Alt] + [Z]                   : toggle word wrap
 ^[S]                          : resolve
+
+^[^/v]                        : scroll view
+[Alt] + [G]                   : jump to line
+[Alt] + [Z]                   : word wrap
+
+[Esc]                         : close pane
 ^[Q] / [F10]                  : abort
 
 [ search ]
 
-[Enter] / [Shift] + [Enter]   : next / previous
-[^/v]                         : search history
+[Enter]                       : next
+[Shift] + [Enter]             : previous
+[^/v]                         : history
 [F6] / [F7] / [F8]            : case / word / regex
-[Esc]                         : close
 
 [ replace ]
 
 [Enter]                       : replace
 ^[Alt] + [Enter]              : replace all
 ^[F6]                         : preserve case
-[Esc]                         : close
 
 [ jump ]
 
 [Enter]                       : jump
-[Esc]                         : close
 
 [ issues ]
 
 [Enter] / ^[N]                : next
 ^[R] / ^[P]                   : previous
-[Esc]                         : close
 
 [ autocomplete mentions ]
 
 <@file:path>                  : file
-<@file:path:range>            : sliced file
+<@symbol:path:name>           : symbol
 
+<@file:path:range>            : slice file
             first n           : head
             last n            : tail
             n-m               : ranged
             #n                : single
 
 <@dir:path>                   : directory
-<@tree:path>                  : tree view
+
+<@tree:path>                  : tree
 <@tree:path:level>            : set depth
+
 <@ext:list>                   : type
-<@symbol:path:name>           : symbol
+
 <@git:diff>                   : work tree diff
 <@git:diff:path>              : work tree file diff
+
 <@git:status>                 : work tree status
+
 <@git:log>                    : recent log (20)
 <@git:log:count>              : set length
+
 <@git:history>                : recent log w/diff (5)
 <@git:history:count>          : set length
+
 <@git:[branch]:subcommand>    : set branch-scope
 <@git:[branch]:diff:path>     : ex.
 <@git:[branch]:log:count>     : ex.
 <@git:[branch]:history:count> : ex.
+
 [@project]                    : project structure
 
 [ editing ]
 
-^[A]                          : select all
 [Shift]                       : select
+^[A]                          : select all
+^[D]                          : select next occurrence
+^[Shift] + [L]                : select all occurrences
+
 ^[Z/Y]                        : undo / redo
 ^[C/X/V]                      : copy / cut / paste
+
 [Tab]                         : indent / autocomplete
 [Shift] + [Tab]               : unindent
-[Alt]   + [^/v]               : shift cursor
+
+[Alt] + [^/v]                 : shift up / down
+
 ^[/]                          : comment out
 ^[W/Del]                      : delete previous / next
-[Enter]                       : newline / accept
+
+^[Alt] + [^/v]                : cursor above / below
+^[Shift] + [Alt] + [^/v]      : cursor expand / shrink
 
 [ navigation ]
 
@@ -80,6 +97,6 @@
 ^[^/v/</>]                    : next / previous
 [Home/End]                    : start / end
 ^[Home/End]                   : file start / end
-^[PgUp/PgDn]                  : up / down (15x)
+^[PgUp/PgDn]                  : up / down (15)
 
 press [Enter], [F1] or ^[G] to close

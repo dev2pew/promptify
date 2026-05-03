@@ -1,4 +1,4 @@
-"""View-building and status-rendering mixin for the interactive editor."""
+"""View-building and status-rendering mixin for the interactive editor"""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ from ._imports import (
 
 
 class EditorViewMixin:
-    """Provide shared view builders, status text, and small UI helpers."""
+    """Provide shared view builders, status text, and small UI helpers"""
 
     terminal_profile: TerminalProfile = cast(TerminalProfile, cast(object, None))
     token_count: int = 0
@@ -84,7 +84,7 @@ class EditorViewMixin:
         *,
         input_processors: list[Processor] | None = None,
     ) -> VSplit:
-        """Build the shared single-line chrome used by search and jump inputs."""
+        """Build the shared single-line chrome used by search and jump inputs"""
         return VSplit(
             [
                 Window(
@@ -111,7 +111,7 @@ class EditorViewMixin:
         )
 
     def _build_search_widget(self) -> HSplit:
-        """Build the shared VS Code-style search and replace widget."""
+        """Build the shared VS Code-style search and replace widget"""
         search_row = self._build_input_bar(
             self.search_buffer,
             self._get_search_label_text,
@@ -134,7 +134,7 @@ class EditorViewMixin:
         )
 
     def _build_style(self) -> Style:
-        """Build the editor style map and fall back if config values are invalid."""
+        """Build the editor style map and fall back if config values are invalid"""
         try:
             styles = dict(settings_module.APP_SETTINGS.theme.styles)
             _ = styles.setdefault("auto-suggestion", AUTO_SUGGESTION_STYLE)
@@ -160,6 +160,8 @@ class EditorViewMixin:
                     "search-toggle-off": "bg:#1f1f1f #ff6b6b bold",
                     "search-match": "bg:#5d4a1d #fff0cb",
                     "search-match-active": "bg:#1f5d8e #f7fbff bold",
+                    "multi-cursor": "bg:#d7f6ff #101317 bold",
+                    "multi-cursor-selection": "bg:#244a60 #eef9ff",
                     "current-line": "bg:#262a31",
                     "err-frame": "bg:#101317",
                     "err-frame.border": "fg:#768394",
@@ -187,7 +189,7 @@ class EditorViewMixin:
     def _build_centered_overlay(
         self, container: AnyContainer, visible_filter: Condition
     ) -> ConditionalContainer:
-        """Center an interactive panel while allowing it to scale with the viewport."""
+        """Center an interactive panel while allowing it to scale with the viewport"""
         return ConditionalContainer(
             content=HSplit(
                 [
@@ -213,7 +215,7 @@ class EditorViewMixin:
         title: str | Callable[[], str],
         style: str,
     ) -> HSplit:
-        """Build resize-safe chrome using ASCII or Unicode border glyphs."""
+        """Build resize-safe chrome using ASCII or Unicode border glyphs"""
         border = self.terminal_profile.border
         border_style = f"{style}.border"
         label_style = f"{style}.label"
@@ -292,7 +294,7 @@ class EditorViewMixin:
         style: str,
         visible_filter: Condition,
     ) -> Float:
-        """Build a centered modal float around resize-safe chrome."""
+        """Build a centered modal float around resize-safe chrome"""
         frame = self._build_chrome(body, title, style)
         return Float(
             content=self._build_centered_overlay(frame, visible_filter),
@@ -303,7 +305,7 @@ class EditorViewMixin:
         )
 
     def _build_top_bar(self) -> VSplit:
-        """Build the top mode, title, status, and token strip."""
+        """Build the top mode, title, status, and token strip"""
         return VSplit(
             [
                 Window(
@@ -339,7 +341,7 @@ class EditorViewMixin:
         )
 
     def _build_bottom_toolbar(self) -> VSplit:
-        """Build the bottom toolbar and live cursor location strip."""
+        """Build the bottom toolbar and live cursor location strip"""
         return VSplit(
             [
                 Window(
@@ -364,19 +366,19 @@ class EditorViewMixin:
         )
 
     def get_text(self, key: str, default: str) -> str:
-        """Read a localized UI string with an inline fallback."""
+        """Read a localized UI string with an inline fallback"""
         return get_string(key, default)
 
     def format_text(self, key: str, default: str, /, **values: object) -> str:
-        """Read and format a localized UI string with inline fallbacks."""
+        """Read and format a localized UI string with inline fallbacks"""
         return self.get_text(key, default).format(**values)
 
     def _set_help_cursor(self, position: int) -> None:
-        """Move the help buffer cursor without reaching through untyped controls."""
+        """Move the help buffer cursor without reaching through untyped controls"""
         self.help_buffer.cursor_position = position
 
     def note_user_activity(self) -> None:
-        """Clear transient status messages after the next user action."""
+        """Clear transient status messages after the next user action"""
         changed = False
         if self._search_message_transient and self.search_message:
             self.search_message = ""
@@ -393,33 +395,33 @@ class EditorViewMixin:
             self.invalidate()
 
     def set_passive_status(self, message: str, transient: bool = True) -> None:
-        """Show a small passive status message in the top bar."""
+        """Show a small passive status message in the top bar"""
         self._passive_status = message
         self._passive_status_transient = transient and bool(message)
         self.invalidate()
 
     def _set_search_message(self, message: str, transient: bool = True) -> None:
-        """Update the search status message and whether it auto-clears."""
+        """Update the search status message and whether it auto-clears"""
         self.search_message = message
         self._search_message_transient = transient and bool(message)
         self.invalidate()
 
     def _clear_search_message(self) -> None:
-        """Clear search status messages without touching history or focus."""
+        """Clear search status messages without touching history or focus"""
         self.search_message = ""
         self._search_message_transient = False
 
     def _set_jump_message(self, message: str) -> None:
-        """Update the jump status message shown in the shared input bar chrome."""
+        """Update the jump status message shown in the shared input bar chrome"""
         self.jump_message = message
         self.invalidate()
 
     def _clear_jump_message(self) -> None:
-        """Clear jump status messages without touching the current query."""
+        """Clear jump status messages without touching the current query"""
         self.jump_message = ""
 
     def _get_current_mode_name(self) -> str:
-        """Return the editor mode that currently owns the user's attention."""
+        """Return the editor mode that currently owns the user's attention"""
         overlay = self._get_visible_overlay()
         if overlay == "quit":
             return self.get_text("editor_mode_quit", "quit")
@@ -436,7 +438,7 @@ class EditorViewMixin:
         return self.get_text("editor_mode_normal", "normal")
 
     def _get_mode_text(self) -> str:
-        """Render a compact mode strip for the top bar."""
+        """Render a compact mode strip for the top bar"""
         mode = self._get_current_mode_name()
         if mode == "issue":
             total = len(self._document_issue_cache)
@@ -454,7 +456,7 @@ class EditorViewMixin:
         return f" [ {mode} ] "
 
     def _get_status_text(self) -> str:
-        """Show passive status, issue counts, or validation pause feedback."""
+        """Show passive status, issue counts, or validation pause feedback"""
         if self._passive_status:
             return f" {self._passive_status} "
         if not self.expensive_checks_enabled():
@@ -483,13 +485,13 @@ class EditorViewMixin:
         return ""
 
     def _get_token_status_text(self) -> str:
-        """Render token status with the requested busy-indicator format."""
+        """Render token status with the requested busy-indicator format"""
         busy = self._token_estimate_busy or not self.expensive_checks_enabled()
         suffix = "* " if busy else "  "
         return f" ~{self.token_count} tokens{suffix}"
 
     def _get_toolbar_text(self) -> str:
-        """Swap toolbar hints to match the current interaction mode."""
+        """Swap toolbar hints to match the current interaction mode"""
         mode = self._get_current_mode_name()
         if mode == "quit":
             return get_string("toolbar_text_quit", "[Y/Enter/] quit | [N/Esc] cancel")
@@ -512,7 +514,7 @@ class EditorViewMixin:
         )
 
     def toggle_word_wrap(self) -> None:
-        """Flip main editor wrapping at runtime and surface the new mode briefly."""
+        """Flip main editor wrapping at runtime and surface the new mode briefly"""
         self.word_wrap_enabled = not self.word_wrap_enabled
         self.main_window.wrap_lines = to_filter(self.word_wrap_enabled)
         self.set_passive_status(
@@ -529,13 +531,13 @@ class EditorViewMixin:
         self.invalidate()
 
     def _get_search_label_text(self) -> str:
-        """Emphasize search mode with an always-visible header and count."""
+        """Emphasize search mode with an always-visible header and count"""
         if not self.search_visible:
             return ""
         return " " + self.get_text("editor_search_label", "SEARCH") + " "
 
     def _get_replace_label_text(self) -> str:
-        """Show the replace row label only while replace mode is open."""
+        """Show the replace row label only while replace mode is open"""
         if not self.search_visible or not self.replace_visible:
             return ""
         return " " + self.get_text("editor_replace_label", "REPLACE") + " "
@@ -549,7 +551,7 @@ class EditorViewMixin:
         disabled_text: str,
         leading_space: bool = True,
     ) -> None:
-        """Append one styled toggle chip to a formatted-text fragment list."""
+        """Append one styled toggle chip to a formatted-text fragment list"""
         if leading_space:
             fragments.append(("", " "))
         fragments.append(
@@ -560,7 +562,7 @@ class EditorViewMixin:
         )
 
     def _get_search_toggle_fragments(self) -> StyleAndTextTuples:
-        """Render the visible search mode chips as styled fragments."""
+        """Render the visible search mode chips as styled fragments"""
         fragments: StyleAndTextTuples = []
         self._append_toggle_fragment(
             fragments,
@@ -584,7 +586,7 @@ class EditorViewMixin:
         return fragments
 
     def _get_replace_toggle_fragments(self) -> StyleAndTextTuples:
-        """Render the replace preserve-case chip as styled fragments."""
+        """Render the replace preserve-case chip as styled fragments"""
         fragments: StyleAndTextTuples = []
         self._append_toggle_fragment(
             fragments,
@@ -604,7 +606,7 @@ class EditorViewMixin:
         left_text: str,
         right_fragments: StyleAndTextTuples | None = None,
     ) -> StyleAndTextTuples:
-        """Combine plain status text with styled toggle chips for the widget."""
+        """Combine plain status text with styled toggle chips for the widget"""
         fragments: StyleAndTextTuples = [("", " ")]
         if left_text:
             fragments.append(("", left_text))
@@ -616,27 +618,27 @@ class EditorViewMixin:
         return fragments
 
     def _get_jump_label_text(self) -> str:
-        """Render the jump bar label only while jump mode is visible."""
+        """Render the jump bar label only while jump mode is visible"""
         if not self.jump_visible:
             return ""
         return " " + self.get_text("editor_jump_label", "JUMP") + " "
 
     def _get_jump_default_text(self) -> str:
-        """Expose the current cursor location as the jump bar's inline suggestion."""
+        """Expose the current cursor location as the jump bar's inline suggestion"""
         return build_jump_target(
             self.buffer.document.cursor_position_row + 1,
             self.buffer.document.cursor_position_col + 1,
         )[1:]
 
     def _normalize_jump_target_text(self, text: str) -> str:
-        """Normalize raw jump input into the mandatory-colon form used by parsing."""
+        """Normalize raw jump input into the mandatory-colon form used by parsing"""
         suffix = text.strip()
         if suffix.startswith(":"):
             suffix = suffix[1:]
         return ":" + suffix if suffix else ""
 
     def _get_search_status_text(self) -> AnyFormattedText:
-        """Return search mode hints or the last search result message."""
+        """Return search mode hints or the last search result message"""
         state = self._get_search_highlight_state()
         toggles = self._get_search_toggle_fragments()
         if self.search_message:
@@ -664,13 +666,13 @@ class EditorViewMixin:
         return self._join_status_fragments("", toggles)
 
     def _get_replace_status_text(self) -> AnyFormattedText:
-        """Return replace-row status chips while replace is visible."""
+        """Return replace-row status chips while replace is visible"""
         if not self.search_visible or not self.replace_visible:
             return ""
         return self._join_status_fragments("", self._get_replace_toggle_fragments())
 
     def _get_jump_status_text(self) -> str:
-        """Return jump mode hints or validation feedback for the target input."""
+        """Return jump mode hints or validation feedback for the target input"""
         if self.jump_message:
             return f" {self.jump_message} "
         return ""

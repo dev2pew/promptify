@@ -1,4 +1,4 @@
-"""Runtime-focused regression entrypoints for the modular editor package."""
+"""Runtime-focused regression entrypoints for the modular editor package"""
 
 import pytest
 
@@ -53,4 +53,16 @@ test_interactive_editor_word_wrap_follows_setting = (
 )
 test_interactive_editor_toggle_word_wrap_updates_window_and_status = (
     cases.test_interactive_editor_toggle_word_wrap_updates_window_and_status
+)
+test_interactive_editor_vertical_motion_keeps_sticky_column = (
+    cases.test_interactive_editor_vertical_motion_keeps_sticky_column
+)
+test_interactive_editor_vertical_multi_cursor_add_and_clear = (
+    cases.test_interactive_editor_vertical_multi_cursor_add_and_clear
+)
+test_interactive_editor_select_occurrences_respects_search_toggles = (
+    cases.test_interactive_editor_select_occurrences_respects_search_toggles
+)
+test_interactive_editor_scroll_view_keeps_cursor_position = (
+    cases.test_interactive_editor_scroll_view_keeps_cursor_position
 )

@@ -1,11 +1,11 @@
-"""Prompt-toolkit processors and margins used by the interactive editor."""
+"""Prompt-toolkit processors and margins used by the interactive editor"""
 
 from __future__ import annotations
 
 from typing import Callable, cast
 
 from ...core.terminal import TerminalProfile
-from ...shared.editor_state import SearchHighlightState
+from ...shared.editor_state import MultiCursorCaret, SearchHighlightState
 from ...shared.editor_support import (
     append_original_token_range,
     flatten_fragments_to_chars,
@@ -22,7 +22,7 @@ from ._imports import (
 
 
 class HighlightTrailingWhitespaceProcessor(Processor):
-    """Highlight trailing spaces and tabs at the end of each line."""
+    """Highlight trailing spaces and tabs at the end of each line"""
 
     def apply_transformation(self, transformation_input):
         fragments = transformation_input.fragments
@@ -53,7 +53,7 @@ class HighlightTrailingWhitespaceProcessor(Processor):
 
 
 class EOFNewlineProcessor(Processor):
-    """Visually indicate a missing EOF newline."""
+    """Visually indicate a missing EOF newline"""
 
     def __init__(self, terminal_profile: TerminalProfile):
         self.terminal_profile = terminal_profile
@@ -75,7 +75,7 @@ class EOFNewlineProcessor(Processor):
 
 
 class SearchMatchProcessor(Processor):
-    """Highlight search matches with distinct active and passive styles."""
+    """Highlight search matches with distinct active and passive styles"""
 
     def __init__(self, get_state: Callable[[], SearchHighlightState | None]):
         self.get_state = get_state
@@ -158,7 +158,7 @@ class SearchMatchProcessor(Processor):
 
 
 class ActiveLineProcessor(Processor):
-    """Soft-highlight the current logical line in the main editor buffer."""
+    """Soft-highlight the current logical line in the main editor buffer"""
 
     def apply_transformation(self, transformation_input):
         try:
@@ -187,8 +187,56 @@ class ActiveLineProcessor(Processor):
         )
 
 
+class MultiCursorProcessor(Processor):
+    """Render extra caret positions and selected occurrence ranges"""
+
+    def __init__(self, get_carets: Callable[[], tuple[MultiCursorCaret, ...]]):
+        self.get_carets = get_carets
+
+    def apply_transformation(self, transformation_input):
+        carets = self.get_carets()
+        if not carets:
+            return Transformation(transformation_input.fragments)
+
+        line_text = "".join(
+            fragment_text(fragment) for fragment in transformation_input.fragments
+        )
+        line_start = transformation_input.document.translate_row_col_to_index(
+            transformation_input.lineno, 0
+        )
+        line_end = line_start + len(line_text)
+        chars = flatten_fragments_to_chars(transformation_input.fragments)
+        if not chars and not any(caret.position == line_start for caret in carets):
+            return Transformation(transformation_input.fragments)
+
+        new_fragments: StyleAndTextTuples = []
+        for index, (style, char) in enumerate(chars):
+            absolute_index = line_start + index
+            next_style = style
+            for caret in carets:
+                if caret.has_selection and (
+                    caret.selection_start <= absolute_index < caret.selection_end
+                ):
+                    next_style = f"{next_style} class:multi-cursor-selection".strip()
+                if (not caret.is_primary) and caret.position == absolute_index:
+                    next_style = f"{next_style} class:multi-cursor".strip()
+            new_fragments.append((next_style, char))
+
+        for caret in carets:
+            if (
+                not caret.is_primary
+                and caret.position == line_end
+                and caret.position >= line_start
+            ):
+                new_fragments.append(("class:multi-cursor", " "))
+
+        if not new_fragments:
+            return Transformation(transformation_input.fragments)
+        return Transformation(new_fragments)
+
+
 class VerticalSeparatorMargin(Margin):
-    """Render a single-column separator next to the optional line-number gutter."""
+    """Render a single-column separator next to the optional line-number gutter"""
 
     def __init__(self, terminal_profile: TerminalProfile):
         self._separator = terminal_profile.tree.vertical

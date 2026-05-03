@@ -1,4 +1,4 @@
-"""Search, replace, and jump regression entrypoints for the modular editor package."""
+"""Search, replace, and jump regression entrypoints for the modular editor package"""
 
 import pytest
 

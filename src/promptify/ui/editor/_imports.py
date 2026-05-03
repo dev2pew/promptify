@@ -1,4 +1,4 @@
-"""Shared import boundary for prompt-toolkit and optional editor dependencies."""
+"""Shared import boundary for prompt-toolkit and optional editor dependencies"""
 
 from __future__ import annotations
 

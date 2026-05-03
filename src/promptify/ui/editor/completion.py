@@ -1,4 +1,4 @@
-"""Autocomplete components used by the interactive editor."""
+"""Autocomplete components used by the interactive editor"""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from ._imports import (
 
 
 class MentionCompleter(Completer):
-    """Route autocomplete requests through the registered mods."""
+    """Route autocomplete requests through the registered mods"""
 
     def __init__(
         self,
@@ -58,7 +58,7 @@ class MentionCompleter(Completer):
 
 
 class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
-    """Completion menu control that respects the active viewport width."""
+    """Completion menu control that respects the active viewport width"""
 
     MIN_LABEL_COLUMN_WIDTH = 16
     MIN_META_COLUMN_WIDTH = 12
@@ -68,13 +68,13 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
     MAX_META_WIDTH_RATIO = 0.5
 
     def _get_display_text_width(self, text: str) -> int:
-        """Measure display text consistently with prompt-toolkit cell widths."""
+        """Measure display text consistently with prompt-toolkit cell widths"""
         return get_cwidth(text)
 
     def _trim_formatted_text_left(
         self, formatted_text: StyleAndTextTuples, max_width: int
     ) -> tuple[StyleAndTextTuples, int]:
-        """Trim from the left so long paths keep their most relevant tail."""
+        """Trim from the left so long paths keep their most relevant tail"""
         width = fragment_list_width(formatted_text)
         if width <= max_width:
             return formatted_text, width
@@ -100,7 +100,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
     def _get_label_fragments(
         self, completion: Completion, is_current_completion: bool, width: int
     ) -> StyleAndTextTuples:
-        """Render the label column with suffix-first trimming on overflow."""
+        """Render the label column with suffix-first trimming on overflow"""
         if is_current_completion:
             style_str = (
                 "class:completion-menu.completion.current "
@@ -123,7 +123,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         trim_delta: int,
         padding_delta: int = 1,
     ) -> StyleAndTextTuples:
-        """Trim and pad a single completion column consistently."""
+        """Trim and pad a single completion column consistently"""
         text, text_width = self._trim_formatted_text_left(content, width - trim_delta)
         padding = " " * max(0, width - padding_delta - text_width)
         return to_formatted_text(
@@ -132,7 +132,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         )
 
     def _get_width_budget(self, max_available_width: int) -> int:
-        """Keep the popup responsive by capping it below the full viewport."""
+        """Keep the popup responsive by capping it below the full viewport"""
         if max_available_width <= self.MIN_WIDTH_FOR_META:
             return max_available_width
         capped_width = int(max_available_width * self.MAX_VIEWPORT_WIDTH_RATIO)
@@ -152,7 +152,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         return min(width_budget, preferred)
 
     def _get_column_widths(self, width: int, complete_state) -> tuple[int, int, bool]:
-        """Split available width between the label and path metadata columns."""
+        """Split available width between the label and path metadata columns"""
         show_meta = self._show_meta(complete_state)
         natural_label_width = self._get_menu_width(width, complete_state)
         natural_meta_width = self._get_menu_meta_width(width, complete_state)
@@ -202,7 +202,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
     def _get_menu_item_meta_fragments(
         self, completion: Completion, is_current_completion: bool, width: int
     ) -> StyleAndTextTuples:
-        """Render path metadata from the right so the tail stays visible."""
+        """Render path metadata from the right so the tail stays visible"""
         style_str = (
             "class:completion-menu.meta.completion.current"
             if is_current_completion
@@ -216,7 +216,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
         )
 
     def create_content(self, width: int, height: int) -> UIContent:
-        """Render completions using a viewport-aware label and metadata split."""
+        """Render completions using a viewport-aware label and metadata split"""
         complete_state = get_app().current_buffer.complete_state
         if not complete_state:
             return UIContent()
@@ -247,7 +247,7 @@ class ResponsiveCompletionsMenuControl(CompletionsMenuControl):
 
 
 class ResponsiveCompletionsMenu(ConditionalContainer):
-    """Dropdown menu that tracks terminal size instead of a fixed width hint."""
+    """Dropdown menu that tracks terminal size instead of a fixed width hint"""
 
     def __init__(
         self,

@@ -31,8 +31,10 @@ a terminal editor powered by `prompt-toolkit`.
 
 - fuzzy completion for files, directories, trees, extensions, symbols, and `git` mentions;
 - modern IDE style search and replace widget with match counts, wrap reporting, search history, and search-mode toggles for case, whole-word, regex, and preserve-case replace;
+- VS Code-style sticky-column cursor movement, multi-cursor editing, occurrence selection, and view-only scrolling shortcuts;
 - jump-to-line input with `:line[:character]` and `:line,character` targets;
 - issue overlays for malformed mentions and unresolved references before save;
+- crash-safe interactive restore backed by `data/state.dat`, with a restore prompt on next launch when unsaved editor work exists;
 - syntax highlighting, trailing whitespace marking, EOF newline indicators, active-line highlighting, and optional line numbers;
 - configurable layout, behavior, colors, and terminal compatibility through `.env`.
 
@@ -45,8 +47,15 @@ the in-app help screen is authoritative, but the main defaults are...
 - `Ctrl+R`: toggle replace
 - `Alt+G`: jump to `:line[:character]` or `:line,character`
 - `Alt+Z`: toggle word wrap
+- `Ctrl+Alt+Up` / `Ctrl+Alt+Down`: add cursor above or below
+- `Ctrl+Shift+Alt+Up` / `Ctrl+Shift+Alt+Down`: expand or shrink the vertical cursor block
+- `Ctrl+D`: select the next occurrence of the current word or selection
+- `Ctrl+Shift+L`: select all occurrences of the current word or selection
+- `Esc`: clear cloned cursors and return to the primary cursor
 - `Ctrl+S`: resolve and save
 - `Ctrl+Q` / `F10`: abort with confirmation
+- `Ctrl+Up` / `Ctrl+Down`: scroll the editor view without moving the cursor
+- `Ctrl+PageUp` / `Ctrl+PageDown`: scroll the editor view by 15 lines
 - `F6` / `F7` / `F8`: toggle match case, whole word, and regex while search is open
 - `Ctrl+F6`: toggle preserve-case replace while replace is open
 - `Up` / `Down`: search history while the search field is focused

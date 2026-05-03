@@ -1,4 +1,4 @@
-"""Issue collection and issue-overlay mixin for the interactive editor."""
+"""Issue collection and issue-overlay mixin for the interactive editor"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from .lexers import CustomPromptLexer
 
 
 class EditorIssuesMixin:
-    """Provide document issue collection plus issue-mode navigation."""
+    """Provide document issue collection plus issue-mode navigation"""
 
     issue_mode_active: bool = False
     issue_index: int = 0
@@ -69,7 +69,7 @@ class EditorIssuesMixin:
             raise NotImplementedError
 
     def _handle_buffer_text_changed(self, _buffer: Buffer) -> None:
-        """Invalidate cached issue state and stale issue overlays after edits."""
+        """Invalidate cached issue state and stale issue overlays after edits"""
         self._document_issue_cache_text_id = 0
         self._document_issue_cache = tuple()
         if self.issue_mode_active:
@@ -84,7 +84,7 @@ class EditorIssuesMixin:
         message: str,
         fragment: str,
     ) -> EditorIssue:
-        """Build a stable issue record for navigation and rendering."""
+        """Build a stable issue record for navigation and rendering"""
         return EditorIssue(line, column, end_column, style, message, fragment)
 
     def _make_line_match_issue(
@@ -94,7 +94,7 @@ class EditorIssuesMixin:
         style: str,
         message: str,
     ) -> EditorIssue:
-        """Build an issue from a single-line regex match."""
+        """Build an issue from a single-line regex match"""
         return self._make_issue(
             lineno,
             match.start(),
@@ -110,7 +110,7 @@ class EditorIssuesMixin:
         style: str,
         message: str,
     ) -> EditorIssue:
-        """Build an issue from a whole-buffer regex match."""
+        """Build an issue from a whole-buffer regex match"""
         start_line, start_col = self.buffer.document.translate_index_to_position(
             match.start()
         )
@@ -125,7 +125,7 @@ class EditorIssuesMixin:
         )
 
     def get_document_issues(self) -> tuple[EditorIssue, ...]:
-        """Collect lightweight syntax and reference issues from the buffer."""
+        """Collect lightweight syntax and reference issues from the buffer"""
         expensive_enabled = self.expensive_checks_enabled()
         text = self.buffer.text
         text_id = id(text)
@@ -189,7 +189,7 @@ class EditorIssuesMixin:
         return self._document_issue_cache
 
     async def collect_save_issues(self) -> tuple[EditorIssue, ...]:
-        """Run save-time issue checks, including symbol lookups."""
+        """Run save-time issue checks, including symbol lookups"""
         issues = {
             (issue.line, issue.column, issue.end_column): issue
             for issue in self.get_document_issues()
@@ -250,7 +250,7 @@ class EditorIssuesMixin:
         )
 
     def activate_issue_mode(self, issues: tuple[EditorIssue, ...]) -> None:
-        """Enter issue mode, jump to the first issue, and show the overlay."""
+        """Enter issue mode, jump to the first issue, and show the overlay"""
         self.issue_mode_active = bool(issues)
         self._document_issue_cache = issues
         self.issue_index = 0
@@ -259,14 +259,14 @@ class EditorIssuesMixin:
             self._render_issue_overlay()
 
     def deactivate_issue_mode(self) -> None:
-        """Exit issue mode and dismiss the overlay."""
+        """Exit issue mode and dismiss the overlay"""
         self.issue_mode_active = False
         self._hide_overlay("error")
         self.err_message = ""
         self.invalidate()
 
     def _render_issue_overlay(self) -> None:
-        """Update the existing overlay window with the active issue details."""
+        """Update the existing overlay window with the active issue details"""
         if not self.issue_mode_active or not self._document_issue_cache:
             return
         issue = self._document_issue_cache[self.issue_index]
@@ -305,7 +305,7 @@ class EditorIssuesMixin:
         self.invalidate()
 
     def jump_to_issue(self, index: int) -> None:
-        """Move the main cursor to the target issue and keep it in view."""
+        """Move the main cursor to the target issue and keep it in view"""
         if not self._document_issue_cache:
             return
         self.issue_index = index % len(self._document_issue_cache)
@@ -317,7 +317,7 @@ class EditorIssuesMixin:
         self.invalidate()
 
     def _get_err_title_text(self) -> str:
-        """Return a compact title for error and issue overlays."""
+        """Return a compact title for error and issue overlays"""
         if self.issue_mode_active and self._document_issue_cache:
             total = len(self._document_issue_cache)
             ordinal = min(self.issue_index + 1, total)
@@ -334,7 +334,7 @@ class EditorIssuesMixin:
         return " < " + get_string("err_title", "error") + " > "
 
     def step_issue(self, direction: int) -> bool:
-        """Move to the next or previous issue while issue mode is active."""
+        """Move to the next or previous issue while issue mode is active"""
         if not self.issue_mode_active or not self._document_issue_cache:
             return False
         self.jump_to_issue(self.issue_index + direction)

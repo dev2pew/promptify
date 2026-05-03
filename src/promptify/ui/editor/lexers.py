@@ -1,4 +1,4 @@
-"""Lexers and mention tokenization for the interactive editor."""
+"""Lexers and mention tokenization for the interactive editor"""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from ._imports import (
 
 
 def tokenize_mention(text: str) -> list[tuple[str, str]]:
-    """Tokenize mentions with semantic parsing for their arguments."""
+    """Tokenize mentions with semantic parsing for their arguments"""
     if text == "[@project]":
         return [("class:mention-tag", "[@project]")]
     if not (text.startswith("<@") and text.endswith(">")):
@@ -120,7 +120,7 @@ def tokenize_mention(text: str) -> list[tuple[str, str]]:
 
 
 class CustomPromptLexer(Lexer):
-    """Custom lexer for tag highlighting and invalid-mention detection."""
+    """Custom lexer for tag highlighting and invalid-mention detection"""
 
     def __init__(
         self,
@@ -141,7 +141,7 @@ class CustomPromptLexer(Lexer):
         self._invalid_fence_cache: dict[int, set[int]] = {}
 
     def get_invalid_fence_lines(self, document: Document) -> set[int]:
-        """Flag only the last unmatched fence line to avoid noisy highlighting."""
+        """Flag only the last unmatched fence line to avoid noisy highlighting"""
         cache_key = id(document.text)
         cached = self._invalid_fence_cache.get(cache_key)
         if cached is not None:
@@ -161,7 +161,7 @@ class CustomPromptLexer(Lexer):
         style: str | None,
         message: str | None,
     ) -> MentionValidationResult:
-        """Store and return a validation result in one step."""
+        """Store and return a validation result in one step"""
         result = MentionValidationResult(style, message)
         self._validation_cache[cache_key] = result
         return result
@@ -171,7 +171,7 @@ class CustomPromptLexer(Lexer):
         path: str,
         label: str = "path",
     ) -> MentionValidationResult | None:
-        """Report paths that escape the project root."""
+        """Report paths that escape the project root"""
         if not self.resolver.context.is_safe_query_path(path):
             return MentionValidationResult(
                 "unresolved-reference",
@@ -188,7 +188,7 @@ class CustomPromptLexer(Lexer):
         missing_message: str,
         unsafe_message: str | None = None,
     ) -> MentionValidationResult | None:
-        """Validate that a query path is safe and resolves to a file."""
+        """Validate that a query path is safe and resolves to a file"""
         path_issue = self._validate_safe_path(path)
         if path_issue is not None:
             if unsafe_message is not None:
@@ -202,7 +202,7 @@ class CustomPromptLexer(Lexer):
         return None
 
     def inspect_mention(self, text: str) -> MentionValidationResult:
-        """Classify a mention as valid, malformed, or unresolved."""
+        """Classify a mention as valid, malformed, or unresolved"""
         cache_key = (self.indexer.revision, text)
         cached = self._validation_cache.get(cache_key)
         if cached is not None:
@@ -348,7 +348,7 @@ class CustomPromptLexer(Lexer):
             )
 
     def is_valid_mention(self, text: str) -> bool:
-        """Backward-compatibility helper for boolean validation callers."""
+        """Backward-compatibility helper for boolean validation callers"""
         return self.inspect_mention(text).style is None
 
     def lex_document(self, document: Document):
@@ -390,7 +390,7 @@ class CustomPromptLexer(Lexer):
 
 
 class HelpLexer(Lexer):
-    """Regex-based lexer for help window text."""
+    """Regex-based lexer for help window text"""
 
     def __init__(self):
         self.header_re = re.compile(r"^\s*\[ .* \]\s*$")
