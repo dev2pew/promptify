@@ -37,6 +37,25 @@ def _get_selected_row_range(buffer: Buffer) -> tuple[int, int]:
     return row, row
 
 
+def _collapse_selection(buffer: Buffer, *, to_end: bool) -> bool:
+    """Collapse an active selection to one edge without moving farther"""
+    if buffer.selection_state is None:
+        return False
+    anchor = buffer.selection_state.original_cursor_position
+    cursor = buffer.cursor_position
+    buffer.selection_state = None
+    buffer.cursor_position = max(anchor, cursor) if to_end else min(anchor, cursor)
+    buffer.preferred_column = None
+    return True
+
+
+def _prepare_plain_navigation(ctx: EditorBindingContext, buffer: Buffer) -> None:
+    """Reset viewport and sticky-column state before plain navigation"""
+    ctx.editor.reattach_scroll_to_cursor()
+    ctx.editor.reset_cursor_navigation_memory()
+    buffer.selection_state = None
+
+
 def register_editing_bindings(ctx: EditorBindingContext) -> None:
     """Register bindings for editing, selection, cursor movement, and save"""
 
@@ -99,19 +118,28 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("home", filter=ctx.text_focus, note_activity=True)
     def _home(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=False):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_position += ctx.get_home_position(buffer.document)
 
     @ctx.bind("end", filter=ctx.text_focus, note_activity=True)
     def _end(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=True):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_position += buffer.document.get_end_of_line_position()
 
     @ctx.bind("pageup", filter=ctx.editor_focus)
     def _pageup(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=False):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         if ctx.editor.multi_cursor_active():
             ctx.editor.move_cursors_vertical(-1, count=15)
             return
@@ -120,7 +148,10 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("pagedown", filter=ctx.editor_focus)
     def _pagedown(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=True):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         if ctx.editor.multi_cursor_active():
             ctx.editor.move_cursors_vertical(1, count=15)
             return
@@ -129,19 +160,28 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("c-home", filter=ctx.text_focus, note_activity=True)
     def _c_home(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=False):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_position = 0
 
     @ctx.bind("c-end", filter=ctx.text_focus, note_activity=True)
     def _c_end(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=True):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_position = len(buffer.text)
 
     @ctx.bind("c-left", filter=ctx.text_focus)
     def _c_left(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=False):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         position = buffer.document.find_previous_word_beginning()
         buffer.cursor_position += (
             position if position is not None else -buffer.cursor_position
@@ -150,7 +190,10 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("c-right", filter=ctx.text_focus)
     def _c_right(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=True):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         position = buffer.document.find_next_word_beginning()
         if position is not None:
             buffer.cursor_position += position
@@ -384,7 +427,10 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     )
     def _left(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=False):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         if ctx.editor.multi_cursor_active():
             ctx.editor.move_cursors_horizontal(-1)
             return
@@ -399,7 +445,10 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     )
     def _right(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=True):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
+        _prepare_plain_navigation(ctx, buffer)
         if ctx.editor.multi_cursor_active():
             ctx.editor.move_cursors_horizontal(1)
             return
@@ -438,7 +487,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     )
     def _up(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=False):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
         ctx.editor.move_cursors_vertical(-1)
 
     @ctx.bind(
@@ -448,7 +499,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     )
     def _down(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        buffer.selection_state = None
+        if _collapse_selection(buffer, to_end=True):
+            ctx.editor.reattach_scroll_to_cursor()
+            return
         ctx.editor.move_cursors_vertical(1)
 
     @ctx.bind("c-up", filter=ctx.editor_focus & ~ctx.has_completions_menu)

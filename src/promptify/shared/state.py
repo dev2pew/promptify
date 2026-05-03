@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypeGuard, cast
+from uuid import uuid4
 
 import aiofiles
 
@@ -19,10 +22,29 @@ def _is_plain_int(value: object) -> TypeGuard[int]:
 async def _write_text_atomic(path: Path, text: str) -> None:
     """Write text to disk through a temporary file, then replace atomically"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_name(f"{path.name}.tmp")
-    async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
-        await f.write(text)
-    temp_path.replace(path)
+    temp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
+            await f.write(text)
+        last_error: OSError | None = None
+        for attempt in range(6):
+            try:
+                os.replace(temp_path, path)
+                return
+            except OSError as exc:
+                last_error = exc
+                if not temp_path.exists():
+                    raise
+                if attempt == 5:
+                    break
+                await asyncio.sleep(0.025 * (attempt + 1))
+        if last_error is not None:
+            raise last_error
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 @dataclass(slots=True)

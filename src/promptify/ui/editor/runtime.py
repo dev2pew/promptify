@@ -52,7 +52,7 @@ from ._imports import (
     get_app,
 )
 from .completion import MentionCompleter, ResponsiveCompletionsMenu
-from .controls import EditorBufferControl
+from .controls import EditorBufferControl, EditorWindow
 from .issues import EditorIssuesMixin
 from .lexers import CustomPromptLexer, HelpLexer
 from .multicursor import EditorMultiCursorMixin
@@ -294,7 +294,8 @@ class InteractiveEditor(
             SearchMatchProcessor(self._get_search_highlight_state),
             MultiCursorProcessor(self.get_multi_cursor_render_carets),
         ]
-        self.main_window = Window(
+        self.main_window = EditorWindow(
+            get_detached_vertical_scroll=self.get_detached_vertical_scroll,
             content=EditorBufferControl(
                 buffer=self.buffer,
                 lexer=self.lexer,
@@ -336,6 +337,8 @@ class InteractiveEditor(
                         prompt_text=self.buffer.text,
                     )
                 )
+            except OSError:
+                pass
             finally:
                 self._pending_session_flush = False
 

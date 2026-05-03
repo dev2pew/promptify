@@ -68,6 +68,8 @@ class EditorViewMixin:
 
         def invalidate(self) -> None: ...
 
+        def reset_cursor_navigation_memory(self) -> None: ...
+
         def expensive_checks_enabled(self) -> bool: ...
 
         def get_document_issues(self) -> tuple[EditorIssue, ...]: ...
@@ -160,6 +162,9 @@ class EditorViewMixin:
                     "search-toggle-off": "bg:#1f1f1f #ff6b6b bold",
                     "search-match": "bg:#5d4a1d #fff0cb",
                     "search-match-active": "bg:#1f5d8e #f7fbff bold",
+                    "matching-bracket.cursor": "bg:#ffe66d #101317 bold",
+                    "matching-bracket.other": "bg:#7cffcb #101317 bold",
+                    "pygments.generic.heading": "fg:#ffcc00 bold",
                     "multi-cursor": "bg:#d7f6ff #101317 bold",
                     "multi-cursor-selection": "bg:#244a60 #eef9ff",
                     "current-line": "bg:#262a31",
@@ -517,6 +522,7 @@ class EditorViewMixin:
         """Flip main editor wrapping at runtime and surface the new mode briefly"""
         self.word_wrap_enabled = not self.word_wrap_enabled
         self.main_window.wrap_lines = to_filter(self.word_wrap_enabled)
+        self.reset_cursor_navigation_memory()
         self.set_passive_status(
             self.get_text(
                 (

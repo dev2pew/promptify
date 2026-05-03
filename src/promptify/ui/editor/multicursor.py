@@ -16,11 +16,14 @@ class EditorMultiCursorMixin:
     _multi_cursor_owned_search: bool = False
     _multi_cursor_occurrence_query: str = ""
     _multi_cursor_last_vertical_direction: int = 0
+    _wrap_preferred_column: int | None = None
+    _detached_vertical_scroll: int | None = None
     buffer: Buffer = cast(Buffer, cast(object, None))
     search_buffer: Buffer = cast(Buffer, cast(object, None))
     main_window: Window = cast(Window, cast(object, None))
     search_visible: bool = False
     replace_visible: bool = False
+    word_wrap_enabled: bool = False
     search_options: SearchOptions = SearchOptions()
 
     if TYPE_CHECKING:
@@ -47,6 +50,19 @@ class EditorMultiCursorMixin:
         if self._multi_carets:
             return tuple(self._multi_carets)
         return (self._make_primary_caret(),)
+
+    def reset_cursor_navigation_memory(self) -> None:
+        """Clear sticky visual and logical columns after non-vertical navigation"""
+        self._wrap_preferred_column = None
+        self.buffer.preferred_column = None
+
+    def reattach_scroll_to_cursor(self) -> None:
+        """Let prompt-toolkit keep the viewport tied to the caret again"""
+        self._detached_vertical_scroll = None
+
+    def get_detached_vertical_scroll(self) -> int | None:
+        """Return a manual viewport offset while view-only scrolling is active"""
+        return self._detached_vertical_scroll
 
     def multi_cursor_active(self) -> bool:
         """Return whether extra virtual carets or selections are active"""
@@ -162,6 +178,7 @@ class EditorMultiCursorMixin:
         self._multi_carets = []
         self._multi_cursor_occurrence_query = ""
         self._multi_cursor_last_vertical_direction = 0
+        self._wrap_preferred_column = None
         if self._multi_cursor_owned_search:
             self.search_visible = False
             self.replace_visible = False
@@ -290,10 +307,10 @@ class EditorMultiCursorMixin:
         self._set_multi_carets(carets)
         return True
 
-    def _move_vertical_caret(
+    def _move_logical_vertical_caret(
         self, caret: MultiCursorCaret, direction: int, *, count: int = 1
     ) -> MultiCursorCaret:
-        """Move one caret up or down while keeping its preferred column sticky"""
+        """Move one caret by logical lines while keeping its preferred column"""
         document = Document(self.buffer.text, cursor_position=caret.position)
         preferred = (
             caret.preferred_column
@@ -314,13 +331,94 @@ class EditorMultiCursorMixin:
             is_primary=caret.is_primary,
         )
 
+    def _move_visual_vertical_caret_once(
+        self, caret: MultiCursorCaret, direction: int
+    ) -> MultiCursorCaret | None:
+        """Move one caret through wrapped visual rows when render data is available"""
+        render_info = self.main_window.render_info
+        if (
+            render_info is None
+            or not self.word_wrap_enabled
+            or not getattr(render_info, "wrap_lines", False)
+        ):
+            return None
+
+        document = Document(self.buffer.text, cursor_position=caret.position)
+        row, col = document.translate_index_to_position(caret.position)
+        visible_items = sorted(render_info.visible_line_to_row_col.items())
+        if not visible_items:
+            return None
+
+        current_index: int | None = None
+        current_start_col = 0
+        for index, (_visible_row, (item_row, start_col)) in enumerate(visible_items):
+            if item_row != row:
+                continue
+            next_col = len(document.lines[row])
+            if index + 1 < len(visible_items) and visible_items[index + 1][1][0] == row:
+                next_col = visible_items[index + 1][1][1]
+            if col < next_col or index == len(visible_items) - 1:
+                current_index = index
+                current_start_col = start_col
+                break
+        else:
+            return None
+
+        target_index = current_index + direction
+        if target_index < 0 or target_index >= len(visible_items):
+            return None
+
+        preferred = (
+            self._wrap_preferred_column
+            if caret.is_primary and not self.multi_cursor_active()
+            else caret.preferred_column
+        )
+        if preferred is None:
+            preferred = max(0, col - current_start_col)
+
+        target_row, target_start_col = visible_items[target_index][1]
+        target_end_col = len(document.lines[target_row])
+        if (
+            target_index + 1 < len(visible_items)
+            and visible_items[target_index + 1][1][0] == target_row
+        ):
+            target_end_col = visible_items[target_index + 1][1][1]
+        target_col = min(target_start_col + preferred, target_end_col)
+        target_position = document.translate_row_col_to_index(target_row, target_col)
+
+        if caret.is_primary and not self.multi_cursor_active():
+            self._wrap_preferred_column = preferred
+        return MultiCursorCaret(
+            position=target_position,
+            anchor=None,
+            preferred_column=preferred,
+            is_primary=caret.is_primary,
+        )
+
+    def _move_vertical_caret(
+        self, caret: MultiCursorCaret, direction: int, *, count: int = 1
+    ) -> MultiCursorCaret:
+        """Move one caret vertically, preferring visual rows while wrapped"""
+        moved = caret
+        for remaining in range(count, 0, -1):
+            visual = self._move_visual_vertical_caret_once(moved, direction)
+            if visual is None:
+                self._wrap_preferred_column = None
+                return self._move_logical_vertical_caret(
+                    moved, direction, count=remaining
+                )
+            moved = visual
+        return moved
+
     def move_cursors_vertical(self, direction: int, *, count: int = 1) -> None:
         """Move all active carets vertically with sticky column memory"""
+        self.reattach_scroll_to_cursor()
         if not self.multi_cursor_active():
-            if direction > 0:
-                self.buffer.cursor_down(count=count)
-            else:
-                self.buffer.cursor_up(count=count)
+            moved = self._move_vertical_caret(
+                self._make_primary_caret(), direction, count=count
+            )
+            self.buffer.cursor_position = moved.position
+            self.buffer.preferred_column = moved.preferred_column
             return
         self.note_user_activity()
         moved = [
@@ -341,6 +439,8 @@ class EditorMultiCursorMixin:
 
     def move_cursors_horizontal(self, direction: int) -> None:
         """Move every active caret left or right"""
+        self.reattach_scroll_to_cursor()
+        self.reset_cursor_navigation_memory()
         if not self.multi_cursor_active():
             if direction < 0 and self.buffer.cursor_position > 0:
                 self.buffer.cursor_position -= 1
@@ -364,6 +464,7 @@ class EditorMultiCursorMixin:
 
     def add_vertical_cursor(self, direction: int) -> bool:
         """Clone a caret above or below the current block, keeping the original fixed"""
+        self.reattach_scroll_to_cursor()
         carets = list(self._get_multi_carets())
         target = (
             min(carets, key=lambda c: self._row_col_for_caret(c)[0])
@@ -419,35 +520,37 @@ class EditorMultiCursorMixin:
 
     def _apply_multi_replacements(
         self,
-        replacements: list[tuple[int, int, str]],
-        *,
-        primary_index: int = 0,
+        replacements: list[tuple[int, int, str, bool]],
     ) -> None:
-        """Apply sorted replacements and place one collapsed caret after each edit"""
+        """Apply sorted replacements and rebase every caret into the edited text"""
         if not replacements:
             return
-        new_text = self.buffer.text
+        text = self.buffer.text
+        ordered = sorted(replacements, key=lambda item: (item[0], item[1]))
+        parts: list[str] = []
         new_carets: list[MultiCursorCaret] = []
-        for order, (start, end, replacement) in enumerate(
-            sorted(replacements, key=lambda item: (item[0], item[1]), reverse=True)
-        ):
-            new_text = new_text[:start] + replacement + new_text[end:]
+        last_index = 0
+        position = 0
+        for start, end, replacement, is_primary in ordered:
+            unchanged = text[last_index:start]
+            parts.append(unchanged)
+            parts.append(replacement)
+            position += len(unchanged) + len(replacement)
             new_carets.append(
-                MultiCursorCaret(
-                    position=start + len(replacement),
-                    is_primary=order == primary_index,
-                )
+                MultiCursorCaret(position=position, is_primary=is_primary)
             )
-        self.buffer.save_to_undo_stack()
-        primary = next(
-            (caret for caret in new_carets if caret.is_primary), new_carets[0]
-        )
+            last_index = end
+        parts.append(text[last_index:])
+        new_text = "".join(parts)
         if not any(caret.is_primary for caret in new_carets):
-            primary.is_primary = True
+            new_carets[-1].is_primary = True
+        primary = next(caret for caret in new_carets if caret.is_primary)
+        self.buffer.save_to_undo_stack()
         self.buffer.set_document(
             Document(new_text, cursor_position=primary.position),
             bypass_readonly=True,
         )
+        self.reset_cursor_navigation_memory()
         self._set_multi_carets(new_carets)
 
     def replace_text_at_cursors(self, text: str) -> bool:
@@ -458,20 +561,10 @@ class EditorMultiCursorMixin:
         ):
             return False
         replacements = [
-            (caret.selection_start, caret.selection_end, text) for caret in carets
+            (caret.selection_start, caret.selection_end, text, caret.is_primary)
+            for caret in carets
         ]
-        primary_order = next(
-            index
-            for index, caret in enumerate(
-                sorted(
-                    carets,
-                    key=lambda c: (c.selection_start, c.selection_end),
-                    reverse=True,
-                )
-            )
-            if caret.is_primary
-        )
-        self._apply_multi_replacements(replacements, primary_index=primary_order)
+        self._apply_multi_replacements(replacements)
         self.start_bulk_edit(text)
         return True
 
@@ -480,26 +573,19 @@ class EditorMultiCursorMixin:
         carets = self._get_multi_carets()
         if not self.multi_cursor_active():
             return False
-        replacements: list[tuple[int, int, str]] = []
+        replacements: list[tuple[int, int, str, bool]] = []
         for caret in carets:
             if caret.has_selection:
-                replacements.append((caret.selection_start, caret.selection_end, ""))
+                replacements.append(
+                    (caret.selection_start, caret.selection_end, "", caret.is_primary)
+                )
             elif caret.position > 0:
-                replacements.append((caret.position - 1, caret.position, ""))
+                replacements.append(
+                    (caret.position - 1, caret.position, "", caret.is_primary)
+                )
         if not replacements:
             return False
-        primary_order = next(
-            index
-            for index, caret in enumerate(
-                sorted(
-                    carets,
-                    key=lambda c: (c.selection_start, c.selection_end),
-                    reverse=True,
-                )
-            )
-            if caret.is_primary
-        )
-        self._apply_multi_replacements(replacements, primary_index=primary_order)
+        self._apply_multi_replacements(replacements)
         return True
 
     def delete_after_cursors(self) -> bool:
@@ -508,26 +594,19 @@ class EditorMultiCursorMixin:
         if not self.multi_cursor_active():
             return False
         text_length = len(self.buffer.text)
-        replacements: list[tuple[int, int, str]] = []
+        replacements: list[tuple[int, int, str, bool]] = []
         for caret in carets:
             if caret.has_selection:
-                replacements.append((caret.selection_start, caret.selection_end, ""))
+                replacements.append(
+                    (caret.selection_start, caret.selection_end, "", caret.is_primary)
+                )
             elif caret.position < text_length:
-                replacements.append((caret.position, caret.position + 1, ""))
+                replacements.append(
+                    (caret.position, caret.position + 1, "", caret.is_primary)
+                )
         if not replacements:
             return False
-        primary_order = next(
-            index
-            for index, caret in enumerate(
-                sorted(
-                    carets,
-                    key=lambda c: (c.selection_start, c.selection_end),
-                    reverse=True,
-                )
-            )
-            if caret.is_primary
-        )
-        self._apply_multi_replacements(replacements, primary_index=primary_order)
+        self._apply_multi_replacements(replacements)
         return True
 
     def paste_text_at_cursors(self, text: str) -> bool:
@@ -546,8 +625,13 @@ class EditorMultiCursorMixin:
         if render_info is None:
             return
         max_scroll = max(0, render_info.content_height - render_info.window_height)
-        self.main_window.vertical_scroll = max(
-            0,
-            min(max_scroll, self.main_window.vertical_scroll + (direction * count)),
+        current_scroll = (
+            self._detached_vertical_scroll
+            if self._detached_vertical_scroll is not None
+            else self.main_window.vertical_scroll
         )
+        self._detached_vertical_scroll = max(
+            0, min(max_scroll, current_scroll + (direction * count))
+        )
+        self.main_window.vertical_scroll = self._detached_vertical_scroll
         self.invalidate()
