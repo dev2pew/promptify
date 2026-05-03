@@ -64,7 +64,12 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.F8,))
     assert bindings.get_bindings_for_keys((Keys.ControlF6,))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "2", "u"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, Keys.Enter))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "7", "u"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ControlDown))
+    assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ControlUp))
+    assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ControlShiftDown))
+    assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ControlShiftUp))
     assert bindings.get_bindings_for_keys((Keys.Escape, "g"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "z"))
     assert bindings.get_bindings_for_keys((Keys.F10,))
@@ -597,6 +602,14 @@ async def test_interactive_editor_runtime_search_widget_shortcuts_work(
                     break
                 await asyncio.sleep(0.02)
 
+            pipe_input.send_text("\x1b[13;2u")  # SHIFT+ENTER
+            for _ in range(20):
+                if editor.buffer.cursor_position == 12:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.cursor_position == 12
+
             pipe_input.send_text("\x1b[17~")  # F6
             for _ in range(20):
                 if editor.search_options.match_case:
@@ -672,6 +685,187 @@ async def test_interactive_editor_runtime_replace_enter_and_ctrl_alt_enter(
                 await asyncio.sleep(0.02)
 
             assert editor.buffer.text == "omega omega"
+
+            editor.replace_buffer.text = ""
+            pipe_input.send_text("\x1b[A")  # UP
+            for _ in range(20):
+                if editor.replace_buffer.text == "omega":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.replace_buffer.text == "omega"
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_runtime_ctrl_alt_vertical_cursors_use_physical_direction(
+    app_components,
+):
+    """Physical Ctrl+Alt+arrows should add carets in the visible arrow direction"""
+    context, resolver = app_components
+    editor = InteractiveEditor("one\ntwo\nthree", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.buffer.cursor_position = (
+                editor.buffer.document.translate_row_col_to_index(1, 0)
+            )
+
+            pipe_input.send_text("\x1b[1;7A")  # CTRL+ALT+UP
+            rows: list[int] = []
+            for _ in range(20):
+                rows = [
+                    editor.buffer.document.translate_index_to_position(caret.position)[
+                        0
+                    ]
+                    for caret in editor._get_multi_carets()
+                ]
+                if rows == [0, 1]:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert rows == [0, 1]
+
+            pipe_input.send_text("\x1b[1;7B")  # CTRL+ALT+DOWN
+            rows = []
+            for _ in range(20):
+                rows = [
+                    editor.buffer.document.translate_index_to_position(caret.position)[
+                        0
+                    ]
+                    for caret in editor._get_multi_carets()
+                ]
+                if rows == [0, 1, 2]:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert rows == [0, 1, 2]
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_runtime_ctrl_shift_alt_shrinks_contiguous_edge(
+    app_components,
+):
+    """Opposite Ctrl+Shift+Alt arrows should shrink the outer block edge"""
+    context, resolver = app_components
+    editor = InteractiveEditor("zero\none\ntwo\nthree", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.buffer.cursor_position = (
+                editor.buffer.document.translate_row_col_to_index(3, 0)
+            )
+
+            pipe_input.send_text("\x1b[1;8A")  # CTRL+SHIFT+ALT+UP
+            pipe_input.send_text("\x1b[1;8A")  # CTRL+SHIFT+ALT+UP
+
+            rows: list[int] = []
+            for _ in range(20):
+                rows = sorted(
+                    editor.buffer.document.translate_index_to_position(caret.position)[
+                        0
+                    ]
+                    for caret in editor.get_multi_cursor_render_carets()
+                )
+                if rows == [1, 2, 3]:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert rows == [1, 2, 3]
+
+            pipe_input.send_text("\x1b[1;8B")  # CTRL+SHIFT+ALT+DOWN
+            rows = []
+            for _ in range(20):
+                rows = sorted(
+                    editor.buffer.document.translate_index_to_position(caret.position)[
+                        0
+                    ]
+                    for caret in editor.get_multi_cursor_render_carets()
+                )
+                if rows == [2, 3]:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert rows == [2, 3]
+
+            pipe_input.send_text("\x1b[1;8B")  # CTRL+SHIFT+ALT+DOWN
+            for _ in range(20):
+                if not editor.multi_cursor_active():
+                    break
+                await asyncio.sleep(0.02)
+
+            assert not editor.multi_cursor_active()
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_runtime_fast_cut_is_not_cancelled_by_typeahead(
+    app_components,
+):
+    """Ctrl+X should run eagerly even when the next typed key arrives quickly"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            pipe_input.send_text("\x01")  # CTRL+A
+            pipe_input.send_text("\x18z")  # CTRL+X then immediate text
+
+            for _ in range(20):
+                if editor.buffer.text == "z":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "z"
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_runtime_shift_vertical_selection_deletes(
+    app_components,
+):
+    """Shift+Down selection should be removable with Delete"""
+    context, resolver = app_components
+    editor = InteractiveEditor("abc\ndef", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            pipe_input.send_text("\x1b[1;2B")  # SHIFT+DOWN
+            for _ in range(20):
+                if editor.buffer.selection_state is not None:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.selection_state is not None
+
+            pipe_input.send_text("\x1b[3~")  # DELETE
+            for _ in range(20):
+                if editor.buffer.text == "def":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "def"
 
             pipe_input.send_text("\x11")  # CTRL+Q
             pipe_input.send_text("\r")  # ENTER

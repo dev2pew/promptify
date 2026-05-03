@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -16,6 +16,7 @@ from prompt_toolkit.keys import Keys
 from ...shared.editor_state import EditorIssue, OverlayName
 
 type BindingHandler = Callable[[KeyPressEvent], None]
+type KeySequence = Sequence[Keys | str]
 type IndentDetector = Callable[[Document], str]
 type HomePositionGetter = Callable[[Document], int]
 type SelectionStarter = Callable[[Buffer], None]
@@ -98,6 +99,8 @@ class EditorBindingHost(Protocol):
 
     def cycle_search_history(self, direction: int) -> None: ...
 
+    def cycle_replace_history(self, direction: int) -> None: ...
+
     def toggle_match_case(self) -> None: ...
 
     def toggle_match_whole_word(self) -> None: ...
@@ -164,6 +167,30 @@ class EditorBindingContext:
                     event.app.invalidate()
 
             _ = self.bindings.add(*keys, filter=filter, eager=eager)(wrapped)
+            return handler
+
+        return decorator
+
+    def bind_sequences(
+        self,
+        sequences: Iterable[KeySequence],
+        *,
+        filter: FilterOrBool = True,
+        eager: bool = False,
+        note_activity: bool = False,
+        invalidate: bool = False,
+    ) -> Callable[[BindingHandler], BindingHandler]:
+        """Register equivalent terminal encodings for one semantic action"""
+
+        def decorator(handler: BindingHandler) -> BindingHandler:
+            for sequence in sequences:
+                self.bind(
+                    *sequence,
+                    filter=filter,
+                    eager=eager,
+                    note_activity=note_activity,
+                    invalidate=invalidate,
+                )(handler)
             return handler
 
         return decorator

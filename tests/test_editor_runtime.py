@@ -42,6 +42,16 @@ test_interactive_editor_runtime_search_widget_shortcuts_work = (
 test_interactive_editor_runtime_replace_enter_and_ctrl_alt_enter = (
     cases.test_interactive_editor_runtime_replace_enter_and_ctrl_alt_enter
 )
+test_interactive_editor_runtime_ctrl_alt_vertical_cursors_use_physical_direction = cases.test_interactive_editor_runtime_ctrl_alt_vertical_cursors_use_physical_direction
+test_interactive_editor_runtime_ctrl_shift_alt_shrinks_contiguous_edge = (
+    cases.test_interactive_editor_runtime_ctrl_shift_alt_shrinks_contiguous_edge
+)
+test_interactive_editor_runtime_fast_cut_is_not_cancelled_by_typeahead = (
+    cases.test_interactive_editor_runtime_fast_cut_is_not_cancelled_by_typeahead
+)
+test_interactive_editor_runtime_shift_vertical_selection_deletes = (
+    cases.test_interactive_editor_runtime_shift_vertical_selection_deletes
+)
 test_interactive_editor_erases_screen_when_done = (
     cases.test_interactive_editor_erases_screen_when_done
 )

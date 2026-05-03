@@ -49,6 +49,8 @@ _DEFAULT_THEME_STYLES = {
     "search-toggle-off": "bg:#1f1f1f #ff6b6b bold",
     "search-match": "bg:#5d4a1d #fff0cb",
     "search-match-active": "bg:#1f5d8e #f7fbff bold",
+    "multi-cursor": "bg:#d7f6ff #101317 bold",
+    "multi-cursor-selection": "bg:#244a60 #eef9ff",
     "current-line": "bg:#262a31",
     "err-frame": "bg:#101317",
     "err-frame.border": "fg:#768394",
@@ -90,6 +92,8 @@ _THEME_ENV_MAP = {
     "PROMPTIFY_THEME_SEARCH_TOGGLE_OFF": "search-toggle-off",
     "PROMPTIFY_THEME_SEARCH_MATCH": "search-match",
     "PROMPTIFY_THEME_SEARCH_MATCH_ACTIVE": "search-match-active",
+    "PROMPTIFY_THEME_MULTI_CURSOR": "multi-cursor",
+    "PROMPTIFY_THEME_MULTI_CURSOR_SELECTION": "multi-cursor-selection",
     "PROMPTIFY_THEME_CURRENT_LINE": "current-line",
     "PROMPTIFY_THEME_ERROR_FRAME": "err-frame",
     "PROMPTIFY_THEME_ERROR_FRAME_BORDER": "err-frame.border",
@@ -167,6 +171,7 @@ class EditorLayoutSettings:
     full_screen: bool
     mouse_support: bool
     ttimeoutlen: float
+    timeoutlen: float
     completion_menu_max_height: int
     completion_menu_scroll_offset: int
     help_width_min: int
@@ -572,6 +577,13 @@ def build_settings(
                 warns,
                 minimum=0.0,
             ),
+            timeoutlen=_parse_float(
+                source_env,
+                "PROMPTIFY_UI_TIMEOUTLEN",
+                0.05,
+                warns,
+                minimum=0.0,
+            ),
             completion_menu_max_height=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_COMPLETION_MENU_MAX_HEIGHT",
@@ -826,6 +838,7 @@ def _replace_editor_layout(
         full_screen=layout.full_screen,
         mouse_support=layout.mouse_support,
         ttimeoutlen=layout.ttimeoutlen,
+        timeoutlen=layout.timeoutlen,
         completion_menu_max_height=layout.completion_menu_max_height,
         completion_menu_scroll_offset=layout.completion_menu_scroll_offset,
         help_width_min=int(overrides.get("help_width_min", layout.help_width_min)),

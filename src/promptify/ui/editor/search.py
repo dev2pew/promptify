@@ -23,6 +23,10 @@ class EditorSearchMixin:
     _search_history_index: int = -1
     _search_history_draft: str = ""
     _search_history_navigation_active: bool = False
+    _replace_history: list[str] = []
+    _replace_history_index: int = -1
+    _replace_history_draft: str = ""
+    _replace_history_navigation_active: bool = False
     _search_last_query: str = ""
     _search_last_direction: int = 1
     _search_last_match: SearchMatch | None = None
@@ -84,6 +88,15 @@ class EditorSearchMixin:
         del self._search_history[self.SEARCH_HISTORY_LIMIT :]
         self._search_history_index = -1
 
+    def _remember_replace_text(self, text: str) -> None:
+        """Keep a small in-memory history of replacement text"""
+        if not text:
+            return
+        self._replace_history = [item for item in self._replace_history if item != text]
+        self._replace_history.insert(0, text)
+        del self._replace_history[self.SEARCH_HISTORY_LIMIT :]
+        self._replace_history_index = -1
+
     def cycle_search_history(self, direction: int) -> None:
         """Move backward or forward through recent search queries"""
         if not self._search_history:
@@ -117,8 +130,37 @@ class EditorSearchMixin:
             self._search_history_index = -1
         self.invalidate()
 
+    def cycle_replace_history(self, direction: int) -> None:
+        """Move backward or forward through recent replacement strings"""
+        if not self._replace_history:
+            return
+        if self._replace_history_index < 0:
+            self._replace_history_draft = self.replace_buffer.text
+            self._replace_history_index = 0 if direction < 0 else -1
+        else:
+            self._replace_history_index -= direction
+
+        if self._replace_history_index < 0:
+            self._replace_history_index = -1
+            replacement = self._replace_history_draft
+        elif self._replace_history_index >= len(self._replace_history):
+            self._replace_history_index = len(self._replace_history) - 1
+            replacement = self._replace_history[self._replace_history_index]
+        else:
+            replacement = self._replace_history[self._replace_history_index]
+
+        self._replace_history_navigation_active = True
+        try:
+            self.replace_buffer.document = Document(
+                replacement, cursor_position=len(replacement)
+            )
+        finally:
+            self._replace_history_navigation_active = False
+
     def _handle_replace_text_changed(self, _buffer: Buffer) -> None:
         """Refresh the widget when replace content changes"""
+        if not self._replace_history_navigation_active:
+            self._replace_history_index = -1
         self.invalidate()
 
     def _handle_jump_text_changed(self, _buffer: Buffer) -> None:
@@ -454,10 +496,12 @@ class EditorSearchMixin:
         match = state.active_match or state.matches[0]
         text = self.buffer.text
         source = text[match.start : match.end]
+        replacement_text = self.replace_buffer.text
         replacement = self._expand_replacement(source, match)
         self.buffer.text = text[: match.start] + replacement + text[match.end :]
         self.buffer.cursor_position = match.start + len(replacement)
         self._remember_search_query(self.search_buffer.text)
+        self._remember_replace_text(replacement_text)
         self._clear_search_message()
         self._reset_search_navigation()
         self.invalidate()
@@ -502,6 +546,7 @@ class EditorSearchMixin:
         self.buffer.text = new_text
         self.buffer.cursor_position = 0
         self._remember_search_query(query)
+        self._remember_replace_text(self.replace_buffer.text)
         self._clear_search_message()
         self._reset_search_navigation()
         self.invalidate()

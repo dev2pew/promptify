@@ -140,6 +140,10 @@ class InteractiveEditor(
         self._search_history_index = -1
         self._search_history_draft = ""
         self._search_history_navigation_active = False
+        self._replace_history: list[str] = []
+        self._replace_history_index = -1
+        self._replace_history_draft = ""
+        self._replace_history_navigation_active = False
         self._document_issue_cache_text_id = 0
         self._document_issue_cache_enabled = True
         self._document_issue_cache: tuple[EditorIssue, ...] = tuple()
@@ -442,6 +446,7 @@ class InteractiveEditor(
             ),
         )
         app.ttimeoutlen = settings.editor_layout.ttimeoutlen
+        app.timeoutlen = settings.editor_layout.timeoutlen
         self._focus_target(self._get_focus_target())
 
         token_task = asyncio.create_task(self._update_tokens_loop())

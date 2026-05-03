@@ -14,6 +14,12 @@ from prompt_toolkit.selection import SelectionState
 
 from ...core.context import get_comment_syntax
 from .context import EditorBindingContext
+from .sequences import (
+    CTRL_ALT_DOWN,
+    CTRL_ALT_UP,
+    CTRL_SHIFT_ALT_DOWN,
+    CTRL_SHIFT_ALT_UP,
+)
 
 
 def _get_selected_row_range(buffer: Buffer) -> tuple[int, int]:
@@ -47,7 +53,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             data = buffer.copy_selection()
             event.app.clipboard.set_data(data)
 
-    @ctx.bind("c-x", filter=ctx.text_focus)
+    @ctx.bind("c-x", filter=ctx.text_focus, eager=True)
     def _cut(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
         if buffer.selection_state:
@@ -234,8 +240,8 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         else:
             buffer.delete(count=len(buffer.text) - buffer.cursor_position)
 
-    @ctx.bind("backspace", filter=ctx.text_focus & has_selection)
-    @ctx.bind("delete", filter=ctx.text_focus & has_selection)
+    @ctx.bind("backspace", filter=ctx.text_focus & has_selection, eager=True)
+    @ctx.bind("delete", filter=ctx.text_focus & has_selection, eager=True)
     def _delete_selection(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         buffer.cut_selection()
@@ -415,6 +421,18 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         if buffer.cursor_position < len(buffer.text):
             buffer.cursor_position += 1
 
+    @ctx.bind("s-up", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    def _s_up(event: KeyPressEvent) -> None:
+        buffer = event.current_buffer
+        ctx.start_selection(buffer)
+        buffer.cursor_position += buffer.document.get_cursor_up_position()
+
+    @ctx.bind("s-down", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    def _s_down(event: KeyPressEvent) -> None:
+        buffer = event.current_buffer
+        ctx.start_selection(buffer)
+        buffer.cursor_position += buffer.document.get_cursor_down_position()
+
     @ctx.bind(
         "up", filter=ctx.editor_focus & ~ctx.has_completions_menu, note_activity=True
     )
@@ -490,49 +508,29 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         if ctx.editor.multi_cursor_active():
             ctx.editor.clear_multi_cursors()
 
-    @ctx.bind(
-        "escape",
-        "[",
-        "1",
-        ";",
-        "7",
-        "A",
+    @ctx.bind_sequences(
+        CTRL_ALT_UP,
         filter=ctx.editor_focus & ~ctx.has_completions_menu,
     )
     def _add_cursor_up(event: KeyPressEvent) -> None:
         ctx.editor.add_vertical_cursor(-1)
 
-    @ctx.bind(
-        "escape",
-        "[",
-        "1",
-        ";",
-        "7",
-        "B",
+    @ctx.bind_sequences(
+        CTRL_ALT_DOWN,
         filter=ctx.editor_focus & ~ctx.has_completions_menu,
     )
     def _add_cursor_down(event: KeyPressEvent) -> None:
         ctx.editor.add_vertical_cursor(1)
 
-    @ctx.bind(
-        "escape",
-        "[",
-        "1",
-        ";",
-        "8",
-        "A",
+    @ctx.bind_sequences(
+        CTRL_SHIFT_ALT_UP,
         filter=ctx.editor_focus & ~ctx.has_completions_menu,
     )
     def _expand_cursor_up(event: KeyPressEvent) -> None:
         ctx.editor.expand_or_shrink_vertical_cursors(-1)
 
-    @ctx.bind(
-        "escape",
-        "[",
-        "1",
-        ";",
-        "8",
-        "B",
+    @ctx.bind_sequences(
+        CTRL_SHIFT_ALT_DOWN,
         filter=ctx.editor_focus & ~ctx.has_completions_menu,
     )
     def _expand_cursor_down(event: KeyPressEvent) -> None:

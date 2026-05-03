@@ -15,9 +15,12 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
             "PROMPTIFY_EDITOR_SHOW_HELP_ON_START": "yes",
             "PROMPTIFY_EDITOR_SHOW_LINE_NUMBERS": "off",
             "PROMPTIFY_EDITOR_WORD_WRAP": "on",
+            "PROMPTIFY_UI_TIMEOUTLEN": "0.02",
             "PROMPTIFY_THEME_TOPBAR": "bg:#000000 #ffffff",
             "PROMPTIFY_THEME_SEARCH_TOGGLE_ON": "fg:#00ff00 bold",
             "PROMPTIFY_THEME_SEARCH_TOGGLE_OFF": "fg:#ff0000",
+            "PROMPTIFY_THEME_MULTI_CURSOR": "bg:#ffffff #000000",
+            "PROMPTIFY_THEME_MULTI_CURSOR_SELECTION": "bg:#111111 #eeeeee",
             "PROMPTIFY_INDEX_WATCH_MODE": "polling",
             "PROMPTIFY_LOG_COLOR_INFO": "ansigreen",
             "PROMPTIFY_TERMINAL_PROFILE": "legacy-cmd",
@@ -32,9 +35,12 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
     assert settings.editor_behavior.show_help_on_start
     assert not settings.editor_behavior.show_line_numbers
     assert settings.editor_behavior.word_wrap
+    assert settings.editor_layout.timeoutlen == 0.02
     assert settings.theme.styles["topbar"] == "bg:#000000 #ffffff"
     assert settings.theme.styles["search-toggle-on"] == "fg:#00ff00 bold"
     assert settings.theme.styles["search-toggle-off"] == "fg:#ff0000"
+    assert settings.theme.styles["multi-cursor"] == "bg:#ffffff #000000"
+    assert settings.theme.styles["multi-cursor-selection"] == "bg:#111111 #eeeeee"
     assert settings.indexer.watch_mode == "polling"
     assert settings.logger.info_color == "ansigreen"
     assert settings.terminal.profile == "legacy-cmd"

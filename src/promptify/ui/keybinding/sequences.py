@@ -1,0 +1,34 @@
+"""Terminal key sequence variants used by editor bindings"""
+
+from __future__ import annotations
+
+from prompt_toolkit.keys import Keys
+
+from .context import KeySequence
+
+SHIFT_ENTER: tuple[KeySequence, ...] = (
+    (Keys.Escape, "[", "1", "3", ";", "2", "u"),
+    (Keys.Escape, Keys.Enter),
+)
+
+CTRL_ALT_ENTER: tuple[KeySequence, ...] = ((Keys.Escape, "[", "1", "3", ";", "7", "u"),)
+
+CTRL_ALT_UP: tuple[KeySequence, ...] = (
+    (Keys.Escape, "[", "1", ";", "7", "A"),
+    (Keys.Escape, Keys.ControlDown),
+)
+
+CTRL_ALT_DOWN: tuple[KeySequence, ...] = (
+    (Keys.Escape, "[", "1", ";", "7", "B"),
+    (Keys.Escape, Keys.ControlUp),
+)
+
+CTRL_SHIFT_ALT_UP: tuple[KeySequence, ...] = (
+    (Keys.Escape, "[", "1", ";", "8", "A"),
+    (Keys.Escape, Keys.ControlShiftDown),
+)
+
+CTRL_SHIFT_ALT_DOWN: tuple[KeySequence, ...] = (
+    (Keys.Escape, "[", "1", ";", "8", "B"),
+    (Keys.Escape, Keys.ControlShiftUp),
+)

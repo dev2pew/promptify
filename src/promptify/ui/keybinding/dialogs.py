@@ -5,6 +5,7 @@ from __future__ import annotations
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 
 from .context import EditorBindingContext
+from .sequences import CTRL_ALT_ENTER, SHIFT_ENTER
 
 
 def register_dialog_bindings(ctx: EditorBindingContext) -> None:
@@ -137,14 +138,8 @@ def register_dialog_bindings(ctx: EditorBindingContext) -> None:
     def _search_next(event: KeyPressEvent) -> None:
         ctx.editor.search_step(1)
 
-    @ctx.bind(
-        "escape",
-        "[",
-        "1",
-        "3",
-        ";",
-        "2",
-        "u",
+    @ctx.bind_sequences(
+        SHIFT_ENTER,
         filter=ctx.search_focus,
         note_activity=True,
         invalidate=True,
@@ -185,14 +180,16 @@ def register_dialog_bindings(ctx: EditorBindingContext) -> None:
     def _replace_current(event: KeyPressEvent) -> None:
         ctx.editor.replace_current()
 
-    @ctx.bind(
-        "escape",
-        "[",
-        "1",
-        "3",
-        ";",
-        "7",
-        "u",
+    @ctx.bind("up", filter=ctx.replace_focus, note_activity=True, invalidate=True)
+    def _replace_history_previous(event: KeyPressEvent) -> None:
+        ctx.editor.cycle_replace_history(-1)
+
+    @ctx.bind("down", filter=ctx.replace_focus, note_activity=True, invalidate=True)
+    def _replace_history_next(event: KeyPressEvent) -> None:
+        ctx.editor.cycle_replace_history(1)
+
+    @ctx.bind_sequences(
+        CTRL_ALT_ENTER,
         filter=ctx.replace_focus,
         note_activity=True,
         invalidate=True,

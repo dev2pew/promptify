@@ -55,27 +55,97 @@ class EditorMultiCursorMixin:
             for caret in self._get_multi_carets()
         )
 
+    def _clamp_multi_caret(
+        self, caret: MultiCursorCaret, *, primary_claimed: bool
+    ) -> MultiCursorCaret:
+        """Return one caret clamped to the live document bounds"""
+        text_length = len(self.buffer.text)
+        position = max(0, min(text_length, caret.position))
+        anchor = (
+            None if caret.anchor is None else max(0, min(text_length, caret.anchor))
+        )
+        return MultiCursorCaret(
+            position=position,
+            anchor=anchor,
+            preferred_column=caret.preferred_column,
+            is_primary=caret.is_primary and not primary_claimed,
+        )
+
+    def _merge_two_carets(
+        self, previous: MultiCursorCaret, current: MultiCursorCaret
+    ) -> MultiCursorCaret:
+        """Merge overlapping edit ranges into one non-conflicting caret"""
+        start = min(previous.selection_start, current.selection_start)
+        end = max(previous.selection_end, current.selection_end)
+        is_primary = previous.is_primary or current.is_primary
+        preferred_column = (
+            current.preferred_column
+            if current.is_primary and current.preferred_column is not None
+            else previous.preferred_column
+        )
+        return MultiCursorCaret(
+            position=end,
+            anchor=start if start != end else None,
+            preferred_column=preferred_column,
+            is_primary=is_primary,
+        )
+
     def _merge_multi_carets(
         self, carets: list[MultiCursorCaret]
     ) -> list[MultiCursorCaret]:
-        """Merge colliding carets while preserving the primary cursor"""
-        merged: dict[tuple[int, int], MultiCursorCaret] = {}
+        """Normalize carets into non-overlapping edit ranges with one primary"""
+        primary_claimed = False
+        clamped: list[MultiCursorCaret] = []
         for caret in carets:
-            key = caret.range_key
-            current = merged.get(key)
-            if current is None or caret.is_primary:
-                merged[key] = caret
+            normalized = self._clamp_multi_caret(caret, primary_claimed=primary_claimed)
+            primary_claimed = primary_claimed or normalized.is_primary
+            clamped.append(normalized)
+
+        if not clamped:
+            clamped.append(self._make_primary_caret())
+
         ordered = sorted(
-            merged.values(),
+            clamped,
             key=lambda caret: (
                 caret.selection_start,
                 caret.selection_end,
                 caret.position,
+                not caret.is_primary,
             ),
         )
-        if not any(caret.is_primary for caret in ordered):
-            ordered.append(self._make_primary_caret())
-        return ordered
+        merged: list[MultiCursorCaret] = []
+        for caret in ordered:
+            if not merged:
+                merged.append(caret)
+                continue
+
+            previous = merged[-1]
+            same_collapsed_position = (
+                not previous.has_selection
+                and not caret.has_selection
+                and previous.position == caret.position
+            )
+            overlaps_previous_range = (
+                previous.selection_start
+                <= caret.selection_start
+                < previous.selection_end
+                or caret.selection_start
+                <= previous.selection_start
+                < caret.selection_end
+            )
+            if same_collapsed_position or overlaps_previous_range:
+                merged[-1] = self._merge_two_carets(previous, caret)
+            else:
+                merged.append(caret)
+
+        if not any(caret.is_primary for caret in merged):
+            live_position = self._make_primary_caret().position
+            nearest_index = min(
+                range(len(merged)),
+                key=lambda index: abs(merged[index].position - live_position),
+            )
+            merged[nearest_index].is_primary = True
+        return merged
 
     def _set_multi_carets(self, carets: list[MultiCursorCaret]) -> None:
         """Persist the virtual carets and sync the real prompt-toolkit cursor"""
@@ -336,9 +406,9 @@ class EditorMultiCursorMixin:
         ]
         if opposite and self._multi_cursor_last_vertical_direction == -direction:
             target = (
-                max(opposite, key=lambda caret: self._row_col_for_caret(caret)[0])
+                min(opposite, key=lambda caret: self._row_col_for_caret(caret)[0])
                 if direction > 0
-                else min(opposite, key=lambda caret: self._row_col_for_caret(caret)[0])
+                else max(opposite, key=lambda caret: self._row_col_for_caret(caret)[0])
             )
             carets.remove(target)
             self._set_multi_carets(carets)

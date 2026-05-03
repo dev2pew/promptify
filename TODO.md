@@ -1,29 +1,74 @@
 # PROMPT
 
-complete the task while adhering to the AGENTS and README from the repo.
+i will attach the current state of `src/` and `/tests/`, move and overwrite your current state of project root with my version.
 
-## TASK
+ensure to remember AGENTS and README.
 
-- analyze this repo's `cdx/hotkeys` branch- <https://github.com/dev2pew/promptify.git>;
-- make sure to follow rules described in AGENTS and README;
-- after planning your actions, perform the fixes of the issues listed below.
+## PROBLEMS
 
-## ISSUES
+1. fix the smart cursor behavior...
 
-1. user no longer is able to erase selected text using `[Shift] + [^/v/</>]` and `[Backspace]` or `[Del]` - but `^[W]` works;
-2. all hotkeys related to multi-cursor editing does not work, below is the list of hotkeys that does not work...
+- the cursor position preservance works correctly;
+- make the [Home/End] buttons or other navigation buttons update the cursor pos;
+- currently pressing Home or End when the cursor is at the row which has nothing does nothing, meaning the cursor will pop back into the pos when navigating betweens the rows.
 
-- `^[Alt] + [^/v]`; (cursor above or below)
-- `^[Shift] + [Alt] + [^/v]`; (cursor expand or shrink)
-- `[Shift] + [Enter]`; (in the search pane for previous match)
-- `[^/v]`; (in the replace pane for history)
+2. the multi-cursor typing is weird, below are the human tests and the demos...
 
-3. closing "search" or "replace" pane takes a long time, including removing closed text cursors using `[Esc]` - why does this happen!? fix! (this problem persists for a long time now - in many modal windows or utilizing certain hotkeys take some time to be processed and if I interrupt it, it cancels, ex. cut action `^[X]` in the editor, if I wait - it cuts the selected text, but if I use cut hotkey and then write text, then it cancels out which is not suitable for fast editing - therefore sucks)
+CTRL + ALT + UP (1) DOWN (1)
 
-## NOTE
+```md
+abcde       <- clone
+edecdbcab   <- cursor
+a           <- clone
 
-after trying to use hotfix to see if multi-cursor works...
+```
 
-1. cloned text cursors does not have visible indicators; (the real cursor has underline, make the cloned ones have some kind of visual element! like cursor block or line, which can be customized using `.env.example`)
-2. hotkey for "cursor above or below" directions are wrong; (need to be swapped)
-3. hotkey "cursor expand or shrink" directions are wrong. (need to be swapped)
+CTRL + SHIFT + ALT + UP (3)
+
+```md
+abcdef      <- clone
+fedcba      <- cursor
+
+```
+
+CTRL + SHIFT + ALT + DOWN (3)
+
+```md
+abcdef      <- cursor
+fedcba      <- clone
+```
+
+3. this happened while typing in the editor...
+
+seems like, this happens randomly when I type or when I am typing more often, seems like if I am typing during backup save it triggers the error but I am not sure.
+
+```log
+Unhandled exception in event loop:
+  File "C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\src\promptify\ui\editor\runtime.py", line 332, in _flush
+    await session_store.save(
+    ...<5 lines>...
+    )
+  File "C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\src\promptify\shared\state.py", line 188, in save
+    await _write_text_atomic(
+    ...<2 lines>...
+    )
+  File "C:\Users\lucky\Documents\vscode\python\tools\dirs\ai\promptify\src\promptify\shared\state.py", line 25, in _write_text_atomic
+    temp_path.replace(path)
+    ~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\lucky\AppData\Roaming\uv\python\cpython-3.13-windows-x86_64-none\Lib\pathlib\_local.py", line 780, in replace
+    os.replace(self, target)
+    ~~~~~~~~~~^^^^^^^^^^^^^^
+
+Exception [WinError 5] Access is denied: 'C:\\Users\\lucky\\Documents\\vscode\\python\\tools\\dirs\\ai\\promptify\\data\\state.dat.tmp' -> 'C:\\Users\\lucky\\Documents\\vscode\\python\\tools\\dirs\\ai\\promptify\\data\\state.dat'
+
+```
+
+4. the brackets highlight color in the editor is weird, change the default colors for highlighting to be bright, instead of dark? (in both source and env example)
+
+5. the pygments default markdown style for headings in too dark, override with with something more vibrant? (in both source and env example - add a new option)
+
+6. navigating while text is selected must place the cursor at the start or end of selection - currently the cursor just moves normally; (ensure this new feature won't clash with other components)
+
+7. navigating with word wrap on is weird, and not intuitive, for example, if the wrapped row has like 6 lines of height, the cursor just skips 5 lines when navigating up or down - make te cursor navigate through the wrapped rows as well - ensure the position is restored correctly when toggling the word wrap in this way;
+
+8. when moving the view using `^[^/v]` (Up/Down) - do not restrict the view range to the cursor, make the cursor be able to not be visible - in other words, let the user go far and not be "chained" to the real cursor.
