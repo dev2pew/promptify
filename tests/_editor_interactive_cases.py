@@ -7,6 +7,7 @@ import pytest
 from prompt_toolkit.application.current import create_app_session
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import CompletionState
+from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.completion import CompleteEvent, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.input.defaults import create_pipe_input
@@ -1582,3 +1583,178 @@ async def test_interactive_editor_scroll_view_keeps_cursor_position(app_componen
 
     assert editor.main_window.vertical_scroll == 15
     assert editor.buffer.cursor_position == start
+
+
+async def test_interactive_editor_runtime_modal_blocks_multicursor_sequences(
+    app_components,
+):
+    """Escape-prefixed editor shortcuts should not leak through active modals"""
+    context, resolver = app_components
+    editor = InteractiveEditor("one\ntwo\nthree", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.buffer.cursor_position = (
+                editor.buffer.document.translate_row_col_to_index(1, 0)
+            )
+            editor.open_help()
+            start_position = editor.buffer.cursor_position
+
+            pipe_input.send_text("\x1b[1;7A")  # CTRL+ALT+UP
+            pipe_input.send_text("\x1b[1;8B")  # CTRL+SHIFT+ALT+DOWN
+            await asyncio.sleep(0.15)
+
+            assert editor.help_visible
+            assert not editor.multi_cursor_active()
+            assert editor.buffer.cursor_position == start_position
+
+            pipe_input.send_text("\x1b")  # ESC closes help intentionally.
+            for _ in range(20):
+                if not editor.help_visible:
+                    break
+                await asyncio.sleep(0.02)
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_multicursor_shift_home_delete_stays_coherent(
+    app_components,
+):
+    """Shift+Home style selection should delete per virtual caret, not scatter clones"""
+    context, resolver = app_components
+    line = "multi-cursor text before `^[Shift] + [Home] and [Backspace]`"
+    editor = InteractiveEditor("\n".join((line, line, line)), context.indexer, resolver)
+    editor.buffer.cursor_position = editor.buffer.document.translate_row_col_to_index(
+        0, len(line)
+    )
+
+    assert editor.add_vertical_cursor(1)
+    assert editor.add_vertical_cursor(1)
+    assert editor.move_cursors_to_line_start(select=True)
+    assert all(caret.has_selection for caret in editor.get_multi_cursor_render_carets())
+
+    assert editor.delete_before_cursors()
+
+    assert editor.buffer.text == "\n\n"
+    carets = editor.get_multi_cursor_render_carets()
+    assert [
+        editor.buffer.document.translate_index_to_position(caret.position)
+        for caret in carets
+    ] == [(0, 0), (1, 0), (2, 0)]
+
+
+async def test_interactive_editor_multicursor_delete_previous_word_stays_coherent(
+    app_components,
+):
+    """Ctrl+W should delete the previous word at each virtual caret"""
+    context, resolver = app_components
+    line = "multi-cursor text before `^[W]`"
+    editor = InteractiveEditor("\n".join((line, line, line)), context.indexer, resolver)
+    editor.buffer.cursor_position = editor.buffer.document.translate_row_col_to_index(
+        0, line.index("]")
+    )
+
+    assert editor.add_vertical_cursor(1)
+    assert editor.add_vertical_cursor(1)
+    assert editor.delete_word_before_cursors()
+
+    expected_line = "multi-cursor text before `^[]`"
+    assert editor.buffer.text == "\n".join(
+        (expected_line, expected_line, expected_line)
+    )
+    assert [
+        editor.buffer.document.translate_index_to_position(caret.position)
+        for caret in editor.get_multi_cursor_render_carets()
+    ] == [
+        (0, expected_line.index("]")),
+        (1, expected_line.index("]")),
+        (2, expected_line.index("]")),
+    ]
+
+
+async def test_interactive_editor_runtime_ctrl_a_backspace_clears_multicursors(
+    app_components,
+):
+    """Ctrl+A followed by Backspace should collapse cloned cursors to one selection"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha\nbeta\ngamma", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.buffer.cursor_position = (
+                editor.buffer.document.translate_row_col_to_index(1, 2)
+            )
+            assert editor.add_vertical_cursor(-1)
+            assert editor.add_vertical_cursor(1)
+            assert editor.multi_cursor_active()
+
+            pipe_input.send_text("\x01")  # CTRL+A
+            pipe_input.send_text("\x7f")  # BACKSPACE
+            for _ in range(20):
+                if editor.buffer.text == "":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == ""
+            assert not editor.multi_cursor_active()
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_runtime_cut_paste_prefers_internal_clipboard(
+    app_components,
+):
+    """Ctrl+V and Ctrl+Shift+V should paste the editor clipboard after Ctrl+X"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha beta", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            pipe_input.send_text("\x01")  # CTRL+A
+            pipe_input.send_text("\x18")  # CTRL+X
+            for _ in range(20):
+                if editor.buffer.text == "":
+                    break
+                await asyncio.sleep(0.02)
+
+            get_app().clipboard.set_data(ClipboardData("system clipboard"))
+            pipe_input.send_text("\x16")  # CTRL+V
+            for _ in range(20):
+                if editor.buffer.text == "alpha beta":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "alpha beta"
+
+            pipe_input.send_text("\x01")  # CTRL+A
+            pipe_input.send_text("\x18")  # CTRL+X
+            for _ in range(20):
+                if editor.buffer.text == "":
+                    break
+                await asyncio.sleep(0.02)
+
+            get_app().clipboard.set_data(ClipboardData("system clipboard"))
+            pipe_input.send_text("\x1b[86;6u")  # CTRL+SHIFT+V modifyOtherKeys
+            for _ in range(20):
+                if editor.buffer.text == "alpha beta":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "alpha beta"
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)

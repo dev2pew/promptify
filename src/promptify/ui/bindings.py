@@ -52,6 +52,16 @@ def setup_keybindings(editor: EditorBindingHost) -> KeyBindings:
         return editor.replace_visible
 
     @Condition
+    def is_modal_visible() -> bool:
+        return (
+            editor.help_visible
+            or editor.err_visible
+            or editor.quit_visible
+            or editor.search_visible
+            or editor.jump_visible
+        )
+
+    @Condition
     def has_completions_menu() -> bool:
         b = get_app().current_buffer
         return b.complete_state is not None and len(b.complete_state.completions) > 0
@@ -110,6 +120,7 @@ def setup_keybindings(editor: EditorBindingHost) -> KeyBindings:
         jump_focus=jump_focus,
         search_widget_focus=search_widget_focus,
         text_focus=text_focus,
+        is_modal_visible=is_modal_visible,
         is_help_visible=is_help_visible,
         is_err_visible=is_err_visible,
         is_issue_mode_active=is_issue_mode_active,

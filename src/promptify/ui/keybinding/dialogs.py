@@ -5,11 +5,20 @@ from __future__ import annotations
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 
 from .context import EditorBindingContext
-from .sequences import CTRL_ALT_ENTER, SHIFT_ENTER
+from .sequences import CTRL_ALT_ENTER, MODAL_BLOCKED_ESCAPE_SEQUENCES, SHIFT_ENTER
 
 
 def register_dialog_bindings(ctx: EditorBindingContext) -> None:
     """Register editor bindings that manage overlays, search, and completions"""
+
+    @ctx.bind_sequences(
+        MODAL_BLOCKED_ESCAPE_SEQUENCES,
+        filter=ctx.is_modal_visible,
+        eager=True,
+        invalidate=True,
+    )
+    def _ignore_editor_escape_sequence_in_modal(event: KeyPressEvent) -> None:
+        """Keep escape-prefixed editor shortcuts from leaking through modals"""
 
     @ctx.bind("f1", note_activity=True)
     @ctx.bind("c-g", note_activity=True)

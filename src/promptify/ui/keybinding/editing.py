@@ -19,6 +19,7 @@ from .sequences import (
     CTRL_ALT_UP,
     CTRL_SHIFT_ALT_DOWN,
     CTRL_SHIFT_ALT_UP,
+    CTRL_SHIFT_V,
 )
 
 
@@ -59,57 +60,79 @@ def _prepare_plain_navigation(ctx: EditorBindingContext, buffer: Buffer) -> None
 def register_editing_bindings(ctx: EditorBindingContext) -> None:
     """Register bindings for editing, selection, cursor movement, and save"""
 
-    @ctx.bind("c-a", filter=ctx.text_focus)
+    editor_text_focus = ctx.editor_focus & ~ctx.is_modal_visible
+    editable_text_focus = editor_text_focus | ctx.search_widget_focus | ctx.jump_focus
+    editor_command_focus = editor_text_focus & ~ctx.has_completions_menu
+
+    @ctx.bind("c-a", filter=editable_text_focus)
     def _select_all(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
+            ctx.editor.clear_multi_cursors()
         buffer.selection_state = SelectionState(original_cursor_position=0)
         buffer.cursor_position = len(buffer.text)
 
-    @ctx.bind("c-c", filter=ctx.text_focus)
+    @ctx.bind("c-c", filter=editable_text_focus)
     def _copy(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
+        if buffer is ctx.editor.buffer:
+            copied = ctx.editor.copy_selected_text_at_cursors()
+            if copied is not None:
+                ctx.editor.set_internal_clipboard_text(copied)
+                return
         if buffer.selection_state:
             data = buffer.copy_selection()
+            ctx.editor.set_internal_clipboard_text(data.text)
             event.app.clipboard.set_data(data)
 
-    @ctx.bind("c-x", filter=ctx.text_focus, eager=True)
+    @ctx.bind("c-x", filter=editable_text_focus, eager=True)
     def _cut(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
+        if buffer is ctx.editor.buffer:
+            cut_text = ctx.editor.cut_selected_text_at_cursors()
+            if cut_text is not None:
+                ctx.editor.set_internal_clipboard_text(cut_text)
+                return
         if buffer.selection_state:
             data = buffer.cut_selection()
+            ctx.editor.set_internal_clipboard_text(data.text)
             event.app.clipboard.set_data(data)
             buffer.selection_state = None
 
-    @ctx.bind("c-v", filter=ctx.text_focus)
+    @ctx.bind("c-v", filter=editable_text_focus)
+    @ctx.bind_sequences(CTRL_SHIFT_V, filter=editable_text_focus)
     def _paste(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
-        data = event.app.clipboard.get_data()
-        if data and data.text:
-            ctx.editor.paste_text(buffer, data.text)
+        text = ctx.editor.get_internal_clipboard_text()
+        if not text:
+            data = event.app.clipboard.get_data()
+            text = data.text if data and data.text else ""
+        if text:
+            ctx.editor.paste_text(buffer, text)
 
-    @ctx.bind("s-insert", filter=ctx.text_focus)
-    @ctx.bind("c-s-insert", filter=ctx.text_focus)
+    @ctx.bind("s-insert", filter=editable_text_focus)
+    @ctx.bind("c-s-insert", filter=editable_text_focus)
     def _paste_system_clipboard(event: KeyPressEvent) -> None:
         ctx.schedule_system_clipboard_paste()
 
-    @ctx.bind("escape", "[", "2", ";", "2", "~", filter=ctx.text_focus)
-    @ctx.bind("escape", "[", "2", ";", "6", "~", filter=ctx.text_focus)
+    @ctx.bind("escape", "[", "2", ";", "2", "~", filter=editable_text_focus)
+    @ctx.bind("escape", "[", "2", ";", "6", "~", filter=editable_text_focus)
     def _paste_system_clipboard_xterm_insert(event: KeyPressEvent) -> None:
         ctx.schedule_system_clipboard_paste()
 
-    @ctx.bind(Keys.BracketedPaste, filter=ctx.text_focus)
+    @ctx.bind(Keys.BracketedPaste, filter=editable_text_focus)
     def _paste_terminal_payload(event: KeyPressEvent) -> None:
         buffer = event.app.current_buffer
         text = event.data.replace("\r\n", "\n").replace("\r", "\n")
         ctx.editor.paste_text(buffer, text)
 
-    @ctx.bind("c-z", filter=ctx.text_focus)
+    @ctx.bind("c-z", filter=editable_text_focus)
     def _undo(event: KeyPressEvent) -> None:
         if ctx.editor.multi_cursor_active():
             ctx.editor.clear_multi_cursors()
         event.app.current_buffer.undo()
 
-    @ctx.bind("c-y", filter=ctx.text_focus, eager=True)
+    @ctx.bind("c-y", filter=editable_text_focus, eager=True)
     def _redo(event: KeyPressEvent) -> None:
         if ctx.editor.multi_cursor_active():
             ctx.editor.clear_multi_cursors()
@@ -133,7 +156,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_position += buffer.document.get_end_of_line_position()
 
-    @ctx.bind("pageup", filter=ctx.editor_focus)
+    @ctx.bind("pageup", filter=editor_text_focus)
     def _pageup(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         if _collapse_selection(buffer, to_end=False):
@@ -145,7 +168,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             return
         buffer.cursor_up(count=15)
 
-    @ctx.bind("pagedown", filter=ctx.editor_focus)
+    @ctx.bind("pagedown", filter=editor_text_focus)
     def _pagedown(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         if _collapse_selection(buffer, to_end=True):
@@ -200,54 +223,70 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         else:
             buffer.cursor_position = len(buffer.text)
 
-    @ctx.bind("s-home", filter=ctx.text_focus)
+    @ctx.bind("s-home", filter=editable_text_focus)
     def _s_home(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.move_cursors_to_line_start(
+            select=True
+        ):
+            return
         ctx.start_selection(buffer)
         buffer.cursor_position += ctx.get_home_position(buffer.document)
 
-    @ctx.bind("s-end", filter=ctx.text_focus)
+    @ctx.bind("s-end", filter=editable_text_focus)
     def _s_end(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.move_cursors_to_line_end(
+            select=True
+        ):
+            return
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_end_of_line_position()
 
-    @ctx.bind("s-pageup", filter=ctx.editor_focus)
+    @ctx.bind("s-pageup", filter=editor_text_focus)
     def _s_pageup(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_cursor_up_position(count=15)
 
-    @ctx.bind("s-pagedown", filter=ctx.editor_focus)
+    @ctx.bind("s-pagedown", filter=editor_text_focus)
     def _s_pagedown(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_cursor_down_position(count=15)
 
-    @ctx.bind("s-c-home", filter=ctx.text_focus)
+    @ctx.bind("s-c-home", filter=editable_text_focus)
     def _s_c_home(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
+            ctx.editor.clear_multi_cursors()
         ctx.start_selection(buffer)
         buffer.cursor_position = 0
 
-    @ctx.bind("s-c-end", filter=ctx.text_focus)
+    @ctx.bind("s-c-end", filter=editable_text_focus)
     def _s_c_end(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
+            ctx.editor.clear_multi_cursors()
         ctx.start_selection(buffer)
         buffer.cursor_position = len(buffer.text)
 
-    @ctx.bind("s-c-left", filter=ctx.text_focus)
+    @ctx.bind("s-c-left", filter=editable_text_focus)
     def _s_c_left(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
+            ctx.editor.clear_multi_cursors()
         ctx.start_selection(buffer)
         position = buffer.document.find_previous_word_beginning()
         buffer.cursor_position += (
             position if position is not None else -buffer.cursor_position
         )
 
-    @ctx.bind("s-c-right", filter=ctx.text_focus)
+    @ctx.bind("s-c-right", filter=editable_text_focus)
     def _s_c_right(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
+            ctx.editor.clear_multi_cursors()
         ctx.start_selection(buffer)
         position = buffer.document.find_next_word_beginning()
         if position is not None:
@@ -255,9 +294,11 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         else:
             buffer.cursor_position = len(buffer.text)
 
-    @ctx.bind("c-w", filter=ctx.text_focus)
+    @ctx.bind("c-w", filter=editable_text_focus)
     def _delete_previous_word(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.delete_word_before_cursors():
+            return
         if buffer.selection_state:
             buffer.cut_selection()
             buffer.selection_state = None
@@ -269,9 +310,11 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         else:
             buffer.delete_before_cursor(count=buffer.cursor_position)
 
-    @ctx.bind("c-delete", filter=ctx.text_focus)
+    @ctx.bind("c-delete", filter=editable_text_focus)
     def _delete_next_word(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.delete_word_after_cursors():
+            return
         if buffer.selection_state:
             buffer.cut_selection()
             buffer.selection_state = None
@@ -283,26 +326,28 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         else:
             buffer.delete(count=len(buffer.text) - buffer.cursor_position)
 
-    @ctx.bind("backspace", filter=ctx.text_focus & has_selection, eager=True)
-    @ctx.bind("delete", filter=ctx.text_focus & has_selection, eager=True)
+    @ctx.bind("backspace", filter=editable_text_focus & has_selection, eager=True)
+    @ctx.bind("delete", filter=editable_text_focus & has_selection, eager=True)
     def _delete_selection(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.delete_before_cursors():
+            return
         buffer.cut_selection()
         buffer.selection_state = None
 
-    @ctx.bind("backspace", filter=ctx.editor_focus)
+    @ctx.bind("backspace", filter=editor_text_focus)
     def _delete_before_cursor(event: KeyPressEvent) -> None:
         if ctx.editor.delete_before_cursors():
             return
         event.current_buffer.delete_before_cursor()
 
-    @ctx.bind("delete", filter=ctx.editor_focus)
+    @ctx.bind("delete", filter=editor_text_focus)
     def _delete_after_cursor(event: KeyPressEvent) -> None:
         if ctx.editor.delete_after_cursors():
             return
         event.current_buffer.delete()
 
-    @ctx.bind("<any>", filter=ctx.text_focus & has_selection)
+    @ctx.bind("<any>", filter=editable_text_focus & has_selection)
     def _type_over_selection(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         if event.data and event.data.isprintable():
@@ -314,7 +359,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
 
     @ctx.bind(
         "<any>",
-        filter=ctx.editor_focus & Condition(lambda: ctx.editor.multi_cursor_active()),
+        filter=editor_text_focus & Condition(lambda: ctx.editor.multi_cursor_active()),
     )
     def _type_with_multi_cursor(event: KeyPressEvent) -> None:
         if event.data and event.data.isprintable():
@@ -323,7 +368,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     # Track entry time to distinguish simulated terminal paste logic from real typing.
     last_enter_time = [0.0]
 
-    @ctx.bind("enter", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("enter", filter=editor_command_focus)
     def _smart_enter(event: KeyPressEvent) -> None:
         now = time.time()
         is_paste = (now - last_enter_time[0]) < 0.05
@@ -361,7 +406,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             indent += indent_str
         buffer.insert_text("\n" + indent)
 
-    @ctx.bind("tab", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("tab", filter=editor_command_focus)
     def _tab(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
@@ -387,7 +432,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
 
         buffer.insert_text(indent_str)
 
-    @ctx.bind("s-tab", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("s-tab", filter=editor_command_focus)
     def _s_tab(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
@@ -456,35 +501,45 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             buffer.cursor_position += 1
         buffer.preferred_column = None
 
-    @ctx.bind("s-left", filter=ctx.text_focus & ~ctx.has_completions_menu)
+    @ctx.bind("s-left", filter=editable_text_focus & ~ctx.has_completions_menu)
     def _s_left(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
+            ctx.editor.move_cursors_horizontal(-1, select=True)
+            return
         ctx.start_selection(buffer)
         if buffer.cursor_position > 0:
             buffer.cursor_position -= 1
 
-    @ctx.bind("s-right", filter=ctx.text_focus & ~ctx.has_completions_menu)
+    @ctx.bind("s-right", filter=editable_text_focus & ~ctx.has_completions_menu)
     def _s_right(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
+            ctx.editor.move_cursors_horizontal(1, select=True)
+            return
         ctx.start_selection(buffer)
         if buffer.cursor_position < len(buffer.text):
             buffer.cursor_position += 1
 
-    @ctx.bind("s-up", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("s-up", filter=editor_command_focus)
     def _s_up(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if ctx.editor.multi_cursor_active():
+            ctx.editor.move_cursors_vertical(-1, select=True)
+            return
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_cursor_up_position()
 
-    @ctx.bind("s-down", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("s-down", filter=editor_command_focus)
     def _s_down(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if ctx.editor.multi_cursor_active():
+            ctx.editor.move_cursors_vertical(1, select=True)
+            return
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_cursor_down_position()
 
-    @ctx.bind(
-        "up", filter=ctx.editor_focus & ~ctx.has_completions_menu, note_activity=True
-    )
+    @ctx.bind("up", filter=editor_command_focus, note_activity=True)
     def _up(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         if _collapse_selection(buffer, to_end=False):
@@ -494,7 +549,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
 
     @ctx.bind(
         "down",
-        filter=ctx.editor_focus & ~ctx.has_completions_menu,
+        filter=editor_command_focus,
         note_activity=True,
     )
     def _down(event: KeyPressEvent) -> None:
@@ -504,7 +559,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             return
         ctx.editor.move_cursors_vertical(1)
 
-    @ctx.bind("c-up", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("c-up", filter=editor_command_focus)
     @ctx.bind(
         "escape",
         "[",
@@ -512,12 +567,12 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         ";",
         "5",
         "A",
-        filter=ctx.editor_focus & ~ctx.has_completions_menu,
+        filter=editor_command_focus,
     )
     def _scroll_up(event: KeyPressEvent) -> None:
         ctx.editor.scroll_view(-1)
 
-    @ctx.bind("c-down", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("c-down", filter=editor_command_focus)
     @ctx.bind(
         "escape",
         "[",
@@ -525,12 +580,12 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         ";",
         "5",
         "B",
-        filter=ctx.editor_focus & ~ctx.has_completions_menu,
+        filter=editor_command_focus,
     )
     def _scroll_down(event: KeyPressEvent) -> None:
         ctx.editor.scroll_view(1)
 
-    @ctx.bind("c-pageup", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("c-pageup", filter=editor_command_focus)
     @ctx.bind(
         "escape",
         "[",
@@ -538,12 +593,12 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         ";",
         "5",
         "~",
-        filter=ctx.editor_focus & ~ctx.has_completions_menu,
+        filter=editor_command_focus,
     )
     def _scroll_page_up(event: KeyPressEvent) -> None:
         ctx.editor.scroll_view(-1, count=15)
 
-    @ctx.bind("c-pagedown", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("c-pagedown", filter=editor_command_focus)
     @ctx.bind(
         "escape",
         "[",
@@ -551,53 +606,53 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         ";",
         "5",
         "~",
-        filter=ctx.editor_focus & ~ctx.has_completions_menu,
+        filter=editor_command_focus,
     )
     def _scroll_page_down(event: KeyPressEvent) -> None:
         ctx.editor.scroll_view(1, count=15)
 
-    @ctx.bind("escape", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("escape", filter=editor_command_focus)
     def _escape_multi_cursor(event: KeyPressEvent) -> None:
         if ctx.editor.multi_cursor_active():
             ctx.editor.clear_multi_cursors()
 
     @ctx.bind_sequences(
         CTRL_ALT_UP,
-        filter=ctx.editor_focus & ~ctx.has_completions_menu,
+        filter=editor_command_focus,
     )
     def _add_cursor_up(event: KeyPressEvent) -> None:
         ctx.editor.add_vertical_cursor(-1)
 
     @ctx.bind_sequences(
         CTRL_ALT_DOWN,
-        filter=ctx.editor_focus & ~ctx.has_completions_menu,
+        filter=editor_command_focus,
     )
     def _add_cursor_down(event: KeyPressEvent) -> None:
         ctx.editor.add_vertical_cursor(1)
 
     @ctx.bind_sequences(
         CTRL_SHIFT_ALT_UP,
-        filter=ctx.editor_focus & ~ctx.has_completions_menu,
+        filter=editor_command_focus,
     )
     def _expand_cursor_up(event: KeyPressEvent) -> None:
         ctx.editor.expand_or_shrink_vertical_cursors(-1)
 
     @ctx.bind_sequences(
         CTRL_SHIFT_ALT_DOWN,
-        filter=ctx.editor_focus & ~ctx.has_completions_menu,
+        filter=editor_command_focus,
     )
     def _expand_cursor_down(event: KeyPressEvent) -> None:
         ctx.editor.expand_or_shrink_vertical_cursors(1)
 
-    @ctx.bind("c-d", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("c-d", filter=editor_command_focus)
     def _select_next_occurrence(event: KeyPressEvent) -> None:
         ctx.editor.select_next_occurrence()
 
-    @ctx.bind("c-l", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("c-l", filter=editor_command_focus)
     def _select_all_occurrences(event: KeyPressEvent) -> None:
         ctx.editor.select_all_occurrences()
 
-    @ctx.bind("escape", "up", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("escape", "up", filter=editor_command_focus)
     def _move_line_up(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
@@ -611,7 +666,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
                 document.cursor_position_col,
             )
 
-    @ctx.bind("escape", "down", filter=ctx.editor_focus & ~ctx.has_completions_menu)
+    @ctx.bind("escape", "down", filter=editor_command_focus)
     def _move_line_down(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
@@ -625,7 +680,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
                 document.cursor_position_col,
             )
 
-    @ctx.bind("c-_", filter=ctx.editor_focus)
+    @ctx.bind("c-_", filter=editor_text_focus)
     def _toggle_comment(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
@@ -694,7 +749,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             cursor_col,
         )
 
-    @ctx.bind("c-s", filter=~ctx.search_widget_focus)
+    @ctx.bind("c-s", filter=editor_text_focus)
     def _save(event: KeyPressEvent) -> None:
         async def _do_save() -> None:
             ctx.editor.note_user_activity()

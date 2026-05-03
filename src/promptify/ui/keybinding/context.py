@@ -30,7 +30,9 @@ class EditorBindingHost(Protocol):
     err_visible: bool
     issue_mode_active: bool
     quit_visible: bool
+    search_visible: bool
     replace_visible: bool
+    jump_visible: bool
     buffer: Buffer
     search_buffer: Buffer
     replace_buffer: Buffer
@@ -57,9 +59,13 @@ class EditorBindingHost(Protocol):
 
     def select_all_occurrences(self) -> bool: ...
 
-    def move_cursors_vertical(self, direction: int, *, count: int = 1) -> None: ...
+    def move_cursors_vertical(
+        self, direction: int, *, count: int = 1, select: bool = False
+    ) -> None: ...
 
-    def move_cursors_horizontal(self, direction: int) -> None: ...
+    def move_cursors_horizontal(
+        self, direction: int, *, select: bool = False
+    ) -> None: ...
 
     def reset_cursor_navigation_memory(self) -> None: ...
 
@@ -67,9 +73,25 @@ class EditorBindingHost(Protocol):
 
     def replace_text_at_cursors(self, text: str) -> bool: ...
 
+    def copy_selected_text_at_cursors(self) -> str | None: ...
+
+    def cut_selected_text_at_cursors(self) -> str | None: ...
+
     def delete_before_cursors(self) -> bool: ...
 
     def delete_after_cursors(self) -> bool: ...
+
+    def delete_word_before_cursors(self) -> bool: ...
+
+    def delete_word_after_cursors(self) -> bool: ...
+
+    def move_cursors_to_line_start(self, *, select: bool = False) -> bool: ...
+
+    def move_cursors_to_line_end(self, *, select: bool = False) -> bool: ...
+
+    def set_internal_clipboard_text(self, text: str) -> None: ...
+
+    def get_internal_clipboard_text(self) -> str: ...
 
     def scroll_view(self, direction: int, *, count: int = 1) -> None: ...
 
@@ -140,6 +162,7 @@ class EditorBindingContext:
     jump_focus: Filter
     search_widget_focus: Filter
     text_focus: Filter
+    is_modal_visible: Filter
     is_help_visible: Filter
     is_err_visible: Filter
     is_issue_mode_active: Filter

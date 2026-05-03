@@ -27,7 +27,7 @@ class EditorBufferControl(BufferControl):
 
 
 class EditorWindow(Window):
-    """Window that can keep a manually scrolled viewport detached from the caret."""
+    """Window that can keep a manually scrolled viewport detached from the caret"""
 
     def __init__(
         self,

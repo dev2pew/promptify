@@ -18,6 +18,7 @@ class EditorMultiCursorMixin:
     _multi_cursor_last_vertical_direction: int = 0
     _wrap_preferred_column: int | None = None
     _detached_vertical_scroll: int | None = None
+    _internal_clipboard_text: str = ""
     buffer: Buffer = cast(Buffer, cast(object, None))
     search_buffer: Buffer = cast(Buffer, cast(object, None))
     main_window: Window = cast(Window, cast(object, None))
@@ -187,6 +188,14 @@ class EditorMultiCursorMixin:
         self.buffer.selection_state = None
         self.buffer.preferred_column = None
         self.invalidate()
+
+    def set_internal_clipboard_text(self, text: str) -> None:
+        """Store editor clipboard text independently from the system clipboard"""
+        self._internal_clipboard_text = text
+
+    def get_internal_clipboard_text(self) -> str:
+        """Return the last text copied or cut inside this editor instance"""
+        return self._internal_clipboard_text
 
     def reset_multi_cursors_for_mouse(self) -> None:
         """Drop cloned carets before a mouse click repositions the real cursor"""
@@ -410,7 +419,33 @@ class EditorMultiCursorMixin:
             moved = visual
         return moved
 
-    def move_cursors_vertical(self, direction: int, *, count: int = 1) -> None:
+    def _selection_anchor_for_move(
+        self, caret: MultiCursorCaret, *, select: bool
+    ) -> int | None:
+        """Resolve the selection anchor for a caret movement"""
+        if not select:
+            return None
+        return caret.anchor if caret.anchor is not None else caret.position
+
+    def _moved_caret(
+        self,
+        caret: MultiCursorCaret,
+        position: int,
+        *,
+        select: bool = False,
+        preferred_column: int | None = None,
+    ) -> MultiCursorCaret:
+        """Build one moved caret while preserving selection intent"""
+        return MultiCursorCaret(
+            position=max(0, min(len(self.buffer.text), position)),
+            anchor=self._selection_anchor_for_move(caret, select=select),
+            preferred_column=preferred_column,
+            is_primary=caret.is_primary,
+        )
+
+    def move_cursors_vertical(
+        self, direction: int, *, count: int = 1, select: bool = False
+    ) -> None:
         """Move all active carets vertically with sticky column memory"""
         self.reattach_scroll_to_cursor()
         if not self.multi_cursor_active():
@@ -421,23 +456,26 @@ class EditorMultiCursorMixin:
             self.buffer.preferred_column = moved.preferred_column
             return
         self.note_user_activity()
-        moved = [
-            self._move_vertical_caret(caret, direction, count=count)
-            for caret in self._get_multi_carets()
-        ]
+        moved = []
+        for caret in self._get_multi_carets():
+            target = self._move_vertical_caret(caret, direction, count=count)
+            moved.append(
+                self._moved_caret(
+                    caret,
+                    target.position,
+                    select=select,
+                    preferred_column=target.preferred_column,
+                )
+            )
         self._set_multi_carets(moved)
 
     def _move_horizontal_caret(
-        self, caret: MultiCursorCaret, direction: int
+        self, caret: MultiCursorCaret, direction: int, *, select: bool = False
     ) -> MultiCursorCaret:
         """Move one caret left or right and clear sticky vertical memory"""
-        position = caret.position + direction
-        position = max(0, min(len(self.buffer.text), position))
-        return MultiCursorCaret(
-            position=position, anchor=None, is_primary=caret.is_primary
-        )
+        return self._moved_caret(caret, caret.position + direction, select=select)
 
-    def move_cursors_horizontal(self, direction: int) -> None:
+    def move_cursors_horizontal(self, direction: int, *, select: bool = False) -> None:
         """Move every active caret left or right"""
         self.reattach_scroll_to_cursor()
         self.reset_cursor_navigation_memory()
@@ -451,10 +489,57 @@ class EditorMultiCursorMixin:
         self.note_user_activity()
         self._set_multi_carets(
             [
-                self._move_horizontal_caret(caret, direction)
+                self._move_horizontal_caret(caret, direction, select=select)
                 for caret in self._get_multi_carets()
             ]
         )
+
+    def _line_start_position_for_caret(self, caret: MultiCursorCaret) -> int:
+        """Return the smart line-start position for one caret"""
+        document = Document(self.buffer.text, cursor_position=caret.position)
+        first_non_ws = document.get_start_of_line_position(after_whitespace=True)
+        if first_non_ws == 0:
+            first_non_ws = document.get_start_of_line_position(after_whitespace=False)
+        return caret.position + first_non_ws
+
+    def _line_end_position_for_caret(self, caret: MultiCursorCaret) -> int:
+        """Return the logical line-end position for one caret"""
+        document = Document(self.buffer.text, cursor_position=caret.position)
+        return caret.position + document.get_end_of_line_position()
+
+    def move_cursors_to_line_start(self, *, select: bool = False) -> bool:
+        """Move every active caret to its own smart line start"""
+        if not self.multi_cursor_active():
+            return False
+        self.reattach_scroll_to_cursor()
+        self.reset_cursor_navigation_memory()
+        self.note_user_activity()
+        self._set_multi_carets(
+            [
+                self._moved_caret(
+                    caret, self._line_start_position_for_caret(caret), select=select
+                )
+                for caret in self._get_multi_carets()
+            ]
+        )
+        return True
+
+    def move_cursors_to_line_end(self, *, select: bool = False) -> bool:
+        """Move every active caret to its own line end"""
+        if not self.multi_cursor_active():
+            return False
+        self.reattach_scroll_to_cursor()
+        self.reset_cursor_navigation_memory()
+        self.note_user_activity()
+        self._set_multi_carets(
+            [
+                self._moved_caret(
+                    caret, self._line_end_position_for_caret(caret), select=select
+                )
+                for caret in self._get_multi_carets()
+            ]
+        )
+        return True
 
     def _row_col_for_caret(self, caret: MultiCursorCaret) -> tuple[int, int]:
         """Return the logical row and column for one caret position"""
@@ -568,6 +653,40 @@ class EditorMultiCursorMixin:
         self.start_bulk_edit(text)
         return True
 
+    def _selected_texts_at_cursors(self) -> tuple[str, ...]:
+        """Return selected text fragments from active virtual carets"""
+        if not self.multi_cursor_active():
+            return tuple()
+        selected: list[str] = []
+        for caret in sorted(
+            self._get_multi_carets(), key=lambda item: item.selection_start
+        ):
+            if caret.has_selection:
+                selected.append(
+                    self.buffer.text[caret.selection_start : caret.selection_end]
+                )
+        return tuple(selected)
+
+    def copy_selected_text_at_cursors(self) -> str | None:
+        """Copy virtual multi-cursor selections as line-separated fragments"""
+        selected = self._selected_texts_at_cursors()
+        if not selected:
+            return None
+        return "\n".join(selected)
+
+    def cut_selected_text_at_cursors(self) -> str | None:
+        """Cut all virtual multi-cursor selections without scattering carets"""
+        copied = self.copy_selected_text_at_cursors()
+        if copied is None:
+            return None
+        replacements = [
+            (caret.selection_start, caret.selection_end, "", caret.is_primary)
+            for caret in self._get_multi_carets()
+            if caret.has_selection
+        ]
+        self._apply_multi_replacements(replacements)
+        return copied
+
     def delete_before_cursors(self) -> bool:
         """Delete one character before each caret, or each selected range"""
         carets = self._get_multi_carets()
@@ -604,6 +723,53 @@ class EditorMultiCursorMixin:
                 replacements.append(
                     (caret.position, caret.position + 1, "", caret.is_primary)
                 )
+        if not replacements:
+            return False
+        self._apply_multi_replacements(replacements)
+        return True
+
+    def delete_word_before_cursors(self) -> bool:
+        """Delete the previous word at every active virtual caret"""
+        if not self.multi_cursor_active():
+            return False
+        replacements: list[tuple[int, int, str, bool]] = []
+        for caret in self._get_multi_carets():
+            if caret.has_selection:
+                replacements.append(
+                    (caret.selection_start, caret.selection_end, "", caret.is_primary)
+                )
+                continue
+            if caret.position <= 0:
+                continue
+            document = Document(self.buffer.text, cursor_position=caret.position)
+            offset = document.find_previous_word_beginning()
+            start = caret.position + offset if offset is not None else 0
+            if start != caret.position:
+                replacements.append((start, caret.position, "", caret.is_primary))
+        if not replacements:
+            return False
+        self._apply_multi_replacements(replacements)
+        return True
+
+    def delete_word_after_cursors(self) -> bool:
+        """Delete the next word at every active virtual caret"""
+        if not self.multi_cursor_active():
+            return False
+        replacements: list[tuple[int, int, str, bool]] = []
+        text_length = len(self.buffer.text)
+        for caret in self._get_multi_carets():
+            if caret.has_selection:
+                replacements.append(
+                    (caret.selection_start, caret.selection_end, "", caret.is_primary)
+                )
+                continue
+            if caret.position >= text_length:
+                continue
+            document = Document(self.buffer.text, cursor_position=caret.position)
+            offset = document.find_next_word_beginning()
+            end = caret.position + offset if offset is not None else text_length
+            if end != caret.position:
+                replacements.append((caret.position, end, "", caret.is_primary))
         if not replacements:
             return False
         self._apply_multi_replacements(replacements)

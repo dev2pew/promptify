@@ -155,6 +155,7 @@ class InteractiveEditor(
         self._multi_cursor_owned_search = False
         self._multi_cursor_occurrence_query = ""
         self._multi_cursor_last_vertical_direction = 0
+        self._internal_clipboard_text = ""
         self.session_store = session_store
         self.session_state = session_state
         self._pending_session_flush = False

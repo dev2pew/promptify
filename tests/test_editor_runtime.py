@@ -76,3 +76,19 @@ test_interactive_editor_select_occurrences_respects_search_toggles = (
 test_interactive_editor_scroll_view_keeps_cursor_position = (
     cases.test_interactive_editor_scroll_view_keeps_cursor_position
 )
+
+test_interactive_editor_runtime_modal_blocks_multicursor_sequences = (
+    cases.test_interactive_editor_runtime_modal_blocks_multicursor_sequences
+)
+test_interactive_editor_multicursor_shift_home_delete_stays_coherent = (
+    cases.test_interactive_editor_multicursor_shift_home_delete_stays_coherent
+)
+test_interactive_editor_multicursor_delete_previous_word_stays_coherent = (
+    cases.test_interactive_editor_multicursor_delete_previous_word_stays_coherent
+)
+test_interactive_editor_runtime_ctrl_a_backspace_clears_multicursors = (
+    cases.test_interactive_editor_runtime_ctrl_a_backspace_clears_multicursors
+)
+test_interactive_editor_runtime_cut_paste_prefers_internal_clipboard = (
+    cases.test_interactive_editor_runtime_cut_paste_prefers_internal_clipboard
+)
