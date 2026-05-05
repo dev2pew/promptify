@@ -13,6 +13,7 @@ problems.json
 # TESTS
 problems.json
 bp-detail.json
+sandbox_*
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,visualstudiocode
