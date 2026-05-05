@@ -15,7 +15,8 @@ address the issues in the TODO.
 implement a different behavior AKA separate logic for different types of terminals by separating them using this category - kind of a simple, hacky-like, patch approach...
 
 a) terminals with no interception capabilities;
-b) terminals with interception capabilities.
+b) terminals with interception capabilities;
+c) do not use internal clipboard at all, save all the data to system clipboard to avoid hassle. (PREFERRED)
 
 ## SECOND
 
@@ -90,3 +91,7 @@ implement a terminal profile system which can identify the terminal the app is r
 2) pressing `[Esc]` will clear the captured keycode, pressing `[Esc]` while the captured keycode is empty will make user go back to the previous question.
 
 (ensure robustness of implementation and ensure to use shared libs. ensure common sense like user cannot cause duplicates in the keycodes and cannot enter potentially conflicting keys)
+
+## THIRD
+
+the third method is the most straightforward, the script processes the selected part of text, reads in from the memory and writes the contents to the clipboard ensuring compatibility across all platforms.
