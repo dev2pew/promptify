@@ -84,7 +84,9 @@
 [Tab]                         : indent / autocomplete
 [Shift] + [Tab]               : unindent
 
+[Shift] + [Alt] + [^/v]       : clone below / above
 [Alt] + [^/v]                 : shift up / down
+[specials]                    : wrap selection
 
 ^[/]                          : comment out
 ^[W/Del]                      : delete previous / next

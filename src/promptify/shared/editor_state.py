@@ -119,12 +119,22 @@ class MultiCursorCaret:
 
 
 @dataclass(frozen=True, slots=True)
+class EditorCaretTarget:
+    """Describe one caret and optional anchor target tied to a text edit"""
+
+    source_position: int
+    replacement_offset: int = 0
+    anchor_source_position: int | None = None
+    anchor_replacement_offset: int = 0
+    preferred_column: int | None = None
+    is_primary: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class EditorTextEdit:
-    """Represent one text edit plus the caret target it should produce"""
+    """Represent one text edit and the caret targets it should produce"""
 
     start: int
     end: int
     replacement: str
-    caret_source_position: int
-    caret_replacement_offset: int = 0
-    is_primary: bool = False
+    carets: tuple[EditorCaretTarget, ...]

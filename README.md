@@ -31,7 +31,7 @@ a terminal editor powered by `prompt-toolkit`.
 
 - fuzzy completion for files, directories, trees, extensions, symbols, and `git` mentions;
 - modern IDE style search and replace widget with match counts, wrap reporting, search history, and search-mode toggles for case, whole-word, regex, and preserve-case replace;
-- VS Code-style sticky-column cursor movement, multi-cursor editing, occurrence selection, and view-only scrolling shortcuts;
+- VS Code-style sticky-column cursor movement, multi-cursor editing, selection wrapping, occurrence selection, and view-only scrolling shortcuts;
 - jump-to-line input with `:line[:character]` and `:line,character` targets;
 - issue overlays for malformed mentions and unresolved references before save;
 - crash-safe interactive restore backed by `data/state.dat`, with a restore prompt on next launch when unsaved editor work exists;
@@ -47,11 +47,13 @@ the in-app help screen is authoritative, but the main defaults are...
 - `Ctrl+R`: toggle replace
 - `Alt+G`: jump to `:line[:character]` or `:line,character`
 - `Alt+Z`: toggle word wrap
+- `Shift+Alt+Up` / `Shift+Alt+Down`: clone the current line or active selection below or above while keeping the original active
 - `Ctrl+Alt+Up` / `Ctrl+Alt+Down`: add cursor above or below
 - `Ctrl+Shift+Alt+Up` / `Ctrl+Shift+Alt+Down`: expand or shrink the vertical cursor block
 - `Ctrl+D`: select the next occurrence of the current word or selection
 - `Ctrl+Shift+L`: select all occurrences of the current word or selection
 - `Esc`: clear cloned cursors and return to the primary cursor
+- typing `(`, `[`, `{`, `'`, `"`, `` ` ``, `*`, `_`, `~`, or `$` over a selection wraps it and keeps the inner selection active for nesting
 - `Ctrl+S`: resolve and save
 - `Ctrl+C` / `Ctrl+X` / `Ctrl+V`: copy, cut, and paste through the system clipboard; `Ctrl+X` cuts the current line when nothing is selected
 - `Ctrl+Shift+C` / `Ctrl+Shift+V`: system clipboard aliases when the terminal forwards them

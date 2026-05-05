@@ -69,6 +69,10 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "2", "u"))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.Enter))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "7", "u"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "4", "A"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "4", "B"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ShiftDown))
+    assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ShiftUp))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ControlDown))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ControlUp))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ControlShiftDown))
@@ -902,6 +906,234 @@ async def test_interactive_editor_runtime_ctrl_x_cuts_current_line(
             await asyncio.wait_for(task, timeout=1.5)
 
 
+async def test_interactive_editor_clone_current_line_matches_requested_direction(
+    app_components,
+):
+    """Shift+Alt clone directions should preserve the original line and column"""
+    context, resolver = app_components
+    text = "top\nclone me\nbottom"
+
+    clone_below = InteractiveEditor(text, context.indexer, resolver)
+    clone_below.buffer.cursor_position = (
+        clone_below.buffer.document.translate_row_col_to_index(1, 3)
+    )
+
+    assert clone_below.clone_current_lines_or_selections(insert_above=False)
+    assert clone_below.buffer.text == "top\nclone me\nclone me\nbottom"
+    assert clone_below.buffer.document.translate_index_to_position(
+        clone_below.buffer.cursor_position
+    ) == (1, 3)
+
+    clone_above = InteractiveEditor(text, context.indexer, resolver)
+    clone_above.buffer.cursor_position = (
+        clone_above.buffer.document.translate_row_col_to_index(1, 3)
+    )
+
+    assert clone_above.clone_current_lines_or_selections(insert_above=True)
+    assert clone_above.buffer.text == "top\nclone me\nclone me\nbottom"
+    assert clone_above.buffer.document.translate_index_to_position(
+        clone_above.buffer.cursor_position
+    ) == (2, 3)
+
+
+async def test_interactive_editor_clone_linewise_selection_preserves_original_block(
+    app_components,
+):
+    """Linewise multiline selections should clone as a separate block and stay selected"""
+    context, resolver = app_components
+    original = "clone me part 1\nmultiline part 2\nend of multi line demo 3"
+    text = f"# demo\n\n{original}\n\n"
+    last_line = "end of multi line demo 3"
+    start_row = 2
+    end_row = 4
+
+    clone_below = InteractiveEditor(text, context.indexer, resolver)
+    start = clone_below.buffer.document.translate_row_col_to_index(start_row, 0)
+    end = clone_below.buffer.document.translate_row_col_to_index(
+        end_row, len(last_line)
+    )
+    clone_below.buffer.selection_state = SelectionState(original_cursor_position=start)
+    clone_below.buffer.cursor_position = end
+
+    assert clone_below.clone_current_lines_or_selections(insert_above=False)
+    assert clone_below.buffer.text == f"# demo\n\n{original}\n{original}\n\n"
+    assert clone_below.buffer.selection_state is not None
+    below_selection = cast(SelectionState, clone_below.buffer.selection_state)
+    below_start = min(
+        below_selection.original_cursor_position,
+        clone_below.buffer.cursor_position,
+    )
+    below_end = max(
+        below_selection.original_cursor_position,
+        clone_below.buffer.cursor_position,
+    )
+    assert clone_below.buffer.text[below_start:below_end] == original
+
+    clone_above = InteractiveEditor(text, context.indexer, resolver)
+    start = clone_above.buffer.document.translate_row_col_to_index(start_row, 0)
+    end = clone_above.buffer.document.translate_row_col_to_index(
+        end_row, len(last_line)
+    )
+    clone_above.buffer.selection_state = SelectionState(original_cursor_position=start)
+    clone_above.buffer.cursor_position = end
+
+    assert clone_above.clone_current_lines_or_selections(insert_above=True)
+    assert clone_above.buffer.text == f"# demo\n\n{original}\n{original}\n\n"
+    assert clone_above.buffer.selection_state is not None
+    above_selection = cast(SelectionState, clone_above.buffer.selection_state)
+    above_start = min(
+        above_selection.original_cursor_position,
+        clone_above.buffer.cursor_position,
+    )
+    above_end = max(
+        above_selection.original_cursor_position,
+        clone_above.buffer.cursor_position,
+    )
+    assert clone_above.buffer.text[above_start:above_end] == original
+
+
+async def test_interactive_editor_clone_last_line_handles_newline_edges(app_components):
+    """Cloning the last line should keep newline placement and the original caret"""
+    context, resolver = app_components
+    text = "line 1\nline 2"
+
+    clone_below = InteractiveEditor(text, context.indexer, resolver)
+    clone_below.buffer.cursor_position = (
+        clone_below.buffer.document.translate_row_col_to_index(1, 4)
+    )
+
+    assert clone_below.clone_current_lines_or_selections(insert_above=False)
+    assert clone_below.buffer.text == "line 1\nline 2\nline 2"
+    assert clone_below.buffer.document.translate_index_to_position(
+        clone_below.buffer.cursor_position
+    ) == (1, 4)
+
+    clone_above = InteractiveEditor(text, context.indexer, resolver)
+    clone_above.buffer.cursor_position = (
+        clone_above.buffer.document.translate_row_col_to_index(1, 4)
+    )
+
+    assert clone_above.clone_current_lines_or_selections(insert_above=True)
+    assert clone_above.buffer.text == "line 1\nline 2\nline 2"
+    assert clone_above.buffer.document.translate_index_to_position(
+        clone_above.buffer.cursor_position
+    ) == (2, 4)
+
+
+async def test_interactive_editor_clone_current_lines_preserves_noncontiguous_multicursors(
+    app_components,
+):
+    """Line cloning should dedupe same-line inserts but keep distinct caret columns"""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "line 1\nline 2\nline 3\nline 4", context.indexer, resolver
+    )
+    line_2_a = editor.buffer.document.translate_row_col_to_index(1, 1)
+    line_2_b = editor.buffer.document.translate_row_col_to_index(1, 5)
+    line_4 = editor.buffer.document.translate_row_col_to_index(3, 4)
+    editor._set_multi_carets(
+        [
+            MultiCursorCaret(position=line_2_a, preferred_column=1, is_primary=True),
+            MultiCursorCaret(position=line_2_b, preferred_column=5),
+            MultiCursorCaret(position=line_4, preferred_column=4),
+        ]
+    )
+
+    assert editor.clone_current_lines_or_selections(insert_above=False)
+    assert editor.buffer.text == "line 1\nline 2\nline 2\nline 3\nline 4\nline 4"
+    assert editor.multi_cursor_active()
+    assert [
+        editor.buffer.document.translate_index_to_position(caret.position)
+        for caret in editor.get_multi_cursor_render_carets()
+    ] == [(1, 1), (1, 5), (4, 4)]
+
+
+async def test_interactive_editor_wrap_selection_preserves_the_inner_range(
+    app_components,
+):
+    """Wrapping one selection should keep only the inner text selected for nesting"""
+    context, resolver = app_components
+    editor = InteractiveEditor("test", context.indexer, resolver)
+    editor.buffer.selection_state = SelectionState(original_cursor_position=0)
+    editor.buffer.cursor_position = len(editor.buffer.text)
+
+    assert editor.type_text_in_main_buffer("(")
+    assert editor.buffer.text == "(test)"
+    assert editor.buffer.selection_state is not None
+    selection = cast(SelectionState, editor.buffer.selection_state)
+    start = min(selection.original_cursor_position, editor.buffer.cursor_position)
+    end = max(selection.original_cursor_position, editor.buffer.cursor_position)
+    assert editor.buffer.text[start:end] == "test"
+
+
+async def test_interactive_editor_wrap_selection_supports_repeated_symmetric_nesting(
+    app_components,
+):
+    """Repeated symmetric wrap triggers should keep nesting around the same text"""
+    context, resolver = app_components
+    editor = InteractiveEditor("test", context.indexer, resolver)
+    editor.buffer.selection_state = SelectionState(original_cursor_position=0)
+    editor.buffer.cursor_position = len(editor.buffer.text)
+
+    assert editor.type_text_in_main_buffer("*")
+    assert editor.type_text_in_main_buffer("*")
+    assert editor.buffer.text == "**test**"
+    assert editor.buffer.selection_state is not None
+    selection = cast(SelectionState, editor.buffer.selection_state)
+    start = min(selection.original_cursor_position, editor.buffer.cursor_position)
+    end = max(selection.original_cursor_position, editor.buffer.cursor_position)
+    assert editor.buffer.text[start:end] == "test"
+
+
+async def test_interactive_editor_wrap_multicursor_selections_keeps_each_inner_text(
+    app_components,
+):
+    """Each wrapped multi-cursor selection should keep its own inner selection active"""
+    context, resolver = app_components
+    editor = InteractiveEditor("alpha\nbeta\ngamma", context.indexer, resolver)
+    second_start = editor.buffer.document.translate_row_col_to_index(2, 0)
+    second_end = editor.buffer.document.translate_row_col_to_index(2, 5)
+    editor._set_multi_carets(
+        [
+            MultiCursorCaret(position=5, anchor=0, is_primary=True),
+            MultiCursorCaret(position=second_end, anchor=second_start),
+        ]
+    )
+
+    assert editor.type_text_in_main_buffer("[")
+    assert editor.buffer.text == "[alpha]\nbeta\n[gamma]"
+    assert [
+        editor.buffer.text[caret.selection_start : caret.selection_end]
+        for caret in editor.get_multi_cursor_render_carets()
+    ] == ["alpha", "gamma"]
+
+
+async def test_interactive_editor_runtime_plain_wrap_trigger_without_selection_inserts_literal(
+    app_components,
+):
+    """Wrap trigger keys should stay plain text when nothing is selected"""
+    context, resolver = app_components
+    editor = InteractiveEditor("", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            pipe_input.send_text("(")
+            for _ in range(20):
+                if editor.buffer.text == "(":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "("
+            assert editor.buffer.selection_state is None
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
 async def test_interactive_editor_cut_current_lines_preserves_noncontiguous_multicursors(
     app_components,
 ):
@@ -974,6 +1206,48 @@ async def test_interactive_editor_runtime_ctrl_x_preserves_noncontiguous_multicu
                 editor.buffer.document.translate_index_to_position(caret.position)
                 for caret in editor.get_multi_cursor_render_carets()
             ] == [(0, 0), (1, 0)]
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_runtime_shift_alt_clone_hotkeys_match_requested_direction(
+    app_components,
+):
+    """Shift+Alt line cloning should keep the original line active for both directions"""
+    context, resolver = app_components
+    editor = InteractiveEditor("top\nclone me\nbottom", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.buffer.cursor_position = (
+                editor.buffer.document.translate_row_col_to_index(1, 3)
+            )
+            pipe_input.send_text("\x1b[1;4A")  # SHIFT+ALT+UP => clone below
+            for _ in range(20):
+                if editor.buffer.text == "top\nclone me\nclone me\nbottom":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "top\nclone me\nclone me\nbottom"
+            assert editor.buffer.document.translate_index_to_position(
+                editor.buffer.cursor_position
+            ) == (1, 3)
+
+            pipe_input.send_text("\x1b[1;4B")  # SHIFT+ALT+DOWN => clone above
+            for _ in range(20):
+                if editor.buffer.text == "top\nclone me\nclone me\nclone me\nbottom":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "top\nclone me\nclone me\nclone me\nbottom"
+            assert editor.buffer.document.translate_index_to_position(
+                editor.buffer.cursor_position
+            ) == (2, 3)
 
             pipe_input.send_text("\x11")  # CTRL+Q
             pipe_input.send_text("\r")  # ENTER
@@ -1743,6 +2017,8 @@ async def test_interactive_editor_runtime_modal_blocks_multicursor_sequences(
             editor.open_help()
             start_position = editor.buffer.cursor_position
 
+            pipe_input.send_text("\x1b[1;4A")  # SHIFT+ALT+UP
+            pipe_input.send_text("\x1b[1;4B")  # SHIFT+ALT+DOWN
             pipe_input.send_text("\x1b[1;7A")  # CTRL+ALT+UP
             pipe_input.send_text("\x1b[1;8B")  # CTRL+SHIFT+ALT+DOWN
             await asyncio.sleep(0.15)

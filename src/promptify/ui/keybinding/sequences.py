@@ -26,6 +26,16 @@ CTRL_ALT_DOWN: tuple[KeySequence, ...] = (
     (Keys.Escape, Keys.ControlUp),
 )
 
+SHIFT_ALT_UP: tuple[KeySequence, ...] = (
+    (Keys.Escape, "[", "1", ";", "4", "A"),
+    (Keys.Escape, Keys.ShiftDown),
+)
+
+SHIFT_ALT_DOWN: tuple[KeySequence, ...] = (
+    (Keys.Escape, "[", "1", ";", "4", "B"),
+    (Keys.Escape, Keys.ShiftUp),
+)
+
 CTRL_SHIFT_ALT_UP: tuple[KeySequence, ...] = (
     (Keys.Escape, "[", "1", ";", "8", "A"),
     (Keys.Escape, Keys.ControlShiftDown),
@@ -50,6 +60,8 @@ CTRL_SHIFT_V: tuple[KeySequence, ...] = (
 MODAL_BLOCKED_ESCAPE_SEQUENCES: tuple[KeySequence, ...] = (
     *CTRL_ALT_UP,
     *CTRL_ALT_DOWN,
+    *SHIFT_ALT_UP,
+    *SHIFT_ALT_DOWN,
     *CTRL_SHIFT_ALT_UP,
     *CTRL_SHIFT_ALT_DOWN,
     (Keys.Escape, "g"),

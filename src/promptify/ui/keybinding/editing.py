@@ -14,6 +14,7 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.selection import SelectionState
 
 from ...core.context import get_comment_syntax
+from ...shared.editor_support import get_active_editor_context
 from .context import EditorBindingContext
 from .sequences import (
     CTRL_ALT_DOWN,
@@ -22,6 +23,8 @@ from .sequences import (
     CTRL_SHIFT_ALT_UP,
     CTRL_SHIFT_C,
     CTRL_SHIFT_V,
+    SHIFT_ALT_DOWN,
+    SHIFT_ALT_UP,
 )
 
 
@@ -404,6 +407,10 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     def _type_over_selection(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         if event.data and event.data.isprintable():
+            if buffer is ctx.editor.buffer and ctx.editor.type_text_in_main_buffer(
+                event.data
+            ):
+                return
             buffer.cut_selection()
             buffer.selection_state = None
             buffer.insert_text(event.data)
@@ -416,7 +423,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     )
     def _type_with_multi_cursor(event: KeyPressEvent) -> None:
         if event.data and event.data.isprintable():
-            ctx.editor.replace_text_at_cursors(event.data)
+            ctx.editor.type_text_in_main_buffer(event.data)
 
     # Track entry time to distinguish simulated terminal paste logic from real typing.
     last_enter_time = [0.0]
@@ -670,6 +677,22 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             ctx.editor.clear_multi_cursors()
 
     @ctx.bind_sequences(
+        SHIFT_ALT_UP,
+        filter=editor_command_focus,
+        note_activity=True,
+    )
+    def _clone_below(event: KeyPressEvent) -> None:
+        ctx.editor.clone_current_lines_or_selections(insert_above=False)
+
+    @ctx.bind_sequences(
+        SHIFT_ALT_DOWN,
+        filter=editor_command_focus,
+        note_activity=True,
+    )
+    def _clone_above(event: KeyPressEvent) -> None:
+        ctx.editor.clone_current_lines_or_selections(insert_above=True)
+
+    @ctx.bind_sequences(
         CTRL_ALT_UP,
         filter=editor_command_focus,
     )
@@ -737,20 +760,15 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     def _toggle_comment(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         document = buffer.document
-        lines_before = document.lines[: document.cursor_position_row]
-        in_block = False
-        language = "markdown"
-        for line in lines_before:
-            if line.strip().startswith("```"):
-                if in_block:
-                    in_block = False
-                    language = "markdown"
-                else:
-                    in_block = True
-                    language = line.strip()[3:].strip().lower()
+        active_context = get_active_editor_context(
+            document.text,
+            document.cursor_position,
+        )
 
         prefix, suffix = (
-            ("<!-- ", " -->") if not in_block else get_comment_syntax(language)
+            ("<!-- ", " -->")
+            if not active_context.in_fenced_block
+            else get_comment_syntax(active_context.language_key)
         )
         start_row, end_row = _get_selected_row_range(buffer)
         lines = document.lines

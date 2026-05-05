@@ -6,9 +6,22 @@ import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, cast
 
-from ...shared.editor_state import EditorTextEdit, MultiCursorCaret, SearchOptions
-from ...shared.editor_support import apply_editor_text_edits
+from prompt_toolkit.selection import SelectionState
+
+from ...shared.editor_state import (
+    EditorCaretTarget,
+    EditorTextEdit,
+    MultiCursorCaret,
+    SearchOptions,
+)
+from ...shared.editor_support import (
+    apply_editor_text_edits,
+    get_editor_wrap_pair,
+    get_logical_line_span,
+)
 from ._imports import Buffer, Document, Window
+
+_KEEP_ANCHOR = object()
 
 
 class EditorMultiCursorMixin:
@@ -53,6 +66,87 @@ class EditorMultiCursorMixin:
         if self._multi_carets:
             return tuple(self._multi_carets)
         return (self._make_primary_caret(),)
+
+    def _primary_selection_caret(self) -> MultiCursorCaret | None:
+        """Reflect the live prompt-toolkit selection as one editable caret"""
+        selection = self.buffer.selection_state
+        if selection is None:
+            return None
+        if selection.original_cursor_position == self.buffer.cursor_position:
+            return None
+        return MultiCursorCaret(
+            position=self.buffer.cursor_position,
+            anchor=selection.original_cursor_position,
+            preferred_column=self.buffer.preferred_column,
+            is_primary=True,
+        )
+
+    def _get_edit_carets(self) -> tuple[MultiCursorCaret, ...]:
+        """Return edit carets, including a plain primary selection when present"""
+        if self._multi_carets:
+            return tuple(self._multi_carets)
+        selected = self._primary_selection_caret()
+        if selected is not None:
+            return (selected,)
+        return (self._make_primary_caret(),)
+
+    def _caret_target(
+        self,
+        caret: MultiCursorCaret,
+        *,
+        source_position: int | None = None,
+        replacement_offset: int = 0,
+        anchor_source_position: int | None | object = _KEEP_ANCHOR,
+        anchor_replacement_offset: int = 0,
+    ) -> EditorCaretTarget:
+        """Build one caret target while preserving primary and column metadata"""
+        source = caret.position if source_position is None else source_position
+        anchor_source: int | None
+        if anchor_source_position is _KEEP_ANCHOR:
+            anchor_source = caret.anchor
+        else:
+            anchor_source = cast(int | None, anchor_source_position)
+        return EditorCaretTarget(
+            source_position=source,
+            replacement_offset=replacement_offset,
+            anchor_source_position=anchor_source,
+            anchor_replacement_offset=anchor_replacement_offset,
+            preferred_column=caret.preferred_column,
+            is_primary=caret.is_primary,
+        )
+
+    def _merge_text_edit(
+        self,
+        edits: list[EditorTextEdit],
+        indexes: dict[tuple[int, int, str], int],
+        *,
+        start: int,
+        end: int,
+        replacement: str,
+        carets: Sequence[EditorCaretTarget],
+    ) -> None:
+        """Merge equivalent edits so one insertion can keep multiple caret targets"""
+        key = (start, end, replacement)
+        edit_carets = tuple(carets)
+        existing_index = indexes.get(key)
+        if existing_index is None:
+            indexes[key] = len(edits)
+            edits.append(
+                EditorTextEdit(
+                    start=start,
+                    end=end,
+                    replacement=replacement,
+                    carets=edit_carets,
+                )
+            )
+            return
+        existing = edits[existing_index]
+        edits[existing_index] = EditorTextEdit(
+            start=existing.start,
+            end=existing.end,
+            replacement=existing.replacement,
+            carets=existing.carets + edit_carets,
+        )
 
     def reset_cursor_navigation_memory(self) -> None:
         """Clear sticky visual and logical columns after non-vertical navigation"""
@@ -610,6 +704,8 @@ class EditorMultiCursorMixin:
         if not edits:
             return
         new_text, new_carets = apply_editor_text_edits(self.buffer.text, edits)
+        if not new_carets:
+            new_carets = [MultiCursorCaret(position=0, is_primary=True)]
         if not any(caret.is_primary for caret in new_carets):
             new_carets[-1].is_primary = True
         primary = next(caret for caret in new_carets if caret.is_primary)
@@ -619,6 +715,16 @@ class EditorMultiCursorMixin:
             bypass_readonly=True,
         )
         self.reset_cursor_navigation_memory()
+        if len(new_carets) == 1 and new_carets[0].is_primary:
+            self._multi_carets = []
+            self.buffer.selection_state = None
+            if primary.has_selection:
+                self.buffer.selection_state = SelectionState(
+                    original_cursor_position=cast(int, primary.anchor)
+                )
+            self.buffer.preferred_column = primary.preferred_column
+            self.invalidate()
+            return
         self._set_multi_carets(new_carets)
 
     def replace_text_at_cursors(self, text: str) -> bool:
@@ -633,14 +739,135 @@ class EditorMultiCursorMixin:
                 start=caret.selection_start,
                 end=caret.selection_end,
                 replacement=text,
-                caret_source_position=caret.selection_end,
-                caret_replacement_offset=len(text),
-                is_primary=caret.is_primary,
+                carets=(
+                    self._caret_target(
+                        caret,
+                        replacement_offset=len(text),
+                        anchor_source_position=None,
+                    ),
+                ),
             )
             for caret in carets
         ]
         self._apply_text_edits(replacements)
         self.start_bulk_edit(text)
+        return True
+
+    def type_text_in_main_buffer(self, text: str) -> bool:
+        """Type one printable payload through the shared editor edit pipeline"""
+        if not text:
+            return False
+        carets = self._get_edit_carets()
+        if not self._multi_carets and not any(caret.has_selection for caret in carets):
+            return False
+
+        replacements: list[EditorTextEdit] = []
+        edit_indexes: dict[tuple[int, int, str], int] = {}
+        for caret in carets:
+            if caret.has_selection:
+                wrap_pair = get_editor_wrap_pair(self.buffer.text, caret.position, text)
+                if wrap_pair is not None:
+                    prefix, suffix = wrap_pair
+                    start = caret.selection_start
+                    end = caret.selection_end
+                    replacement = prefix + self.buffer.text[start:end] + suffix
+                    self._merge_text_edit(
+                        replacements,
+                        edit_indexes,
+                        start=start,
+                        end=end,
+                        replacement=replacement,
+                        carets=(
+                            self._caret_target(
+                                caret,
+                                replacement_offset=len(prefix)
+                                + (caret.position - start),
+                                anchor_replacement_offset=(
+                                    0
+                                    if caret.anchor is None
+                                    else len(prefix) + (caret.anchor - start)
+                                ),
+                            ),
+                        ),
+                    )
+                    continue
+            self._merge_text_edit(
+                replacements,
+                edit_indexes,
+                start=caret.selection_start,
+                end=caret.selection_end,
+                replacement=text,
+                carets=(
+                    self._caret_target(
+                        caret,
+                        replacement_offset=len(text),
+                        anchor_source_position=None,
+                    ),
+                ),
+            )
+
+        self._apply_text_edits(replacements)
+        self.start_bulk_edit(text)
+        return True
+
+    def clone_current_lines_or_selections(self, *, insert_above: bool) -> bool:
+        """Clone each current line or active selection while keeping originals active"""
+        carets = self._get_edit_carets()
+        if not carets:
+            return False
+
+        replacements: list[EditorTextEdit] = []
+        edit_indexes: dict[tuple[int, int, str], int] = {}
+        for caret in carets:
+            if caret.has_selection:
+                selection_start = caret.selection_start
+                selection_end = caret.selection_end
+                selection_text = self.buffer.text[selection_start:selection_end]
+                linewise_selection = (
+                    selection_start == 0
+                    or self.buffer.text[selection_start - 1] == "\n"
+                ) and (
+                    selection_end == len(self.buffer.text)
+                    or self.buffer.text[selection_end] == "\n"
+                )
+                if linewise_selection:
+                    if insert_above:
+                        insert_at = selection_start
+                        replacement = selection_text + "\n"
+                    elif selection_end < len(self.buffer.text):
+                        insert_at = selection_end + 1
+                        replacement = selection_text + "\n"
+                    else:
+                        insert_at = selection_end
+                        replacement = "\n" + selection_text
+                else:
+                    insert_at = selection_start if insert_above else selection_end
+                    replacement = selection_text
+            else:
+                line = get_logical_line_span(self.buffer.text, caret.position)
+                insert_at, replacement = line.clone_insertion(insert_above=insert_above)
+
+            boundary_offset = len(replacement) if insert_above else 0
+            self._merge_text_edit(
+                replacements,
+                edit_indexes,
+                start=insert_at,
+                end=insert_at,
+                replacement=replacement,
+                carets=(
+                    self._caret_target(
+                        caret,
+                        replacement_offset=(
+                            boundary_offset if caret.position == insert_at else 0
+                        ),
+                        anchor_replacement_offset=(
+                            boundary_offset if caret.anchor == insert_at else 0
+                        ),
+                    ),
+                ),
+            )
+
+        self._apply_text_edits(replacements)
         return True
 
     def _selected_texts_at_cursors(self) -> tuple[str, ...]:
@@ -674,8 +901,7 @@ class EditorMultiCursorMixin:
                 start=caret.selection_start,
                 end=caret.selection_end,
                 replacement="",
-                caret_source_position=caret.selection_start,
-                is_primary=caret.is_primary,
+                carets=(self._caret_target(caret, anchor_source_position=None),),
             )
             for caret in self._get_multi_carets()
             if caret.has_selection
@@ -683,41 +909,21 @@ class EditorMultiCursorMixin:
         self._apply_text_edits(replacements)
         return copied
 
-    def _line_cut_edit_for_position(
-        self, position: int, *, is_primary: bool
-    ) -> EditorTextEdit:
+    def _line_cut_edit_for_caret(self, caret: MultiCursorCaret) -> EditorTextEdit:
         """Return one line-cut edit with a VS Code-like caret target"""
-        document = Document(self.buffer.text, cursor_position=position)
-        row = document.cursor_position_row
-        line = document.current_line
-        line_start = document.translate_row_col_to_index(row, 0)
-        line_end = document.translate_row_col_to_index(row, len(line))
-        if row > 0:
-            target_position = document.translate_row_col_to_index(row - 1, 0)
-        else:
-            target_position = line_start
-        if row < document.line_count - 1:
-            return EditorTextEdit(
-                start=line_start,
-                end=line_end + 1,
-                replacement="",
-                caret_source_position=target_position,
-                is_primary=is_primary,
-            )
-        if row > 0:
-            return EditorTextEdit(
-                start=line_start - 1,
-                end=line_end,
-                replacement="",
-                caret_source_position=target_position,
-                is_primary=is_primary,
-            )
+        line = get_logical_line_span(self.buffer.text, caret.position)
+        cut_start, cut_end = line.cut_range()
         return EditorTextEdit(
-            start=line_start,
-            end=line_end,
+            start=cut_start,
+            end=cut_end,
             replacement="",
-            caret_source_position=target_position,
-            is_primary=is_primary,
+            carets=(
+                self._caret_target(
+                    caret,
+                    source_position=line.cut_target_position(),
+                    anchor_source_position=None,
+                ),
+            ),
         )
 
     def cut_current_lines_at_cursors(self) -> str | None:
@@ -726,31 +932,18 @@ class EditorMultiCursorMixin:
         if not carets:
             return None
 
-        ordered_edits = [
-            self._line_cut_edit_for_position(
-                caret.position, is_primary=caret.is_primary
-            )
-            for caret in carets
-        ]
-        ordered_edits.sort(key=lambda item: (item.start, item.end))
         deduped_edits: list[EditorTextEdit] = []
-        for edit in ordered_edits:
-            if (
-                deduped_edits
-                and deduped_edits[-1].start == edit.start
-                and deduped_edits[-1].end == edit.end
-            ):
-                previous = deduped_edits[-1]
-                deduped_edits[-1] = EditorTextEdit(
-                    start=previous.start,
-                    end=previous.end,
-                    replacement=previous.replacement,
-                    caret_source_position=previous.caret_source_position,
-                    caret_replacement_offset=previous.caret_replacement_offset,
-                    is_primary=previous.is_primary or edit.is_primary,
-                )
-                continue
-            deduped_edits.append(edit)
+        edit_indexes: dict[tuple[int, int, str], int] = {}
+        for caret in carets:
+            edit = self._line_cut_edit_for_caret(caret)
+            self._merge_text_edit(
+                deduped_edits,
+                edit_indexes,
+                start=edit.start,
+                end=edit.end,
+                replacement=edit.replacement,
+                carets=edit.carets,
+            )
 
         copied = "".join(
             self.buffer.text[edit.start : edit.end].lstrip("\n")
@@ -772,8 +965,13 @@ class EditorMultiCursorMixin:
                         start=caret.selection_start,
                         end=caret.selection_end,
                         replacement="",
-                        caret_source_position=caret.selection_start,
-                        is_primary=caret.is_primary,
+                        carets=(
+                            self._caret_target(
+                                caret,
+                                source_position=caret.selection_start,
+                                anchor_source_position=None,
+                            ),
+                        ),
                     )
                 )
             elif caret.position > 0:
@@ -782,8 +980,13 @@ class EditorMultiCursorMixin:
                         start=caret.position - 1,
                         end=caret.position,
                         replacement="",
-                        caret_source_position=caret.position - 1,
-                        is_primary=caret.is_primary,
+                        carets=(
+                            self._caret_target(
+                                caret,
+                                source_position=caret.position - 1,
+                                anchor_source_position=None,
+                            ),
+                        ),
                     )
                 )
         if not replacements:
@@ -805,8 +1008,13 @@ class EditorMultiCursorMixin:
                         start=caret.selection_start,
                         end=caret.selection_end,
                         replacement="",
-                        caret_source_position=caret.selection_start,
-                        is_primary=caret.is_primary,
+                        carets=(
+                            self._caret_target(
+                                caret,
+                                source_position=caret.selection_start,
+                                anchor_source_position=None,
+                            ),
+                        ),
                     )
                 )
             elif caret.position < text_length:
@@ -815,8 +1023,13 @@ class EditorMultiCursorMixin:
                         start=caret.position,
                         end=caret.position + 1,
                         replacement="",
-                        caret_source_position=caret.position,
-                        is_primary=caret.is_primary,
+                        carets=(
+                            self._caret_target(
+                                caret,
+                                source_position=caret.position,
+                                anchor_source_position=None,
+                            ),
+                        ),
                     )
                 )
         if not replacements:
@@ -836,8 +1049,13 @@ class EditorMultiCursorMixin:
                         start=caret.selection_start,
                         end=caret.selection_end,
                         replacement="",
-                        caret_source_position=caret.selection_start,
-                        is_primary=caret.is_primary,
+                        carets=(
+                            self._caret_target(
+                                caret,
+                                source_position=caret.selection_start,
+                                anchor_source_position=None,
+                            ),
+                        ),
                     )
                 )
                 continue
@@ -852,8 +1070,13 @@ class EditorMultiCursorMixin:
                         start=start,
                         end=caret.position,
                         replacement="",
-                        caret_source_position=start,
-                        is_primary=caret.is_primary,
+                        carets=(
+                            self._caret_target(
+                                caret,
+                                source_position=start,
+                                anchor_source_position=None,
+                            ),
+                        ),
                     )
                 )
         if not replacements:
@@ -874,8 +1097,13 @@ class EditorMultiCursorMixin:
                         start=caret.selection_start,
                         end=caret.selection_end,
                         replacement="",
-                        caret_source_position=caret.selection_start,
-                        is_primary=caret.is_primary,
+                        carets=(
+                            self._caret_target(
+                                caret,
+                                source_position=caret.selection_start,
+                                anchor_source_position=None,
+                            ),
+                        ),
                     )
                 )
                 continue
@@ -890,8 +1118,13 @@ class EditorMultiCursorMixin:
                         start=caret.position,
                         end=end,
                         replacement="",
-                        caret_source_position=caret.position,
-                        is_primary=caret.is_primary,
+                        carets=(
+                            self._caret_target(
+                                caret,
+                                source_position=caret.position,
+                                anchor_source_position=None,
+                            ),
+                        ),
                     )
                 )
         if not replacements:
