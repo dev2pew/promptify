@@ -37,6 +37,36 @@ from promptify.core.settings import AppSettings, build_settings
 from promptify.core.terminal import TerminalProfile, detect_terminal_profile
 
 
+def _iter_test_sandbox_roots(tests_dir: Path | None = None) -> tuple[Path, ...]:
+    """Return repo-local sandbox directories reserved for pytest runs"""
+    resolved_tests_dir = Path(__file__).parent if tests_dir is None else tests_dir
+    return tuple(
+        path
+        for path in resolved_tests_dir.iterdir()
+        if path.is_dir() and path.name.startswith("sandbox")
+    )
+
+
+def _cleanup_test_sandbox_roots(tests_dir: Path | None = None) -> None:
+    """Remove any repo-local sandbox directories left behind by test runs"""
+    for root in _iter_test_sandbox_roots(tests_dir):
+        shutil.rmtree(root)
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Clear stale repo-local test sandboxes before the suite starts"""
+    del session
+    _cleanup_test_sandbox_roots()
+
+
+def pytest_sessionfinish(
+    session: pytest.Session, exitstatus: int | pytest.ExitCode
+) -> None:
+    """Clear repo-local test sandboxes after the suite finishes"""
+    del session, exitstatus
+    _cleanup_test_sandbox_roots()
+
+
 @pytest.fixture(scope="session")
 def test_sandbox() -> Generator[SandboxPaths, None, None]:
     """
@@ -50,8 +80,7 @@ def test_sandbox() -> Generator[SandboxPaths, None, None]:
     outs_dir = root / "outs"
 
     # CLEAN PREVIOUS INTERRUPTED RUNS IF THEY EXIST
-    if root.exists():
-        shutil.rmtree(root)
+    _cleanup_test_sandbox_roots()
 
     # CREATE DIRECTORIES
     demo_dir.mkdir(parents=True)
@@ -94,8 +123,7 @@ def test_sandbox() -> Generator[SandboxPaths, None, None]:
     yield {"root": root, "demo": demo_dir, "case": case_dir, "outs": outs_dir}
 
     # TEARDOWN SANDBOX
-    if root.exists():
-        shutil.rmtree(root)
+    _cleanup_test_sandbox_roots()
 
 
 @pytest.fixture

@@ -31,6 +31,7 @@ target-version = "py313"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
 
 [tool.basedpyright]
 pythonVersion = "3.13"

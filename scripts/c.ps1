@@ -37,10 +37,19 @@ $RootDirs = @(
     ".pytest_cache",
     ".ruff_cache",
     ".uv-cache",
-    "__pycache__"
+    "__pycache__",
+    "pytest-cache-files-*"
 )
 
 foreach ($Dir in $RootDirs) {
+    if ($Dir.Contains("*")) {
+        Get-ChildItem -LiteralPath $ProjectRoot -Directory -Force -Filter $Dir -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                Remove-Item -LiteralPath $_.FullName -Recurse -Force
+                Write-Host "Deleted: $($_.FullName)"
+            }
+        continue
+    }
     Remove-PathIfExists -Path (Join-Path $ProjectRoot $Dir)
 }
 
