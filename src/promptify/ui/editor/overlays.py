@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ...shared.editor_state import EditorViewState, FocusTarget, OverlayName
 from ._imports import Buffer, SelectionState, Window, get_app
@@ -49,7 +49,7 @@ class EditorOverlayMixin:
     help_window: Window = cast(Window, cast(object, None))
     err_window: Window = cast(Window, cast(object, None))
     quit_window: Window = cast(Window, cast(object, None))
-    main_window: Window = cast(Window, cast(object, None))
+    main_window: Any = cast(Any, None)
     quit_buffer: Buffer = cast(Buffer, cast(object, None))
 
     if TYPE_CHECKING:

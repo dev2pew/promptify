@@ -53,6 +53,8 @@ the in-app help screen is authoritative, but the main defaults are...
 - `Ctrl+Shift+L`: select all occurrences of the current word or selection
 - `Esc`: clear cloned cursors and return to the primary cursor
 - `Ctrl+S`: resolve and save
+- `Ctrl+C` / `Ctrl+X` / `Ctrl+V`: copy, cut, and paste through the system clipboard; `Ctrl+X` cuts the current line when nothing is selected
+- `Ctrl+Shift+C` / `Ctrl+Shift+V`: system clipboard aliases when the terminal forwards them
 - `Ctrl+Q` / `F10`: abort with confirmation
 - `Ctrl+Up` / `Ctrl+Down`: scroll the editor view without moving the cursor
 - `Ctrl+PageUp` / `Ctrl+PageDown`: scroll the editor view by 15 lines
@@ -144,6 +146,7 @@ the full documented surface is in [.env.example](.env.example), including...
 - matching thresholds and completion tuning;
 - editor layout, line-number gutter, word wrap, search history, bulk-paste tuning, key-sequence timeouts, and token refresh timing;
 - full prompt-toolkit style overrides for the interactive theme.
+- markdown heading theme overrides use `PROMPTIFY_THEME_MARKDOWN_HEADINGS` and apply to both primary and secondary heading tokens.
 
 invalid values fall back safely to code defaults through [settings.py](src/promptify/core/settings.py).
 
@@ -177,7 +180,7 @@ or on Windows...
 run tests...
 
 ```bash
-uv run pytest -v
+./scripts/t.sh
 
 ```
 

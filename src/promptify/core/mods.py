@@ -563,7 +563,7 @@ class DirMod(MentionMod):
             yield from build_path_completions(
                 match_path.group(1),
                 list(indexer.dirs),
-                meta_candidates=set(),
+                meta_candidates=set(indexer.dirs),
             )
 
 

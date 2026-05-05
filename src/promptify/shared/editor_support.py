@@ -6,6 +6,8 @@ import re
 from collections.abc import Sequence
 from typing import cast
 
+from .editor_state import EditorTextEdit, MultiCursorCaret
+
 MENTION_SCAN_PATTERN = r"<@(?:\\.|[^>\n])+(?:>|$)|\[@[^\]\n]*(?:\]|$)"
 HELP_TOKEN_PATTERN = r"(<@(?:\\.|[^>\n])+>|\[@project\])|(\^?\[[^\]\n]+\])"
 JUMP_TARGET_PATTERN = re.compile(r"^:(?P<line>\d+)(?:(?:[:,])(?P<column>\d+))?$")
@@ -158,3 +160,54 @@ def preserve_replacement_case(source: str, replacement: str) -> str:
         tail = replacement[1:].lower()
         return head + tail
     return replacement
+
+
+def apply_editor_text_edits(
+    text: str,
+    edits: Sequence[EditorTextEdit],
+) -> tuple[str, list[MultiCursorCaret]]:
+    """Apply ordered text edits and resolve their resulting caret positions"""
+    if not edits:
+        return text, []
+
+    ordered = sorted(edits, key=lambda item: (item.start, item.end))
+    parts: list[str] = []
+    last_index = 0
+    for edit in ordered:
+        parts.append(text[last_index : edit.start])
+        parts.append(edit.replacement)
+        last_index = edit.end
+    parts.append(text[last_index:])
+    new_text = "".join(parts)
+
+    new_carets = [
+        MultiCursorCaret(
+            position=_rebase_edit_caret_position(edit, ordered),
+            is_primary=edit.is_primary,
+        )
+        for edit in ordered
+    ]
+    return new_text, new_carets
+
+
+def _rebase_edit_caret_position(
+    target_edit: EditorTextEdit,
+    ordered_edits: Sequence[EditorTextEdit],
+) -> int:
+    """Translate one source caret target through the full edit list"""
+    delta = 0
+    source_position = target_edit.caret_source_position
+    for edit in ordered_edits:
+        transformed_start = edit.start + delta
+        if source_position < edit.start:
+            break
+        if source_position <= edit.end:
+            if edit is target_edit:
+                return transformed_start + min(
+                    target_edit.caret_replacement_offset, len(edit.replacement)
+                )
+            return transformed_start + min(
+                source_position - edit.start, len(edit.replacement)
+            )
+        delta += len(edit.replacement) - (edit.end - edit.start)
+    return source_position + delta

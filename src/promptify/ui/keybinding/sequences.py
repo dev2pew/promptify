@@ -11,7 +11,10 @@ SHIFT_ENTER: tuple[KeySequence, ...] = (
     (Keys.Escape, Keys.Enter),
 )
 
-CTRL_ALT_ENTER: tuple[KeySequence, ...] = ((Keys.Escape, "[", "1", "3", ";", "7", "u"),)
+CTRL_ALT_ENTER: tuple[KeySequence, ...] = (
+    (Keys.Escape, "[", "1", "3", ";", "7", "u"),
+    (Keys.Escape, Keys.Enter),
+)
 
 CTRL_ALT_UP: tuple[KeySequence, ...] = (
     (Keys.Escape, "[", "1", ";", "7", "A"),

@@ -19,6 +19,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
             "PROMPTIFY_THEME_TOPBAR": "bg:#000000 #ffffff",
             "PROMPTIFY_THEME_SEARCH_TOGGLE_ON": "fg:#00ff00 bold",
             "PROMPTIFY_THEME_SEARCH_TOGGLE_OFF": "fg:#ff0000",
+            "PROMPTIFY_THEME_MARKDOWN_HEADINGS": "fg:#abcdef bold",
             "PROMPTIFY_THEME_MULTI_CURSOR": "bg:#ffffff #000000",
             "PROMPTIFY_THEME_MULTI_CURSOR_SELECTION": "bg:#111111 #eeeeee",
             "PROMPTIFY_INDEX_WATCH_MODE": "polling",
@@ -39,6 +40,8 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
     assert settings.theme.styles["topbar"] == "bg:#000000 #ffffff"
     assert settings.theme.styles["search-toggle-on"] == "fg:#00ff00 bold"
     assert settings.theme.styles["search-toggle-off"] == "fg:#ff0000"
+    assert settings.theme.styles["pygments.generic.heading"] == "fg:#abcdef bold"
+    assert settings.theme.styles["pygments.generic.subheading"] == "fg:#abcdef bold"
     assert settings.theme.styles["multi-cursor"] == "bg:#ffffff #000000"
     assert settings.theme.styles["multi-cursor-selection"] == "bg:#111111 #eeeeee"
     assert settings.indexer.watch_mode == "polling"

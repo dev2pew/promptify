@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import promptify.core.settings as settings_module
 
@@ -62,7 +62,7 @@ class EditorViewMixin:
     replace_buffer: Buffer = cast(Buffer, cast(object, None))
     jump_buffer: Buffer = cast(Buffer, cast(object, None))
     help_buffer: Buffer = cast(Buffer, cast(object, None))
-    main_window: Window = cast(Window, cast(object, None))
+    main_window: Any = cast(Any, None)
 
     if TYPE_CHECKING:
 
@@ -165,6 +165,7 @@ class EditorViewMixin:
                     "matching-bracket.cursor": "bg:#ffe66d #101317 bold",
                     "matching-bracket.other": "bg:#7cffcb #101317 bold",
                     "pygments.generic.heading": "fg:#ffcc00 bold",
+                    "pygments.generic.subheading": "fg:#ffcc00 bold",
                     "multi-cursor": "bg:#d7f6ff #101317 bold",
                     "multi-cursor-selection": "bg:#244a60 #eef9ff",
                     "current-line": "bg:#262a31",

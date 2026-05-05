@@ -7,6 +7,7 @@ import re
 import time
 
 from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.document import Document
 from prompt_toolkit.filters import Condition, has_selection
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.keys import Keys
@@ -58,6 +59,43 @@ def _prepare_plain_navigation(ctx: EditorBindingContext, buffer: Buffer) -> None
     buffer.selection_state = None
 
 
+def _cut_entire_current_line(buffer: Buffer) -> str:
+    """Cut and return the current logical line, including its separator when possible"""
+    document = buffer.document
+    row = document.cursor_position_row
+    line = document.current_line
+    line_start = document.translate_row_col_to_index(row, 0)
+    line_end = document.translate_row_col_to_index(row, len(line))
+    target_position = (
+        document.translate_row_col_to_index(row - 1, 0) if row > 0 else line_start
+    )
+
+    if row < document.line_count - 1:
+        start = line_start
+        end = line_end + 1
+        copied_text = document.text[start:end]
+    elif row > 0:
+        start = line_start - 1
+        end = line_end
+        copied_text = document.text[start:end].lstrip("\n")
+    else:
+        start = line_start
+        end = line_end
+        copied_text = document.text[start:end]
+
+    buffer.save_to_undo_stack()
+    buffer.set_document(
+        Document(
+            buffer.text[:start] + buffer.text[end:],
+            cursor_position=target_position,
+        ),
+        bypass_readonly=True,
+    )
+    buffer.selection_state = None
+    buffer.preferred_column = None
+    return copied_text
+
+
 def register_editing_bindings(ctx: EditorBindingContext) -> None:
     """Register bindings for editing, selection, cursor movement, and save"""
 
@@ -87,6 +125,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         text = _get_selected_text_for_clipboard(event.app.current_buffer)
         if text:
             ctx.editor.set_internal_clipboard_text(text)
+            ctx.schedule_system_clipboard_copy(text)
 
     @ctx.bind_sequences(CTRL_SHIFT_C, filter=editable_text_focus)
     def _copy_system_clipboard(event: KeyPressEvent) -> None:
@@ -101,18 +140,27 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             cut_text = ctx.editor.cut_selected_text_at_cursors()
             if cut_text is not None:
                 ctx.editor.set_internal_clipboard_text(cut_text)
+                ctx.schedule_system_clipboard_copy(cut_text)
+                return
+            cut_text = ctx.editor.cut_current_lines_at_cursors()
+            if cut_text:
+                ctx.editor.set_internal_clipboard_text(cut_text)
+                ctx.schedule_system_clipboard_copy(cut_text)
                 return
         if buffer.selection_state:
             data = buffer.cut_selection()
             ctx.editor.set_internal_clipboard_text(data.text)
+            ctx.schedule_system_clipboard_copy(data.text)
             buffer.selection_state = None
+            return
+        cut_text = _cut_entire_current_line(buffer)
+        if cut_text:
+            ctx.editor.set_internal_clipboard_text(cut_text)
+            ctx.schedule_system_clipboard_copy(cut_text)
 
     @ctx.bind("c-v", filter=editable_text_focus)
     def _paste(event: KeyPressEvent) -> None:
-        buffer = event.app.current_buffer
-        text = ctx.editor.get_internal_clipboard_text()
-        if text:
-            ctx.editor.paste_text(buffer, text)
+        ctx.schedule_system_clipboard_paste()
 
     @ctx.bind_sequences(CTRL_SHIFT_V, filter=editable_text_focus)
     @ctx.bind("s-insert", filter=editable_text_focus)

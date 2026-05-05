@@ -132,8 +132,8 @@ def test_file_mod_exact_match_helpers_do_not_show_path_meta():
     assert completions[1].display_meta_text == ""
 
 
-def test_dir_mod_completions_do_not_show_path_meta():
-    """Directory completions should keep the menu lightweight and label-only"""
+def test_dir_mod_completions_show_path_meta_like_file_mentions():
+    """Directory completions should expose parent-path tails for disambiguation"""
     indexer = IndexerStub(
         files_by_rel={},
         dirs={"src/features/auth", "src/features/billing"},
@@ -145,4 +145,5 @@ def test_dir_mod_completions_do_not_show_path_meta():
         )
     )
 
-    assert completions[0].display_meta_text == ""
+    assert completions[0].display_text == "auth"
+    assert completions[0].display_meta_text == "src/features"

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, cast
 
-from ...shared.editor_state import MultiCursorCaret, SearchOptions
+from ...shared.editor_state import EditorTextEdit, MultiCursorCaret, SearchOptions
+from ...shared.editor_support import apply_editor_text_edits
 from ._imports import Buffer, Document, Window
 
 
@@ -603,30 +605,11 @@ class EditorMultiCursorMixin:
             return True
         return self.add_vertical_cursor(direction)
 
-    def _apply_multi_replacements(
-        self,
-        replacements: list[tuple[int, int, str, bool]],
-    ) -> None:
-        """Apply sorted replacements and rebase every caret into the edited text"""
-        if not replacements:
+    def _apply_text_edits(self, edits: Sequence[EditorTextEdit]) -> None:
+        """Apply text edits through one shared caret-rebasing pipeline"""
+        if not edits:
             return
-        text = self.buffer.text
-        ordered = sorted(replacements, key=lambda item: (item[0], item[1]))
-        parts: list[str] = []
-        new_carets: list[MultiCursorCaret] = []
-        last_index = 0
-        position = 0
-        for start, end, replacement, is_primary in ordered:
-            unchanged = text[last_index:start]
-            parts.append(unchanged)
-            parts.append(replacement)
-            position += len(unchanged) + len(replacement)
-            new_carets.append(
-                MultiCursorCaret(position=position, is_primary=is_primary)
-            )
-            last_index = end
-        parts.append(text[last_index:])
-        new_text = "".join(parts)
+        new_text, new_carets = apply_editor_text_edits(self.buffer.text, edits)
         if not any(caret.is_primary for caret in new_carets):
             new_carets[-1].is_primary = True
         primary = next(caret for caret in new_carets if caret.is_primary)
@@ -646,10 +629,17 @@ class EditorMultiCursorMixin:
         ):
             return False
         replacements = [
-            (caret.selection_start, caret.selection_end, text, caret.is_primary)
+            EditorTextEdit(
+                start=caret.selection_start,
+                end=caret.selection_end,
+                replacement=text,
+                caret_source_position=caret.selection_end,
+                caret_replacement_offset=len(text),
+                is_primary=caret.is_primary,
+            )
             for caret in carets
         ]
-        self._apply_multi_replacements(replacements)
+        self._apply_text_edits(replacements)
         self.start_bulk_edit(text)
         return True
 
@@ -680,11 +670,93 @@ class EditorMultiCursorMixin:
         if copied is None:
             return None
         replacements = [
-            (caret.selection_start, caret.selection_end, "", caret.is_primary)
+            EditorTextEdit(
+                start=caret.selection_start,
+                end=caret.selection_end,
+                replacement="",
+                caret_source_position=caret.selection_start,
+                is_primary=caret.is_primary,
+            )
             for caret in self._get_multi_carets()
             if caret.has_selection
         ]
-        self._apply_multi_replacements(replacements)
+        self._apply_text_edits(replacements)
+        return copied
+
+    def _line_cut_edit_for_position(
+        self, position: int, *, is_primary: bool
+    ) -> EditorTextEdit:
+        """Return one line-cut edit with a VS Code-like caret target"""
+        document = Document(self.buffer.text, cursor_position=position)
+        row = document.cursor_position_row
+        line = document.current_line
+        line_start = document.translate_row_col_to_index(row, 0)
+        line_end = document.translate_row_col_to_index(row, len(line))
+        if row > 0:
+            target_position = document.translate_row_col_to_index(row - 1, 0)
+        else:
+            target_position = line_start
+        if row < document.line_count - 1:
+            return EditorTextEdit(
+                start=line_start,
+                end=line_end + 1,
+                replacement="",
+                caret_source_position=target_position,
+                is_primary=is_primary,
+            )
+        if row > 0:
+            return EditorTextEdit(
+                start=line_start - 1,
+                end=line_end,
+                replacement="",
+                caret_source_position=target_position,
+                is_primary=is_primary,
+            )
+        return EditorTextEdit(
+            start=line_start,
+            end=line_end,
+            replacement="",
+            caret_source_position=target_position,
+            is_primary=is_primary,
+        )
+
+    def cut_current_lines_at_cursors(self) -> str | None:
+        """Cut the full logical line for each active caret"""
+        carets = list(self._get_multi_carets())
+        if not carets:
+            return None
+
+        ordered_edits = [
+            self._line_cut_edit_for_position(
+                caret.position, is_primary=caret.is_primary
+            )
+            for caret in carets
+        ]
+        ordered_edits.sort(key=lambda item: (item.start, item.end))
+        deduped_edits: list[EditorTextEdit] = []
+        for edit in ordered_edits:
+            if (
+                deduped_edits
+                and deduped_edits[-1].start == edit.start
+                and deduped_edits[-1].end == edit.end
+            ):
+                previous = deduped_edits[-1]
+                deduped_edits[-1] = EditorTextEdit(
+                    start=previous.start,
+                    end=previous.end,
+                    replacement=previous.replacement,
+                    caret_source_position=previous.caret_source_position,
+                    caret_replacement_offset=previous.caret_replacement_offset,
+                    is_primary=previous.is_primary or edit.is_primary,
+                )
+                continue
+            deduped_edits.append(edit)
+
+        copied = "".join(
+            self.buffer.text[edit.start : edit.end].lstrip("\n")
+            for edit in deduped_edits
+        )
+        self._apply_text_edits(deduped_edits)
         return copied
 
     def delete_before_cursors(self) -> bool:
@@ -692,19 +764,31 @@ class EditorMultiCursorMixin:
         carets = self._get_multi_carets()
         if not self.multi_cursor_active():
             return False
-        replacements: list[tuple[int, int, str, bool]] = []
+        replacements: list[EditorTextEdit] = []
         for caret in carets:
             if caret.has_selection:
                 replacements.append(
-                    (caret.selection_start, caret.selection_end, "", caret.is_primary)
+                    EditorTextEdit(
+                        start=caret.selection_start,
+                        end=caret.selection_end,
+                        replacement="",
+                        caret_source_position=caret.selection_start,
+                        is_primary=caret.is_primary,
+                    )
                 )
             elif caret.position > 0:
                 replacements.append(
-                    (caret.position - 1, caret.position, "", caret.is_primary)
+                    EditorTextEdit(
+                        start=caret.position - 1,
+                        end=caret.position,
+                        replacement="",
+                        caret_source_position=caret.position - 1,
+                        is_primary=caret.is_primary,
+                    )
                 )
         if not replacements:
             return False
-        self._apply_multi_replacements(replacements)
+        self._apply_text_edits(replacements)
         return True
 
     def delete_after_cursors(self) -> bool:
@@ -713,30 +797,48 @@ class EditorMultiCursorMixin:
         if not self.multi_cursor_active():
             return False
         text_length = len(self.buffer.text)
-        replacements: list[tuple[int, int, str, bool]] = []
+        replacements: list[EditorTextEdit] = []
         for caret in carets:
             if caret.has_selection:
                 replacements.append(
-                    (caret.selection_start, caret.selection_end, "", caret.is_primary)
+                    EditorTextEdit(
+                        start=caret.selection_start,
+                        end=caret.selection_end,
+                        replacement="",
+                        caret_source_position=caret.selection_start,
+                        is_primary=caret.is_primary,
+                    )
                 )
             elif caret.position < text_length:
                 replacements.append(
-                    (caret.position, caret.position + 1, "", caret.is_primary)
+                    EditorTextEdit(
+                        start=caret.position,
+                        end=caret.position + 1,
+                        replacement="",
+                        caret_source_position=caret.position,
+                        is_primary=caret.is_primary,
+                    )
                 )
         if not replacements:
             return False
-        self._apply_multi_replacements(replacements)
+        self._apply_text_edits(replacements)
         return True
 
     def delete_word_before_cursors(self) -> bool:
         """Delete the previous word at every active virtual caret"""
         if not self.multi_cursor_active():
             return False
-        replacements: list[tuple[int, int, str, bool]] = []
+        replacements: list[EditorTextEdit] = []
         for caret in self._get_multi_carets():
             if caret.has_selection:
                 replacements.append(
-                    (caret.selection_start, caret.selection_end, "", caret.is_primary)
+                    EditorTextEdit(
+                        start=caret.selection_start,
+                        end=caret.selection_end,
+                        replacement="",
+                        caret_source_position=caret.selection_start,
+                        is_primary=caret.is_primary,
+                    )
                 )
                 continue
             if caret.position <= 0:
@@ -745,22 +847,36 @@ class EditorMultiCursorMixin:
             offset = document.find_previous_word_beginning()
             start = caret.position + offset if offset is not None else 0
             if start != caret.position:
-                replacements.append((start, caret.position, "", caret.is_primary))
+                replacements.append(
+                    EditorTextEdit(
+                        start=start,
+                        end=caret.position,
+                        replacement="",
+                        caret_source_position=start,
+                        is_primary=caret.is_primary,
+                    )
+                )
         if not replacements:
             return False
-        self._apply_multi_replacements(replacements)
+        self._apply_text_edits(replacements)
         return True
 
     def delete_word_after_cursors(self) -> bool:
         """Delete the next word at every active virtual caret"""
         if not self.multi_cursor_active():
             return False
-        replacements: list[tuple[int, int, str, bool]] = []
+        replacements: list[EditorTextEdit] = []
         text_length = len(self.buffer.text)
         for caret in self._get_multi_carets():
             if caret.has_selection:
                 replacements.append(
-                    (caret.selection_start, caret.selection_end, "", caret.is_primary)
+                    EditorTextEdit(
+                        start=caret.selection_start,
+                        end=caret.selection_end,
+                        replacement="",
+                        caret_source_position=caret.selection_start,
+                        is_primary=caret.is_primary,
+                    )
                 )
                 continue
             if caret.position >= text_length:
@@ -769,10 +885,18 @@ class EditorMultiCursorMixin:
             offset = document.find_next_word_beginning()
             end = caret.position + offset if offset is not None else text_length
             if end != caret.position:
-                replacements.append((caret.position, end, "", caret.is_primary))
+                replacements.append(
+                    EditorTextEdit(
+                        start=caret.position,
+                        end=end,
+                        replacement="",
+                        caret_source_position=caret.position,
+                        is_primary=caret.is_primary,
+                    )
+                )
         if not replacements:
             return False
-        self._apply_multi_replacements(replacements)
+        self._apply_text_edits(replacements)
         return True
 
     def paste_text_at_cursors(self, text: str) -> bool:

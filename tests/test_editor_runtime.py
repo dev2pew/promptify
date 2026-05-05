@@ -49,6 +49,9 @@ test_interactive_editor_runtime_ctrl_shift_alt_shrinks_contiguous_edge = (
 test_interactive_editor_runtime_fast_cut_is_not_cancelled_by_typeahead = (
     cases.test_interactive_editor_runtime_fast_cut_is_not_cancelled_by_typeahead
 )
+test_interactive_editor_runtime_ctrl_x_cuts_current_line = (
+    cases.test_interactive_editor_runtime_ctrl_x_cuts_current_line
+)
 test_interactive_editor_runtime_shift_vertical_selection_deletes = (
     cases.test_interactive_editor_runtime_shift_vertical_selection_deletes
 )
@@ -89,6 +92,6 @@ test_interactive_editor_multicursor_delete_previous_word_stays_coherent = (
 test_interactive_editor_runtime_ctrl_a_backspace_clears_multicursors = (
     cases.test_interactive_editor_runtime_ctrl_a_backspace_clears_multicursors
 )
-test_interactive_editor_runtime_clipboard_shortcuts_are_distinct = (
-    cases.test_interactive_editor_runtime_clipboard_shortcuts_are_distinct
+test_interactive_editor_runtime_clipboard_shortcuts_use_the_system_clipboard = (
+    cases.test_interactive_editor_runtime_clipboard_shortcuts_use_the_system_clipboard
 )

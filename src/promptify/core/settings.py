@@ -52,6 +52,7 @@ _DEFAULT_THEME_STYLES = {
     "matching-bracket.cursor": "bg:#ffe66d #101317 bold",
     "matching-bracket.other": "bg:#7cffcb #101317 bold",
     "pygments.generic.heading": "fg:#ffcc00 bold",
+    "pygments.generic.subheading": "fg:#ffcc00 bold",
     "multi-cursor": "bg:#d7f6ff #101317 bold",
     "multi-cursor-selection": "bg:#244a60 #eef9ff",
     "current-line": "bg:#262a31",
@@ -97,7 +98,6 @@ _THEME_ENV_MAP = {
     "PROMPTIFY_THEME_SEARCH_MATCH_ACTIVE": "search-match-active",
     "PROMPTIFY_THEME_MATCHING_BRACKET_CURSOR": "matching-bracket.cursor",
     "PROMPTIFY_THEME_MATCHING_BRACKET_OTHER": "matching-bracket.other",
-    "PROMPTIFY_THEME_MARKDOWN_HEADING": "pygments.generic.heading",
     "PROMPTIFY_THEME_MULTI_CURSOR": "multi-cursor",
     "PROMPTIFY_THEME_MULTI_CURSOR_SELECTION": "multi-cursor-selection",
     "PROMPTIFY_THEME_CURRENT_LINE": "current-line",
@@ -121,6 +121,11 @@ _THEME_ENV_MAP = {
     "PROMPTIFY_THEME_TRAILING_WHITESPACE": "trailing-whitespace",
     "PROMPTIFY_THEME_EOF_NEWLINE": "eof-newline",
 }
+
+_MARKDOWN_HEADING_STYLE_KEYS = (
+    "pygments.generic.heading",
+    "pygments.generic.subheading",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -381,6 +386,17 @@ def _build_theme_styles(
     warns: list[str],
 ) -> dict[str, str]:
     styles = dict(_DEFAULT_THEME_STYLES)
+    markdown_headings_value = _get_env(
+        env, "PROMPTIFY_THEME_MARKDOWN_HEADINGS"
+    ) or _get_env(env, "PROMPTIFY_THEME_MARKDOWN_HEADING")
+    if markdown_headings_value is not None:
+        if markdown_headings_value == "":
+            warns.append(
+                "PROMPTIFY_THEME_MARKDOWN_HEADINGS cannot be empty, using theme default"
+            )
+        else:
+            for style_key in _MARKDOWN_HEADING_STYLE_KEYS:
+                styles[style_key] = markdown_headings_value
     for env_key, style_key in _THEME_ENV_MAP.items():
         value = _get_env(env, env_key)
         if value is None:

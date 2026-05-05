@@ -116,3 +116,15 @@ class MultiCursorCaret:
     def selection_end(self) -> int:
         """Return the upper selection boundary or the caret position"""
         return self.range_key[1]
+
+
+@dataclass(frozen=True, slots=True)
+class EditorTextEdit:
+    """Represent one text edit plus the caret target it should produce"""
+
+    start: int
+    end: int
+    replacement: str
+    caret_source_position: int
+    caret_replacement_offset: int = 0
+    is_primary: bool = False

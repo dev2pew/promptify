@@ -7,7 +7,6 @@ import pytest
 from prompt_toolkit.application.current import create_app_session
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.buffer import CompletionState
-from prompt_toolkit.clipboard import ClipboardData
 from prompt_toolkit.completion import CompleteEvent, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.input.defaults import create_pipe_input
@@ -18,6 +17,7 @@ from prompt_toolkit.output.base import DummyOutput
 from prompt_toolkit.selection import SelectionState
 
 from ._settings_master import SettingsPass
+from promptify.shared.editor_state import MultiCursorCaret
 from promptify.ui.bindings import setup_keybindings
 from promptify.ui.editor import (
     InteractiveEditor,
@@ -659,7 +659,7 @@ async def test_interactive_editor_runtime_search_widget_shortcuts_work(
 async def test_interactive_editor_runtime_replace_enter_and_ctrl_alt_enter(
     app_components,
 ):
-    """The live replace widget should map Enter and Ctrl+Alt+Enter correctly"""
+    """The live replace widget should accept both replace-all terminal sequences"""
     context, resolver = app_components
     editor = InteractiveEditor("alpha alpha", context.indexer, resolver)
 
@@ -682,6 +682,18 @@ async def test_interactive_editor_runtime_replace_enter_and_ctrl_alt_enter(
             assert editor.buffer.text == "omega alpha"
 
             pipe_input.send_text("\x1b[13;7u")
+            for _ in range(20):
+                if editor.buffer.text == "omega omega":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "omega omega"
+
+            editor.buffer.text = "alpha alpha"
+            editor.buffer.cursor_position = 0
+            editor.search_buffer.text = "alpha"
+            editor.replace_buffer.text = "omega"
+            pipe_input.send_text("\x1b\r")
             for _ in range(20):
                 if editor.buffer.text == "omega omega":
                     break
@@ -836,6 +848,132 @@ async def test_interactive_editor_runtime_fast_cut_is_not_cancelled_by_typeahead
                 await asyncio.sleep(0.02)
 
             assert editor.buffer.text == "z"
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_runtime_ctrl_x_cuts_current_line(
+    app_components, monkeypatch
+):
+    """Ctrl+X without a selection should cut the current line to the system clipboard"""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "# demo\n\ncut me\nline 2\nline 3", context.indexer, resolver
+    )
+    copied_to_system: list[str] = []
+
+    monkeypatch.setattr("promptify.ui.bindings.pyperclip.copy", copied_to_system.append)
+    monkeypatch.setattr(
+        "promptify.ui.bindings.pyperclip.paste", lambda: copied_to_system[-1]
+    )
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.buffer.cursor_position = (
+                editor.buffer.document.translate_row_col_to_index(2, 3)
+            )
+            pipe_input.send_text("\x18")  # CTRL+X
+            for _ in range(20):
+                if editor.buffer.text == "# demo\n\nline 2\nline 3":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "# demo\n\nline 2\nline 3"
+            assert copied_to_system == ["cut me\n"]
+
+            editor.buffer.cursor_position = (
+                editor.buffer.document.translate_row_col_to_index(2, 0)
+            )
+            pipe_input.send_text("\x16")  # CTRL+V
+            for _ in range(20):
+                if editor.buffer.text == "# demo\n\ncut me\nline 2\nline 3":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "# demo\n\ncut me\nline 2\nline 3"
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_cut_current_lines_preserves_noncontiguous_multicursors(
+    app_components,
+):
+    """Line-cut operations should keep noncontiguous carets distinct after deletion"""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "line 1\nline 2\nline 3\nline 4", context.indexer, resolver
+    )
+    line_2 = editor.buffer.document.translate_row_col_to_index(1, 6)
+    line_4 = editor.buffer.document.translate_row_col_to_index(3, 6)
+    editor._set_multi_carets(
+        [
+            MultiCursorCaret(position=line_2, preferred_column=6, is_primary=True),
+            MultiCursorCaret(position=line_4, preferred_column=6),
+        ]
+    )
+
+    cut_text = editor.cut_current_lines_at_cursors()
+
+    assert cut_text == "line 2\nline 4"
+    assert editor.buffer.text == "line 1\nline 3"
+    assert editor.multi_cursor_active()
+    carets = editor.get_multi_cursor_render_carets()
+    assert [
+        editor.buffer.document.translate_index_to_position(caret.position)
+        for caret in carets
+    ] == [(0, 0), (1, 0)]
+
+
+async def test_interactive_editor_runtime_ctrl_x_preserves_noncontiguous_multicursors(
+    app_components, monkeypatch
+):
+    """Ctrl+X should keep noncontiguous virtual line cuts aligned like VS Code"""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "line 1\nline 2\nline 3\nline 4", context.indexer, resolver
+    )
+    copied_to_system: list[str] = []
+    line_2 = editor.buffer.document.translate_row_col_to_index(1, 6)
+    line_4 = editor.buffer.document.translate_row_col_to_index(3, 6)
+
+    monkeypatch.setattr("promptify.ui.bindings.pyperclip.copy", copied_to_system.append)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor._set_multi_carets(
+                [
+                    MultiCursorCaret(
+                        position=line_2,
+                        preferred_column=6,
+                        is_primary=True,
+                    ),
+                    MultiCursorCaret(position=line_4, preferred_column=6),
+                ]
+            )
+            pipe_input.send_text("\x18")  # CTRL+X
+
+            for _ in range(20):
+                if editor.buffer.text == "line 1\nline 3":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert copied_to_system == ["line 2\nline 4"]
+            assert editor.buffer.text == "line 1\nline 3"
+            assert editor.multi_cursor_active()
+            assert [
+                editor.buffer.document.translate_index_to_position(caret.position)
+                for caret in editor.get_multi_cursor_render_carets()
+            ] == [(0, 0), (1, 0)]
 
             pipe_input.send_text("\x11")  # CTRL+Q
             pipe_input.send_text("\r")  # ENTER
@@ -1713,10 +1851,10 @@ async def test_interactive_editor_runtime_ctrl_a_backspace_clears_multicursors(
             await asyncio.wait_for(task, timeout=1.5)
 
 
-async def test_interactive_editor_runtime_clipboard_shortcuts_are_distinct(
+async def test_interactive_editor_runtime_clipboard_shortcuts_use_the_system_clipboard(
     app_components, monkeypatch
 ):
-    """Ctrl+C/V should stay internal while Ctrl+Shift+C/V use the system clipboard"""
+    """Ctrl+C/X/V should use the system clipboard while forwarded aliases stay valid"""
     context, resolver = app_components
     editor = InteractiveEditor("alpha beta", context.indexer, resolver)
     copied_to_system: list[str] = []
@@ -1736,23 +1874,24 @@ async def test_interactive_editor_runtime_clipboard_shortcuts_are_distinct(
                     break
                 await asyncio.sleep(0.02)
 
-            get_app().clipboard.set_data(ClipboardData("prompt-toolkit clipboard"))
+            assert copied_to_system == ["alpha beta"]
+
             pipe_input.send_text("\x16")  # CTRL+V
             for _ in range(20):
-                if editor.buffer.text == "alpha beta":
+                if editor.buffer.text == "system paste":
                     break
                 await asyncio.sleep(0.02)
 
-            assert editor.buffer.text == "alpha beta"
+            assert editor.buffer.text == "system paste"
 
             pipe_input.send_text("\x01")  # CTRL+A
             pipe_input.send_text("\x1b[67;6u")  # CTRL+SHIFT+C modifyOtherKeys
             for _ in range(20):
-                if copied_to_system == ["alpha beta"]:
+                if copied_to_system == ["alpha beta", "system paste"]:
                     break
                 await asyncio.sleep(0.02)
 
-            assert copied_to_system == ["alpha beta"]
+            assert copied_to_system == ["alpha beta", "system paste"]
 
             pipe_input.send_text("\x01")  # CTRL+A
             pipe_input.send_text("\x7f")  # BACKSPACE
@@ -1778,11 +1917,11 @@ async def test_interactive_editor_runtime_clipboard_shortcuts_are_distinct(
 
             pipe_input.send_text("\x16")  # CTRL+V
             for _ in range(20):
-                if editor.buffer.text == "alpha beta":
+                if editor.buffer.text == "system paste":
                     break
                 await asyncio.sleep(0.02)
 
-            assert editor.buffer.text == "alpha beta"
+            assert editor.buffer.text == "system paste"
 
             pipe_input.send_text("\x11")  # CTRL+Q
             pipe_input.send_text("\r")  # ENTER
