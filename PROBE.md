@@ -17,7 +17,7 @@ in all of the outputs, the combination were used in the following order...
 12. `Ctrl + Shift + Alt + Up`;
 13. `Ctrl + Shift + Alt + Down`.
 
-'''
+```
 
 ## CONHOST
 
