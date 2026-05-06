@@ -103,14 +103,14 @@ class App:
                 (session.session_id, self._format_restore_session_label(session))
                 for session in sessions
             ],
-            restore_text=get_string("restore_session_action_restore", "restore"),
+            restore_text=get_string("restore_session_action_restore", "load"),
             discard_text=get_string(
-                "restore_session_action_discard_selected", "discard"
+                "restore_session_action_discard_selected", "del"
             ),
             discard_all_text=get_string(
-                "restore_session_action_discard_all", "discard all"
+                "restore_session_action_discard_all", "purge"
             ),
-            cancel_text=get_string("restore_session_action_cancel", "cancel"),
+            cancel_text=get_string("restore_session_action_cancel", "later"),
         )
 
     async def get_last_path(self, case_name: str, state: AppState) -> str:

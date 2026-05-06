@@ -8,13 +8,10 @@ complete the task while adhering to the guidelines.
 
 ## GUIDE
 
-- ensure robust code;
-- follow best practices;
-- ensure self-explanatory code.
-
-- ensure minimum diffs AKA changes;
-- utilize existing code and components;
-- no need to refactor large amounts of code.
+- no large refactors;
+- no unnecessary changes;
+- reuse existing code and methods; (shared)
+- follow project conventions. (style, tone)
 
 ## TREE
 
