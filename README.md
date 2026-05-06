@@ -35,7 +35,7 @@ a terminal editor powered by `prompt-toolkit`.
 - auto-pair insertion for common wrap symbols in the main editor, plus selection-wrapping that keeps the inner text selected for nesting;
 - jump-to-line input with `:line[:character]` and `:line,character` targets;
 - issue overlays for malformed mentions and unresolved references before save;
-- crash-safe interactive restore backed by per-session snapshots under `data/states/`, with a picker that can restore or discard individual unsaved sessions on next launch;
+- crash-safe interactive restore backed by per-session snapshots under `data/states/`, with a responsive picker that formats timestamp, case, and target columns before restoring or discarding unsaved sessions on next launch;
 - syntax highlighting, trailing whitespace marking, EOF newline indicators, active-line highlighting, and optional line numbers;
 - configurable layout, behavior, colors, and terminal compatibility through `.env`.
 
@@ -150,7 +150,7 @@ the full documented surface is in [.env.example](.env.example), including...
 - exact tokenizer data stored under `data/o200k_base.tiktoken`, with automatic download if it is missing and safe fallback when the download is unavailable;
 - matching thresholds and completion tuning;
 - editor layout, line-number gutter, word wrap, scroll safe zones, search history, undo/redo history depth, bulk-paste tuning, key-sequence timeouts, and token refresh timing;
-- full prompt-toolkit style overrides for the interactive theme.
+- full prompt-toolkit style overrides for the interactive theme and modal dialogs.
 - markdown heading theme overrides use `PROMPTIFY_THEME_MARKDOWN_HEADINGS` and apply to both primary and secondary heading tokens.
 
 invalid values fall back safely to code defaults through [settings.py](src/promptify/core/settings.py).

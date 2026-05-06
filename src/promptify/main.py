@@ -66,25 +66,6 @@ class App:
         """Persist application state to disk"""
         await self.state_store.save(state)
 
-    def _format_restore_session_label(self, session: EditorSessionState) -> str:
-        """Build one compact restore-picker label for a saved editor session"""
-        updated = session.updated_at
-        try:
-            parsed = datetime.datetime.fromisoformat(session.updated_at)
-            if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=datetime.UTC)
-            updated = parsed.astimezone().strftime("%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            pass
-        return get_string(
-            "restore_session_item",
-            "{updated} | {case_name} | {target_path}",
-        ).format(
-            updated=updated,
-            case_name=Path(session.case_dir).name or session.case_dir,
-            target_path=session.target_path,
-        )
-
     def _is_restorable_editor_session(self, session: EditorSessionState) -> bool:
         """Return whether a saved session still points at valid case and target paths"""
         return Path(session.case_dir).is_dir() and Path(session.target_path).is_dir()
@@ -94,16 +75,13 @@ class App:
     ) -> tuple[str, str | None]:
         """Ask what to do with the current list of pending editor sessions"""
         return await ask_restore_session_modal(
-            title=get_string("restore_session_title", "restore session"),
+            title=get_string("restore_session_title", "session restore"),
             text=get_string(
                 "restore_session_prompt",
-                "select a saved interactive editor session to restore or discard.",
+                "select a saved interactive editor session to restore or discard",
             ),
-            values=[
-                (session.session_id, self._format_restore_session_label(session))
-                for session in sessions
-            ],
-            restore_text=get_string("restore_session_action_restore", "load"),
+            sessions=sessions,
+            restore_text=get_string("restore_session_action_restore", "open"),
             discard_text=get_string("restore_session_action_discard_selected", "del"),
             discard_all_text=get_string("restore_session_action_discard_all", "purge"),
             cancel_text=get_string("restore_session_action_cancel", "later"),

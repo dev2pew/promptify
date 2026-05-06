@@ -517,7 +517,11 @@ class EditorMultiCursorMixin:
         """Resolve the selection anchor for a caret movement"""
         if not select:
             return None
-        return caret.anchor if caret.anchor is not None else caret.position
+        if caret.anchor is not None:
+            return caret.anchor
+        if not self.multi_cursor_active() and self.buffer.selection_state is not None:
+            return self.buffer.selection_state.original_cursor_position
+        return caret.position
 
     def _apply_navigation_carets(self, carets: list[MultiCursorCaret]) -> None:
         """Apply cursor-only movement results through the shared caret model"""

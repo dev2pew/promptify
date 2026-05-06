@@ -1355,6 +1355,37 @@ async def test_interactive_editor_runtime_shift_vertical_selection_deletes(
             await asyncio.wait_for(task, timeout=1.5)
 
 
+async def test_interactive_editor_runtime_shift_vertical_selection_extends(
+    app_components,
+):
+    """Repeated Shift+Down should keep the original anchor and extend the selection"""
+    context, resolver = app_components
+    editor = InteractiveEditor("one\ntwo\nthree", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            pipe_input.send_text("\x1b[1;2B")  # SHIFT+DOWN
+            pipe_input.send_text("\x1b[1;2B")  # SHIFT+DOWN
+            target_position = editor.buffer.document.translate_row_col_to_index(2, 0)
+            for _ in range(20):
+                if editor.buffer.cursor_position == target_position:
+                    break
+                await asyncio.sleep(0.02)
+
+            selection = editor.buffer.selection_state
+            assert selection is not None
+            assert selection.original_cursor_position == 0
+            assert editor.buffer.cursor_position == target_position
+            assert editor.buffer.copy_selection().text == "one\ntwo\n"
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
 async def test_interactive_editor_search_status_reports_active_match_counts(
     app_components,
 ):
