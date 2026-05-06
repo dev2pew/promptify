@@ -164,6 +164,104 @@ class App:
         """Return the output directory name for a case"""
         return case.case_dir.name
 
+    async def prompt_case_selection(
+        self,
+        configs: list[tuple[CaseConfig, Path]],
+        state: AppState,
+    ) -> tuple[Path, int] | None:
+        """Prompt until the user chooses a valid case or cancels"""
+        name_counts: dict[str, int] = {}
+        for cfg, _dir in configs:
+            name_counts[cfg.name] = name_counts.get(cfg.name, 0) + 1
+
+        display_items = [
+            f"{cfg.name} <ansigray>({directory.name})</ansigray>"
+            if name_counts[cfg.name] > 1
+            else cfg.name
+            for cfg, directory in configs
+        ]
+        last_case_index = await self.get_last_case_index(state, len(configs))
+
+        while True:
+            print(get_string("available_cases", "available cases"))
+            print_columnized(display_items)
+            case_input = await self.prompt_with_suggestion(
+                "select_case",
+                "select case",
+                suggested_text="" if last_case_index is None else str(last_case_index),
+            )
+            if not case_input:
+                log.warn(get_string("operation_cancelled", "operation cancelled"))
+                return None
+            try:
+                case_idx = int(case_input) - 1
+                if case_idx < 0:
+                    raise IndexError
+                return configs[case_idx][1], case_idx + 1
+            except (ValueError, IndexError):
+                log.err(get_string("invalid_selection", "invalid selection"))
+
+    async def prompt_target_directory(self, suggested_path: str) -> Path | None:
+        """Prompt until the user chooses an existing target directory or cancels"""
+        while True:
+            target_path_str = await self.prompt_with_suggestion(
+                "enter_target_path",
+                "enter target project path",
+                suggested_text=suggested_path,
+            )
+            if not target_path_str:
+                if suggested_path:
+                    target_path_str = suggested_path
+                else:
+                    log.warn(get_string("operation_cancelled", "operation cancelled"))
+                    return None
+            target_dir = Path(target_path_str).resolve()
+            if target_dir.is_dir():
+                return target_dir
+            log.err(
+                get_string("dir_not_exist", "not found - {path}").format(
+                    path=target_dir
+                )
+            )
+
+    async def prompt_mode_selection(
+        self, case: CaseConfig, state: AppState
+    ) -> int | None:
+        """Prompt until the user chooses a valid mode or cancels"""
+        last_mode = await self.get_last_mode(case, state)
+        modes = [
+            (
+                get_string("mode_simple_name", "simple mode"),
+                get_string("mode_simple_desc", "legacy desc"),
+            ),
+            (
+                get_string("mode_interactive_name", "interactive"),
+                get_string("mode_interactive_desc", "editor desc"),
+            ),
+        ]
+
+        while True:
+            print(get_string("available_modes", "available modes"))
+            print_modes(modes)
+            mode_input = await self.prompt_with_suggestion(
+                "select_mode",
+                "select mode",
+                suggested_text="" if last_mode is None else str(last_mode),
+            )
+            if not mode_input:
+                if last_mode is None:
+                    log.warn(get_string("operation_cancelled", "operation cancelled"))
+                    return None
+                return last_mode
+            try:
+                mode = int(mode_input)
+            except ValueError:
+                log.err(get_string("invalid_selection", "invalid selection"))
+                continue
+            if mode in (1, 2):
+                return mode
+            log.err(get_string("invalid_selection", "invalid selection"))
+
     async def build_runtime(
         self,
         case: CaseConfig,
@@ -347,67 +445,28 @@ class App:
             case = CaseConfig(selected_case_dir)
             last_path = await self.get_last_path(case.name, state)
         else:
-            name_counts = {}
-            for cfg, _ in configs:
-                name_counts[cfg.name] = name_counts.get(cfg.name, 0) + 1
-
-            display_items = []
-            for cfg, d in configs:
-                if name_counts[cfg.name] > 1:
-                    display_items.append(f"{cfg.name} <ansigray>({d.name})</ansigray>")
-                else:
-                    display_items.append(cfg.name)
-
-            lastcase_index = await self.get_last_case_index(state, len(cases))
-
-            print(get_string("available_cases", "available cases"))
-            print_columnized(display_items)
-
-            try:
-                case_input = await self.prompt_with_suggestion(
-                    "select_case",
-                    "select case",
-                    suggested_text=""
-                    if lastcase_index is None
-                    else str(lastcase_index),
-                )
-
-                if not case_input:
-                    log.warn(get_string("operation_cancelled", "operation cancelled"))
-                    return
-                case_idx = int(case_input) - 1
-                if case_idx < 0:
-                    raise IndexError
-                selected_case_dir = cases[case_idx]
-                selected_case_index = case_idx + 1
-            except (ValueError, IndexError):
-                log.err(get_string("invalid_selection", "invalid selection"))
+            selected_case = await self.prompt_case_selection(configs, state)
+            if selected_case is None:
                 return
+            selected_case_dir, selected_case_index = selected_case
 
             case = CaseConfig(selected_case_dir)
             last_path = await self.get_last_path(case.name, state)
 
         # PATH SELECTION
         if self.cli_config.path:
-            target_path_str = self.cli_config.path
+            target_dir = Path(self.cli_config.path).resolve()
+            if not target_dir.is_dir():
+                log.err(
+                    get_string("dir_not_exist", "not found - {path}").format(
+                        path=target_dir
+                    )
+                )
+                return
         else:
-            target_path_str = (
-                await self.prompt_with_suggestion(
-                    "enter_target_path",
-                    "enter target project path",
-                    suggested_text=last_path,
-                )
-                or last_path
-            )
-
-        target_dir = Path(target_path_str).resolve()
-        if not target_dir.is_dir():
-            log.err(
-                get_string("dir_not_exist", "not found - {path}").format(
-                    path=target_dir
-                )
-            )
-            return
+            target_dir = await self.prompt_target_directory(last_path)
+            if target_dir is None:
+                return
 
         if selected_case_index is not None:
             await self.save_last_case_index(selected_case_index, state)
@@ -430,38 +489,8 @@ class App:
         elif self.cli_config.case and self.cli_config.path:
             mode = 2  # DEFAULT TO INTERACTIVE MODE IF SKIPPING WIZARD VIA CLI
         else:
-            last_mode = await self.get_last_mode(case, state)
-            print(get_string("available_modes", "available modes"))
-            print_modes(
-                [
-                    (
-                        get_string("mode_simple_name", "simple mode"),
-                        get_string("mode_simple_desc", "legacy desc"),
-                    ),
-                    (
-                        get_string("mode_interactive_name", "interactive"),
-                        get_string("mode_interactive_desc", "editor desc"),
-                    ),
-                ]
-            )
-            try:
-                mode_input = await self.prompt_with_suggestion(
-                    "select_mode",
-                    "select mode",
-                    suggested_text="" if last_mode is None else str(last_mode),
-                )
-                if not mode_input:
-                    if last_mode is None:
-                        log.warn(
-                            get_string("operation_cancelled", "operation cancelled")
-                        )
-                        indexer.stop_watching()
-                        return
-                    mode = last_mode
-                else:
-                    mode = int(mode_input)
-            except ValueError:
-                log.err(get_string("invalid_selection", "invalid selection"))
+            mode = await self.prompt_mode_selection(case, state)
+            if mode is None:
                 indexer.stop_watching()
                 return
 

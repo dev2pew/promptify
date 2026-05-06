@@ -293,6 +293,84 @@ async def test_prompt_with_suggestion_uses_localized_label(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_prompt_case_selection_retries_until_valid_choice(
+    test_sandbox, monkeypatch
+):
+    """Case selection should keep prompting until a valid numeric choice is entered"""
+    app = App()
+    app.data_dir = test_sandbox["root"] / "data" / "case-retry"
+    state = await app.get_state()
+    configs = [(CaseConfig(test_sandbox["case"]), test_sandbox["case"])]
+    responses = iter(["oops", "1"])
+    prompts: list[str] = []
+    errors: list[str] = []
+
+    async def fake_prompt(_key: str, fallback: str, *, suggested_text: str = "") -> str:
+        prompts.append(fallback)
+        del suggested_text
+        return next(responses)
+
+    monkeypatch.setattr(app, "prompt_with_suggestion", fake_prompt)
+    monkeypatch.setattr("promptify.main.log.err", errors.append)
+    monkeypatch.setattr("promptify.main.print_columnized", lambda _items: None)
+
+    selected = await app.prompt_case_selection(configs, state)
+
+    assert selected == (test_sandbox["case"], 1)
+    assert prompts == ["select case", "select case"]
+    assert errors == ["invalid selection"]
+
+
+@pytest.mark.asyncio
+async def test_prompt_target_directory_retries_until_path_exists(
+    test_sandbox, monkeypatch
+):
+    """Target-path prompts should keep asking until a valid directory is provided"""
+    app = App()
+    responses = iter(["missing-dir", str(test_sandbox["demo"].resolve())])
+    errors: list[str] = []
+
+    async def fake_prompt(_key: str, fallback: str, *, suggested_text: str = "") -> str:
+        del fallback, suggested_text
+        return next(responses)
+
+    monkeypatch.setattr(app, "prompt_with_suggestion", fake_prompt)
+    monkeypatch.setattr("promptify.main.log.err", errors.append)
+
+    selected = await app.prompt_target_directory("")
+
+    assert selected == test_sandbox["demo"].resolve()
+    assert len(errors) == 1
+    assert "directory" in errors[0]
+
+
+@pytest.mark.asyncio
+async def test_prompt_mode_selection_retries_until_mode_is_valid(
+    test_sandbox, monkeypatch
+):
+    """Mode selection should reprompt on out-of-range and non-numeric values"""
+    app = App()
+    app.data_dir = test_sandbox["root"] / "data" / "mode-retry"
+    state = await app.get_state()
+    case = CaseConfig(test_sandbox["case"])
+    responses = iter(["9", "x", "2"])
+    errors: list[str] = []
+
+    async def fake_prompt(_key: str, fallback: str, *, suggested_text: str = "") -> str:
+        del fallback, suggested_text
+        return next(responses)
+
+    monkeypatch.setattr(app, "prompt_with_suggestion", fake_prompt)
+    monkeypatch.setattr("promptify.main.log.err", errors.append)
+    monkeypatch.setattr("promptify.main.print_modes", lambda _modes: None)
+
+    selected = await app.prompt_mode_selection(case, state)
+
+    assert selected == 2
+    assert errors == ["invalid selection", "invalid selection"]
+
+
+@pytest.mark.asyncio
 async def test_case_index_is_persisted_as_list_number(test_sandbox):
     """The remembered case should be stored as the displayed 1-based list number"""
     app = App()

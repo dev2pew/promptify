@@ -18,9 +18,9 @@ from ...shared.editor_support import get_active_editor_context, get_logical_line
 from .context import EditorBindingContext
 from .sequences import (
     CTRL_ALT_DOWN,
+    CTRL_ALT_LEFT_BRACKET,
+    CTRL_ALT_RIGHT_BRACKET,
     CTRL_ALT_UP,
-    CTRL_SHIFT_DOWN,
-    CTRL_SHIFT_UP,
     CTRL_SHIFT_ALT_DOWN,
     CTRL_SHIFT_ALT_UP,
     CTRL_SHIFT_C,
@@ -701,7 +701,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         note_activity=True,
     )
     @ctx.bind_sequences(
-        CTRL_SHIFT_UP,
+        CTRL_ALT_LEFT_BRACKET,
         filter=editor_command_focus,
         note_activity=True,
     )
@@ -714,7 +714,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         note_activity=True,
     )
     @ctx.bind_sequences(
-        CTRL_SHIFT_DOWN,
+        CTRL_ALT_RIGHT_BRACKET,
         filter=editor_command_focus,
         note_activity=True,
     )

@@ -17,6 +17,7 @@ from prompt_toolkit.output.base import DummyOutput
 from prompt_toolkit.selection import SelectionState
 
 from ._settings_master import SettingsPass
+from promptify.shared.editor_support import get_editor_wrap_rule
 from promptify.shared.editor_state import MultiCursorCaret
 from promptify.ui.bindings import setup_keybindings
 from promptify.ui.editor import (
@@ -69,8 +70,8 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "2", "u"))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.Enter))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "7", "u"))
-    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "6", "A"))
-    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "6", "B"))
+    assert bindings.get_bindings_for_keys((Keys.ControlAt, Keys.ControlZ))
+    assert bindings.get_bindings_for_keys((Keys.ControlAt, Keys.Escape))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "4", "A"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "4", "B"))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ShiftDown))
@@ -1177,6 +1178,28 @@ async def test_interactive_editor_runtime_plain_wrap_trigger_without_selection_i
             pipe_input.send_text("\x11")  # CTRL+Q
             pipe_input.send_text("\r")  # ENTER
             await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_wrap_rules_disable_auto_pair_for_backticks_and_quotes(
+    app_components,
+):
+    """Backticks and quotes should still wrap selections without auto-pairing when plain typing"""
+    context, resolver = app_components
+    del context, resolver
+
+    backtick = get_editor_wrap_rule("", 0, "`")
+    single_quote = get_editor_wrap_rule("", 0, "'")
+    double_quote = get_editor_wrap_rule("", 0, '"')
+    paren = get_editor_wrap_rule("", 0, "(")
+
+    assert backtick is not None
+    assert single_quote is not None
+    assert double_quote is not None
+    assert paren is not None
+    assert backtick.wrap_selection is True and backtick.auto_pair is False
+    assert single_quote.wrap_selection is True and single_quote.auto_pair is False
+    assert double_quote.wrap_selection is True and double_quote.auto_pair is False
+    assert paren.wrap_selection is True and paren.auto_pair is True
 
 
 async def test_interactive_editor_cut_current_lines_preserves_noncontiguous_multicursors(
