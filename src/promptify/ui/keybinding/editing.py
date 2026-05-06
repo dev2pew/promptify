@@ -18,8 +18,6 @@ from ...shared.editor_support import get_active_editor_context, get_logical_line
 from .context import EditorBindingContext
 from .sequences import (
     CTRL_ALT_DOWN,
-    CTRL_ALT_LEFT_BRACKET,
-    CTRL_ALT_RIGHT_BRACKET,
     CTRL_ALT_UP,
     CTRL_SHIFT_ALT_DOWN,
     CTRL_SHIFT_ALT_UP,
@@ -700,21 +698,11 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         filter=editor_command_focus,
         note_activity=True,
     )
-    @ctx.bind_sequences(
-        CTRL_ALT_LEFT_BRACKET,
-        filter=editor_command_focus,
-        note_activity=True,
-    )
     def _clone_below(event: KeyPressEvent) -> None:
         ctx.editor.clone_current_lines_or_selections(insert_above=False)
 
     @ctx.bind_sequences(
         SHIFT_ALT_DOWN,
-        filter=editor_command_focus,
-        note_activity=True,
-    )
-    @ctx.bind_sequences(
-        CTRL_ALT_RIGHT_BRACKET,
         filter=editor_command_focus,
         note_activity=True,
     )

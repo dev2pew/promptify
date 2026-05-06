@@ -104,12 +104,8 @@ class App:
                 for session in sessions
             ],
             restore_text=get_string("restore_session_action_restore", "load"),
-            discard_text=get_string(
-                "restore_session_action_discard_selected", "del"
-            ),
-            discard_all_text=get_string(
-                "restore_session_action_discard_all", "purge"
-            ),
+            discard_text=get_string("restore_session_action_discard_selected", "del"),
+            discard_all_text=get_string("restore_session_action_discard_all", "purge"),
             cancel_text=get_string("restore_session_action_cancel", "later"),
         )
 

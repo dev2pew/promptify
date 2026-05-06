@@ -49,7 +49,6 @@ the in-app help screen is authoritative, but the main defaults are...
 - `Alt+G`: jump to `:line[:character]` or `:line,character`
 - `Alt+Z`: toggle word wrap
 - `Shift+Alt+Up` / `Shift+Alt+Down`: clone the current line or active selection below or above while keeping the original active
-- `Ctrl+Shift+Up` / `Ctrl+Shift+Down`: alternate clone hotkeys for terminals that intercept `Shift+Alt+Up/Down`
 - `Ctrl+Alt+Up` / `Ctrl+Alt+Down`: add cursor above or below
 - `Ctrl+Shift+Alt+Up` / `Ctrl+Shift+Alt+Down`: expand or shrink the vertical cursor block
 - `Ctrl+D`: select the next occurrence of the current word or selection

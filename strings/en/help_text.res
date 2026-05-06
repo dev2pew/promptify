@@ -85,7 +85,6 @@
 [Shift] + [Tab]               : unindent
 
 [Shift] + [Alt] + [^/v]       : clone below / above
-^[Shift] + [^/v]              : clone below / above
 
 [Alt] + [^/v]                 : shift up / down
 [specials]                    : pair / wrap selection

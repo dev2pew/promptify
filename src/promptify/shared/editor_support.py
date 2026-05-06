@@ -74,8 +74,7 @@ HELP_TEXT_FALLBACK = (
     "^[Shift] + [C/V]              : copy / paste alias\n"
     "[Tab]                         : indent / autocomplete\n\n"
     "[Shift] + [Tab]               : unindent\n"
-    "[Shift] + [Alt] + [^/v]       : clone below / above\n"
-    "^[Shift] + [^/v]              : same as above\n\n"
+    "[Shift] + [Alt] + [^/v]       : clone below / above\n\n"
     "[Alt] + [^/v]                 : shift up / down\n"
     "[specials]                    : pair / wrap selection\n"
     "^[/]                          : comment out\n\n"
@@ -460,7 +459,9 @@ def _current_visual_segment_index(
     last_row_index = row_matches[-1]
     for index in row_matches:
         segment = segments[index]
-        if col <= segment.end_col or index == last_row_index:
+        if col < segment.end_col or (
+            index == last_row_index and col <= segment.end_col
+        ):
             return index
     return row_matches[-1]
 

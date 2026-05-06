@@ -21,7 +21,7 @@ class SourceLocation:
     column: int
 
     def format(self) -> str:
-        """Return the location using the requested line and column shape."""
+        """Return the location using the requested line and column shape"""
         return f"{self.source_name}:{self.line}:{self.column}"
 
 
@@ -40,7 +40,7 @@ class DuplicateBlockWarning:
     duplicate: SourceLocation
 
     def format(self) -> str:
-        """Return a human-readable duplicate warning message."""
+        """Return a human-readable duplicate warning message"""
         return (
             f"warning: duplicate mention output for '{self.path}' at "
             f"{self.duplicate.format()}; keeping first from {self.first.format()}"
@@ -48,26 +48,26 @@ class DuplicateBlockWarning:
 
 
 class ParseError(Exception):
-    """Report malformed mention output blocks."""
+    """Report malformed mention output blocks"""
 
 
 def _line_text(line: str) -> str:
-    """Strip one markdown line down to its visible text."""
+    """Strip one markdown line down to its visible text"""
     return line.rstrip("\r\n")
 
 
 def _header_column(line: str) -> int:
-    """Return the 1-based start column of the path inside one header line."""
+    """Return the 1-based start column of the path inside one header line"""
     return line.index("`") + 2
 
 
 def _normalize_path(raw_path: str) -> str:
-    """Normalize a mention path into a stable slash-separated relative path."""
+    """Normalize a mention path into a stable slash-separated relative path"""
     return raw_path.replace("\\", "/").strip()
 
 
 def _looks_like_supported_mention_path(raw_path: str) -> bool:
-    """Return whether a header path matches file and dir mention output only."""
+    """Return whether a header path matches file and dir mention output only"""
     path = _normalize_path(raw_path)
     if not path or ":" in path:
         return False
@@ -77,7 +77,7 @@ def _looks_like_supported_mention_path(raw_path: str) -> bool:
 
 
 def parse_markdown(text: str, source_name: str) -> list[FileBlock]:
-    """Extract file and directory mention output blocks from markdown."""
+    """Extract file and directory mention output blocks from markdown"""
     lines = text.splitlines(keepends=True)
     blocks: list[FileBlock] = []
     i = 0
@@ -138,7 +138,7 @@ def parse_markdown(text: str, source_name: str) -> list[FileBlock]:
 def dedupe_blocks(
     blocks: list[FileBlock],
 ) -> tuple[list[FileBlock], list[DuplicateBlockWarning]]:
-    """Keep the first copy of each file path and collect duplicate warnings."""
+    """Keep the first copy of each file path and collect duplicate warnings"""
     unique: list[FileBlock] = []
     seen: dict[str, FileBlock] = {}
     warnings: list[DuplicateBlockWarning] = []
@@ -159,7 +159,7 @@ def dedupe_blocks(
 
 
 def safe_target_path(root: Path, raw_path: str) -> Path:
-    """Resolve a safe output path inside the generated root directory."""
+    """Resolve a safe output path inside the generated root directory"""
     normalized_path = _normalize_path(raw_path)
     if normalized_path.startswith("/") or re.match(r"^[A-Za-z]:/", normalized_path):
         raise ValueError(f"absolute paths are not allowed: {raw_path}")
@@ -176,7 +176,7 @@ def safe_target_path(root: Path, raw_path: str) -> Path:
 
 
 def prepare_output_root(output_root: Path) -> None:
-    """Reset the generated output directory so the rebuild stays exact."""
+    """Reset the generated output directory so the rebuild stays exact"""
     if output_root.is_dir():
         shutil.rmtree(output_root)
     elif output_root.exists():
@@ -185,7 +185,7 @@ def prepare_output_root(output_root: Path) -> None:
 
 
 def write_blocks(blocks: list[FileBlock], output_root: Path) -> None:
-    """Write the extracted files into the generated output directory."""
+    """Write the extracted files into the generated output directory"""
     prepare_output_root(output_root)
     for block in blocks:
         target = safe_target_path(output_root, block.path)
@@ -194,7 +194,7 @@ def write_blocks(blocks: list[FileBlock], output_root: Path) -> None:
 
 
 def parse_file(markdown_file: Path) -> None:
-    """Parse one markdown prompt file into a sibling reconstructed directory."""
+    """Parse one markdown prompt file into a sibling reconstructed directory"""
     if not markdown_file.is_file():
         raise FileNotFoundError(f"not a file: {markdown_file}")
 
@@ -211,7 +211,7 @@ def parse_file(markdown_file: Path) -> None:
 
 
 def main(argv: list[str]) -> int:
-    """Process one or more markdown files passed on the command line."""
+    """Process one or more markdown files passed on the command line"""
     if len(argv) < 2:
         print("usage: python parse.py <filename> <filename> <filename>", file=sys.stderr)
         return 2

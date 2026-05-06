@@ -70,8 +70,8 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "2", "u"))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.Enter))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "7", "u"))
-    assert bindings.get_bindings_for_keys((Keys.ControlAt, Keys.ControlZ))
-    assert bindings.get_bindings_for_keys((Keys.ControlAt, Keys.Escape))
+    assert not bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "6", "A"))
+    assert not bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "6", "B"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "4", "A"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "4", "B"))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ShiftDown))
@@ -1999,6 +1999,76 @@ async def test_interactive_editor_vertical_motion_keeps_sticky_column(app_compon
     editor.move_cursors_vertical(1)
     assert editor.buffer.document.cursor_position_row == 2
     assert editor.buffer.document.cursor_position_col == 5
+
+
+async def test_interactive_editor_wrapped_vertical_motion_uses_current_visual_row(
+    app_components,
+):
+    """Wrapped movement should treat segment boundaries as the current visual row"""
+    context, resolver = app_components
+    editor = InteractiveEditor("abcdefghij12345\nklmnopq", context.indexer, resolver)
+    editor.word_wrap_enabled = True
+    editor.main_window.render_info = cast(
+        Any,
+        type(
+            "RenderInfoStub",
+            (),
+            {
+                "wrap_lines": True,
+                "visible_line_to_row_col": {
+                    0: (0, 0),
+                    1: (0, 5),
+                    2: (0, 10),
+                    3: (1, 0),
+                    4: (1, 5),
+                },
+            },
+        )(),
+    )
+
+    editor.move_cursors_vertical(1)
+    assert editor.buffer.cursor_position == 5
+
+    editor.move_cursors_vertical(-1)
+    assert editor.buffer.cursor_position == 0
+
+    editor.move_cursors_vertical(1)
+    editor.move_cursors_vertical(1)
+    assert editor.buffer.cursor_position == 10
+
+
+async def test_interactive_editor_wrapped_shift_vertical_motion_keeps_selection_active(
+    app_components,
+):
+    """Shift plus wrapped vertical movement should extend the selection off boundaries"""
+    context, resolver = app_components
+    editor = InteractiveEditor("abcdefghij12345\nklmnopq", context.indexer, resolver)
+    editor.word_wrap_enabled = True
+    editor.main_window.render_info = cast(
+        Any,
+        type(
+            "RenderInfoStub",
+            (),
+            {
+                "wrap_lines": True,
+                "visible_line_to_row_col": {
+                    0: (0, 0),
+                    1: (0, 5),
+                    2: (0, 10),
+                    3: (1, 0),
+                    4: (1, 5),
+                },
+            },
+        )(),
+    )
+
+    editor.move_cursors_vertical(1)
+    editor.move_cursors_vertical(-1, select=True)
+
+    assert editor.buffer.cursor_position == 0
+    assert editor.buffer.selection_state is not None
+    selection = cast(SelectionState, editor.buffer.selection_state)
+    assert selection.original_cursor_position == 5
 
 
 async def test_interactive_editor_vertical_multi_cursor_add_and_clear(app_components):

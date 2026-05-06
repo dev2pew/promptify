@@ -10,7 +10,7 @@ from types import ModuleType
 
 
 def _load_parse_tool() -> ModuleType:
-    """Load the standalone parse.py script as a testable module."""
+    """Load the standalone parse.py script as a testable module"""
     script_path = Path(__file__).parent.parent / "tools" / "parse.py"
     spec = importlib.util.spec_from_file_location("promptify_parse_tool", script_path)
     if spec is None or spec.loader is None:
@@ -22,7 +22,7 @@ def _load_parse_tool() -> ModuleType:
 
 
 def _build_parse_sandbox(name: str) -> Path:
-    """Create a repo-local scratch directory for parse tool tests."""
+    """Create a repo-local scratch directory for parse tool tests"""
     root = Path(__file__).parent / name
     if root.exists():
         shutil.rmtree(root)
@@ -31,7 +31,7 @@ def _build_parse_sandbox(name: str) -> Path:
 
 
 def test_parse_tool_rebuilds_only_file_and_dir_mentions(capsys):
-    """Only file and dir mention outputs should be rebuilt from the markdown prompt."""
+    """Only file and dir mention outputs should be rebuilt from the markdown prompt"""
     parse_tool = _load_parse_tool()
     root = _build_parse_sandbox("sandbox_parse_tool_basic")
     prompt = root / "prompt.md"
@@ -84,7 +84,7 @@ def test_parse_tool_rebuilds_only_file_and_dir_mentions(capsys):
 
 
 def test_parse_tool_warns_and_dedupes_duplicate_mention_outputs(capsys):
-    """Duplicate file mentions should warn with both source locations and keep the first."""
+    """Duplicate file mentions should warn with both source locations and keep the first"""
     parse_tool = _load_parse_tool()
     root = _build_parse_sandbox("sandbox_parse_tool_duplicates")
     prompt = root / "prompt.md"
@@ -124,7 +124,7 @@ def test_parse_tool_warns_and_dedupes_duplicate_mention_outputs(capsys):
 
 
 def test_parse_tool_main_requires_file_arguments():
-    """The standalone parser should stay CLI-only and exit with usage on no args."""
+    """The standalone parser should stay CLI-only and exit with usage on no args"""
     parse_tool = _load_parse_tool()
 
     assert parse_tool.main(["parse.py"]) == 2
