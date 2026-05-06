@@ -94,7 +94,7 @@
     "editor_status_wrap_chip_off": "(W)",
     "editor_issue_label_singular": "issue",
     "editor_issue_label_plural": "issues",
-    "editor_occurrence_status": "find: {query}",
+    "editor_occurrence_status": "find",
     "editor_search_label": "search",
     "editor_replace_label": "replace",
     "editor_search_status_count": "{current} of {total}",

@@ -56,7 +56,7 @@ class App:
     @property
     def editor_session_store(self) -> EditorSessionStateStore:
         """Return the persistent restore store for unsaved editor sessions"""
-        return EditorSessionStateStore(self.data_dir / "editor-sessions")
+        return EditorSessionStateStore(self.data_dir / "states")
 
     async def get_state(self) -> AppState:
         """Load persisted application state from disk"""

@@ -482,7 +482,7 @@ class EditorViewMixin:
         if self._multi_cursor_occurrence_query and not self.search_visible:
             label = self.format_text(
                 "editor_occurrence_status",
-                "find: {query}",
+                "find",
                 query=self._multi_cursor_occurrence_query,
             )
             return self._join_status_fragments(
