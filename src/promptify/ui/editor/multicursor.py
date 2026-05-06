@@ -698,6 +698,33 @@ class EditorMultiCursorMixin:
         )
         return True
 
+    def move_cursors_to_document_start(self, *, select: bool = False) -> bool:
+        """Move every active caret to the start of the buffer"""
+        self.reattach_scroll_to_cursor()
+        self.reset_cursor_navigation_memory()
+        self.note_user_activity()
+        self._apply_navigation_carets(
+            [
+                self._moved_caret(caret, 0, select=select)
+                for caret in self._get_multi_carets()
+            ]
+        )
+        return True
+
+    def move_cursors_to_document_end(self, *, select: bool = False) -> bool:
+        """Move every active caret to the end of the buffer"""
+        self.reattach_scroll_to_cursor()
+        self.reset_cursor_navigation_memory()
+        self.note_user_activity()
+        text_end = len(self.buffer.text)
+        self._apply_navigation_carets(
+            [
+                self._moved_caret(caret, text_end, select=select)
+                for caret in self._get_multi_carets()
+            ]
+        )
+        return True
+
     def _word_move_position(self, caret: MultiCursorCaret, direction: int) -> int:
         """Resolve the previous or next word boundary for one caret"""
         document = Document(self.buffer.text, cursor_position=caret.position)

@@ -19,6 +19,8 @@ from .context import EditorBindingContext
 from .sequences import (
     CTRL_ALT_DOWN,
     CTRL_ALT_UP,
+    CTRL_SHIFT_DOWN,
+    CTRL_SHIFT_UP,
     CTRL_SHIFT_ALT_DOWN,
     CTRL_SHIFT_ALT_UP,
     CTRL_SHIFT_C,
@@ -230,6 +232,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         if _collapse_selection(buffer, to_end=False):
             ctx.editor.reattach_scroll_to_cursor()
             return
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_to_document_start()
+            return
         _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_position = 0
 
@@ -238,6 +243,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         buffer = event.current_buffer
         if _collapse_selection(buffer, to_end=True):
             ctx.editor.reattach_scroll_to_cursor()
+            return
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_to_document_end()
             return
         _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_position = len(buffer.text)
@@ -314,16 +322,20 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("s-c-home", filter=editable_text_focus)
     def _s_c_home(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
-            ctx.editor.clear_multi_cursors()
+        if buffer is ctx.editor.buffer and ctx.editor.move_cursors_to_document_start(
+            select=True
+        ):
+            return
         ctx.start_selection(buffer)
         buffer.cursor_position = 0
 
     @ctx.bind("s-c-end", filter=editable_text_focus)
     def _s_c_end(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
-            ctx.editor.clear_multi_cursors()
+        if buffer is ctx.editor.buffer and ctx.editor.move_cursors_to_document_end(
+            select=True
+        ):
+            return
         ctx.start_selection(buffer)
         buffer.cursor_position = len(buffer.text)
 
@@ -688,11 +700,21 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         filter=editor_command_focus,
         note_activity=True,
     )
+    @ctx.bind_sequences(
+        CTRL_SHIFT_UP,
+        filter=editor_command_focus,
+        note_activity=True,
+    )
     def _clone_below(event: KeyPressEvent) -> None:
         ctx.editor.clone_current_lines_or_selections(insert_above=False)
 
     @ctx.bind_sequences(
         SHIFT_ALT_DOWN,
+        filter=editor_command_focus,
+        note_activity=True,
+    )
+    @ctx.bind_sequences(
+        CTRL_SHIFT_DOWN,
         filter=editor_command_focus,
         note_activity=True,
     )

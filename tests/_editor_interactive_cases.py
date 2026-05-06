@@ -69,6 +69,8 @@ async def test_interactive_bindings_register_supported_runtime_keys(app_componen
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "2", "u"))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.Enter))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", "3", ";", "7", "u"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "6", "A"))
+    assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "6", "B"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "4", "A"))
     assert bindings.get_bindings_for_keys((Keys.Escape, "[", "1", ";", "4", "B"))
     assert bindings.get_bindings_for_keys((Keys.Escape, Keys.ShiftDown))
@@ -1059,6 +1061,36 @@ async def test_interactive_editor_clone_current_lines_preserves_noncontiguous_mu
         editor.buffer.document.translate_index_to_position(caret.position)
         for caret in editor.get_multi_cursor_render_carets()
     ] == [(1, 1), (1, 5), (4, 4)]
+
+
+async def test_interactive_editor_document_boundary_navigation_moves_multicursors_together(
+    app_components,
+):
+    """Document-boundary navigation should move cloned carets through the shared model"""
+    context, resolver = app_components
+    editor = InteractiveEditor("line 1\nline 2\nline 3", context.indexer, resolver)
+    first_line = editor.buffer.document.translate_row_col_to_index(0, 2)
+    third_line = editor.buffer.document.translate_row_col_to_index(2, 4)
+    editor._set_multi_carets(
+        [
+            MultiCursorCaret(position=first_line, preferred_column=2, is_primary=True),
+            MultiCursorCaret(position=third_line, preferred_column=4),
+        ]
+    )
+
+    assert editor.move_cursors_to_document_start()
+    assert editor.buffer.cursor_position == 0
+    assert not editor.multi_cursor_active()
+
+    editor._set_multi_carets(
+        [
+            MultiCursorCaret(position=first_line, preferred_column=2, is_primary=True),
+            MultiCursorCaret(position=third_line, preferred_column=4),
+        ]
+    )
+    assert editor.move_cursors_to_document_end()
+    assert editor.buffer.cursor_position == len(editor.buffer.text)
+    assert not editor.multi_cursor_active()
 
 
 async def test_interactive_editor_wrap_selection_preserves_the_inner_range(

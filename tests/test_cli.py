@@ -11,6 +11,7 @@ from prompt_toolkit.shortcuts import PromptSession
 from promptify.core.cli import parse_cli_args, CLIConfig, extract_help_from_docstring
 from promptify.core.config import CaseConfig
 from promptify.core.settings import build_settings
+from promptify.core.terminal import detect_terminal_profile
 from promptify.main import App
 from promptify.shared.state import EditorSessionState, EditorSessionStateStore
 from promptify.ui.logger import (
@@ -177,6 +178,27 @@ def test_logger_prime_default_suggestion_nudges_empty_buffer():
     logger._prime_default_suggestion()
 
     assert observed == [""]
+
+
+def test_logger_build_input_session_respects_terminal_profile(monkeypatch):
+    """Shared wizard prompts should disable mouse support on restricted hosts"""
+    captured: dict[str, Any] = {}
+    profile = detect_terminal_profile({}, override="conhost")
+
+    class FakeSession:
+        def __init__(self, **kwargs: Any):
+            captured.update(kwargs)
+
+    logger = Logger()
+    monkeypatch.setattr("promptify.ui.logger.PromptSession", FakeSession)
+    monkeypatch.setattr(
+        "promptify.ui.logger.terminal_module.APP_TERMINAL_PROFILE", profile
+    )
+
+    session = logger._build_input_session()
+
+    assert isinstance(session, FakeSession)
+    assert captured["mouse_support"] is False
 
 
 def test_logger_tab_binding_accepts_current_suggestion(monkeypatch):

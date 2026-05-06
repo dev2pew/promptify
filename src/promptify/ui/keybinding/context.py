@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
@@ -14,7 +14,11 @@ from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.keys import Keys
 
 from ...shared.editor_state import EditorIssue, OverlayName
-from ..editor.controls import EditorBuffer
+
+if TYPE_CHECKING:
+    from ..editor.controls import EditorBuffer
+else:
+    EditorBuffer = Any
 
 type BindingHandler = Callable[[KeyPressEvent], None]
 type KeySequence = Sequence[Keys | str]
@@ -100,6 +104,10 @@ class EditorBindingHost(Protocol):
     def move_cursors_to_line_start(self, *, select: bool = False) -> bool: ...
 
     def move_cursors_to_line_end(self, *, select: bool = False) -> bool: ...
+
+    def move_cursors_to_document_start(self, *, select: bool = False) -> bool: ...
+
+    def move_cursors_to_document_end(self, *, select: bool = False) -> bool: ...
 
     def set_internal_clipboard_text(self, text: str) -> None: ...
 

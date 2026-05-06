@@ -38,6 +38,12 @@ class TerminalProfile:
     tree: TreeChars
 
 
+@dataclass(frozen=True, slots=True)
+class PromptToolkitSurface:
+    full_screen: bool
+    mouse_support: bool
+
+
 _MODERN_PROFILE = TerminalProfile(
     name="modern",
     supports_unicode=True,
@@ -123,6 +129,20 @@ def detect_terminal_profile(
         eof_newline_missing=_MODERN_PROFILE.eof_newline_missing,
         border=_MODERN_PROFILE.border,
         tree=_MODERN_PROFILE.tree,
+    )
+
+
+def resolve_prompt_toolkit_surface(
+    *,
+    prefer_full_screen: bool,
+    prefer_mouse: bool = True,
+    profile: TerminalProfile | None = None,
+) -> PromptToolkitSurface:
+    """Return host-safe prompt-toolkit flags for one UI surface"""
+    terminal_profile = APP_TERMINAL_PROFILE if profile is None else profile
+    return PromptToolkitSurface(
+        full_screen=prefer_full_screen and terminal_profile.supports_full_screen,
+        mouse_support=prefer_mouse and terminal_profile.supports_mouse,
     )
 
 

@@ -5,14 +5,17 @@ from __future__ import annotations
 import functools
 from collections.abc import Sequence
 
+import promptify.core.terminal as terminal_module
+
 from prompt_toolkit.application import Application, get_app
 from prompt_toolkit.key_binding import KeyBindings, merge_key_bindings
 from prompt_toolkit.key_binding.bindings.focus import focus_next, focus_previous
 from prompt_toolkit.key_binding.defaults import load_key_bindings
 from prompt_toolkit.layout.containers import HSplit
 from prompt_toolkit.layout import Layout
-from prompt_toolkit.shortcuts import yes_no_dialog
 from prompt_toolkit.widgets import Box, Button, Dialog, Label, RadioList
+
+from ..utils.i18n import get_string
 
 type SessionRestoreAction = str
 type SessionRestoreResult = tuple[SessionRestoreAction, str | None]
@@ -23,17 +26,37 @@ def _create_dialog_app(dialog: Dialog) -> Application[object]:
     bindings = KeyBindings()
     bindings.add("tab")(focus_next)
     bindings.add("s-tab")(focus_previous)
+    surface = terminal_module.resolve_prompt_toolkit_surface(prefer_full_screen=True)
     return Application(
         layout=Layout(dialog),
         key_bindings=merge_key_bindings([load_key_bindings(), bindings]),
-        mouse_support=True,
-        full_screen=True,
+        mouse_support=surface.mouse_support,
+        full_screen=surface.full_screen,
     )
 
 
 async def ask_yes_no_modal(*, title: str, text: str) -> bool:
     """Show a centered yes/no dialog and return the chosen answer"""
-    result = await yes_no_dialog(title=title, text=text).run_async()
+
+    def _exit(result: bool) -> None:
+        get_app().exit(result=result)
+
+    dialog = Dialog(
+        title=title,
+        body=Box(body=Label(text=text, dont_extend_height=True), padding=1),
+        buttons=[
+            Button(
+                text=get_string("yes_option", "yes"),
+                handler=functools.partial(_exit, True),
+            ),
+            Button(
+                text=get_string("no_option", "no"),
+                handler=functools.partial(_exit, False),
+            ),
+        ],
+        with_background=True,
+    )
+    result = await _create_dialog_app(dialog).run_async()
     return bool(result)
 
 

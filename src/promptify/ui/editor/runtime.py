@@ -472,19 +472,18 @@ class InteractiveEditor(
             )
         )
         style = self._build_style()
+        surface = terminal_module.resolve_prompt_toolkit_surface(
+            prefer_full_screen=settings.editor_layout.full_screen,
+            prefer_mouse=settings.editor_layout.mouse_support,
+            profile=self.terminal_profile,
+        )
         app: Application[None] = Application(
             layout=layout,
             key_bindings=bindings,
             style=style,
             erase_when_done=True,
-            full_screen=(
-                settings.editor_layout.full_screen
-                and self.terminal_profile.supports_full_screen
-            ),
-            mouse_support=(
-                settings.editor_layout.mouse_support
-                and self.terminal_profile.supports_mouse
-            ),
+            full_screen=surface.full_screen,
+            mouse_support=surface.mouse_support,
         )
         app.ttimeoutlen = settings.editor_layout.ttimeoutlen
         app.timeoutlen = settings.editor_layout.timeoutlen

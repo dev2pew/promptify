@@ -3,6 +3,9 @@
 import sys
 import datetime
 from typing import Any
+
+import promptify.core.terminal as terminal_module
+
 from prompt_toolkit.application.current import get_app
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding import KeyBindings
@@ -68,6 +71,13 @@ class Logger:
 
         return bindings
 
+    def _build_input_session(self) -> PromptSession[str]:
+        """Create one prompt session that respects terminal-host capabilities"""
+        surface = terminal_module.resolve_prompt_toolkit_surface(
+            prefer_full_screen=False
+        )
+        return PromptSession(mouse_support=surface.mouse_support)
+
     def _prime_default_suggestion(self) -> None:
         """Trigger auto-suggestion rendering for untouched empty prompts"""
         buffer = self._session.default_buffer if self._session is not None else None
@@ -131,7 +141,7 @@ class Logger:
         )
 
         if self._session is None:
-            self._session = PromptSession()
+            self._session = self._build_input_session()
 
         try:
             return await self._session.prompt_async(

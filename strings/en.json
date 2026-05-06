@@ -22,6 +22,8 @@
     "restore_session_action_discard_selected": "discard",
     "restore_session_action_discard_all": "discard all",
     "restore_session_action_cancel": "cancel",
+    "yes_option": "yes",
+    "no_option": "no",
     "invalid_mode": "invalid mode",
     "legacy_not_found": "legacy file '{path}' not found",
     "processing_legacy": "processing legacy template",

@@ -1,6 +1,9 @@
 """Tests for terminal profile detection and legacy fallbacks"""
 
-from promptify.core.terminal import detect_terminal_profile
+from promptify.core.terminal import (
+    detect_terminal_profile,
+    resolve_prompt_toolkit_surface,
+)
 
 
 def test_detect_terminal_profile_prefers_vscode_markers():
@@ -61,3 +64,41 @@ def test_detect_terminal_profile_can_force_safe_conhost_defaults():
     assert profile.supports_box_drawing
     assert not profile.supports_mouse
     assert not profile.supports_full_screen
+
+
+def test_resolve_prompt_toolkit_surface_respects_terminal_capabilities():
+    """Prompt-toolkit surfaces should disable unsupported full-screen and mouse paths"""
+    profile = detect_terminal_profile(
+        {
+            "COMSPEC": r"C:\Windows\System32\cmd.exe",
+        },
+        override="conhost",
+    )
+
+    surface = resolve_prompt_toolkit_surface(
+        prefer_full_screen=True,
+        prefer_mouse=True,
+        profile=profile,
+    )
+
+    assert surface.full_screen is False
+    assert surface.mouse_support is False
+
+
+def test_resolve_prompt_toolkit_surface_preserves_supported_flags():
+    """Modern profiles should keep requested prompt-toolkit capabilities enabled"""
+    profile = detect_terminal_profile(
+        {
+            "TERM_PROGRAM": "vscode",
+        },
+        override="auto",
+    )
+
+    surface = resolve_prompt_toolkit_surface(
+        prefer_full_screen=True,
+        prefer_mouse=False,
+        profile=profile,
+    )
+
+    assert surface.full_screen is True
+    assert surface.mouse_support is False
