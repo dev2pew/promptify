@@ -5,9 +5,30 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.layout.containers import Window
 from prompt_toolkit.layout.controls import BufferControl, UIContent
 from prompt_toolkit.mouse_events import MouseEventType
+
+
+class EditorBuffer(Buffer):
+    """Buffer with a bounded undo and redo history"""
+
+    def __init__(self, *args: Any, undo_limit: int = 256, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._undo_limit = max(1, undo_limit)
+
+    def _trim_history(self) -> None:
+        """Keep prompt-toolkit undo and redo stacks within the configured limit"""
+        if len(self._undo_stack) > self._undo_limit:
+            del self._undo_stack[: len(self._undo_stack) - self._undo_limit]
+        if len(self._redo_stack) > self._undo_limit:
+            del self._redo_stack[: len(self._redo_stack) - self._undo_limit]
+
+    def save_to_undo_stack(self, clear_redo_stack: bool = True) -> None:
+        """Save one undo snapshot and trim both history stacks afterward"""
+        super().save_to_undo_stack(clear_redo_stack=clear_redo_stack)
+        self._trim_history()
 
 
 class EditorBufferControl(BufferControl):

@@ -183,6 +183,10 @@ class EditorLayoutSettings:
     mouse_support: bool
     ttimeoutlen: float
     timeoutlen: float
+    view_safe_zone_top: int
+    view_safe_zone_bottom: int
+    view_safe_zone_left: int
+    view_safe_zone_right: int
     completion_menu_max_height: int
     completion_menu_scroll_offset: int
     help_width_min: int
@@ -199,6 +203,7 @@ class EditorLayoutSettings:
 class EditorBehaviorSettings:
     bulk_edit_suspend_seconds: float
     bulk_edit_size_threshold: int
+    undo_history_limit: int
     search_history_limit: int
     token_update_interval: float
     show_help_on_start: bool
@@ -606,6 +611,34 @@ def build_settings(
                 warns,
                 minimum=0.0,
             ),
+            view_safe_zone_top=_parse_int(
+                source_env,
+                "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_TOP",
+                2,
+                warns,
+                minimum=0,
+            ),
+            view_safe_zone_bottom=_parse_int(
+                source_env,
+                "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_BOTTOM",
+                2,
+                warns,
+                minimum=0,
+            ),
+            view_safe_zone_left=_parse_int(
+                source_env,
+                "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_LEFT",
+                2,
+                warns,
+                minimum=0,
+            ),
+            view_safe_zone_right=_parse_int(
+                source_env,
+                "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_RIGHT",
+                2,
+                warns,
+                minimum=0,
+            ),
             completion_menu_max_height=_parse_int(
                 source_env,
                 "PROMPTIFY_EDITOR_COMPLETION_MENU_MAX_HEIGHT",
@@ -689,6 +722,13 @@ def build_settings(
                 source_env,
                 "PROMPTIFY_EDITOR_BULK_EDIT_SIZE_THRESHOLD",
                 2048,
+                warns,
+                minimum=1,
+            ),
+            undo_history_limit=_parse_int(
+                source_env,
+                "PROMPTIFY_EDITOR_UNDO_HISTORY_LIMIT",
+                256,
                 warns,
                 minimum=1,
             ),
@@ -861,6 +901,18 @@ def _replace_editor_layout(
         mouse_support=layout.mouse_support,
         ttimeoutlen=layout.ttimeoutlen,
         timeoutlen=layout.timeoutlen,
+        view_safe_zone_top=int(
+            overrides.get("view_safe_zone_top", layout.view_safe_zone_top)
+        ),
+        view_safe_zone_bottom=int(
+            overrides.get("view_safe_zone_bottom", layout.view_safe_zone_bottom)
+        ),
+        view_safe_zone_left=int(
+            overrides.get("view_safe_zone_left", layout.view_safe_zone_left)
+        ),
+        view_safe_zone_right=int(
+            overrides.get("view_safe_zone_right", layout.view_safe_zone_right)
+        ),
         completion_menu_max_height=layout.completion_menu_max_height,
         completion_menu_scroll_offset=layout.completion_menu_scroll_offset,
         help_width_min=int(overrides.get("help_width_min", layout.help_width_min)),

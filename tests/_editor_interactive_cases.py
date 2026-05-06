@@ -632,6 +632,14 @@ async def test_interactive_editor_runtime_search_widget_shortcuts_work(
                 await asyncio.sleep(0.02)
 
             assert editor.replace_visible
+            assert get_app().current_buffer is editor.search_buffer
+
+            pipe_input.send_text("\t")
+            for _ in range(20):
+                if get_app().current_buffer is editor.replace_buffer:
+                    break
+                await asyncio.sleep(0.02)
+
             assert get_app().current_buffer is editor.replace_buffer
 
             pipe_input.send_text("\x1b[17;5~")  # CTRL+F6
@@ -676,6 +684,11 @@ async def test_interactive_editor_runtime_replace_enter_and_ctrl_alt_enter(
             editor.search_buffer.text = "alpha"
             editor.toggle_replace()
             editor.replace_buffer.text = "omega"
+            pipe_input.send_text("\t")
+            for _ in range(20):
+                if get_app().current_buffer is editor.replace_buffer:
+                    break
+                await asyncio.sleep(0.02)
 
             pipe_input.send_text("\r")
             for _ in range(20):

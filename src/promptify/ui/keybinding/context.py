@@ -14,6 +14,7 @@ from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.keys import Keys
 
 from ...shared.editor_state import EditorIssue, OverlayName
+from ..editor.controls import EditorBuffer
 
 type BindingHandler = Callable[[KeyPressEvent], None]
 type KeySequence = Sequence[Keys | str]
@@ -34,10 +35,10 @@ class EditorBindingHost(Protocol):
     search_visible: bool
     replace_visible: bool
     jump_visible: bool
-    buffer: Buffer
-    search_buffer: Buffer
-    replace_buffer: Buffer
-    jump_buffer: Buffer
+    buffer: EditorBuffer
+    search_buffer: EditorBuffer
+    replace_buffer: EditorBuffer
+    jump_buffer: EditorBuffer
     result: str | None
 
     def note_user_activity(self) -> None: ...
@@ -60,6 +61,8 @@ class EditorBindingHost(Protocol):
 
     def select_all_occurrences(self) -> bool: ...
 
+    def occurrence_mode_active(self) -> bool: ...
+
     def move_cursors_vertical(
         self, direction: int, *, count: int = 1, select: bool = False
     ) -> None: ...
@@ -67,6 +70,8 @@ class EditorBindingHost(Protocol):
     def move_cursors_horizontal(
         self, direction: int, *, select: bool = False
     ) -> None: ...
+
+    def move_cursors_by_word(self, direction: int, *, select: bool = False) -> bool: ...
 
     def reset_cursor_navigation_memory(self) -> None: ...
 
@@ -133,6 +138,8 @@ class EditorBindingHost(Protocol):
     def cycle_search_history(self, direction: int) -> None: ...
 
     def cycle_replace_history(self, direction: int) -> None: ...
+
+    def cycle_search_widget_focus(self, direction: int) -> bool: ...
 
     def toggle_match_case(self) -> None: ...
 

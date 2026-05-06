@@ -7,6 +7,8 @@ import re
 from collections.abc import Sequence
 from typing import cast
 
+from prompt_toolkit.document import Document
+
 from ..utils.i18n import strings
 from .editor_state import EditorTextEdit, MultiCursorCaret
 
@@ -74,7 +76,7 @@ HELP_TEXT_FALLBACK = (
     "[Shift] + [Tab]               : unindent\n"
     "[Shift] + [Alt] + [^/v]       : clone below / above\n\n"
     "[Alt] + [^/v]                 : shift up / down\n"
-    "[specials]                    : wrap selection\n"
+    "[specials]                    : pair / wrap selection\n"
     "^[/]                          : comment out\n\n"
     "^[W/Del]                      : delete previous / next\n"
     "^[Alt] + [^/v]                : cursor above / below\n\n"
@@ -112,6 +114,14 @@ class LogicalLineSpan:
         """Return the cursor location left behind after cutting this line"""
         return self.previous_row_start if self.row > 0 else self.start
 
+    def cut_text(self, text: str) -> str:
+        """Return the exact text VS Code-style line cutting should copy"""
+        cut_start, cut_end = self.cut_range()
+        copied = text[cut_start:cut_end]
+        if self.row > 0 and cut_start < self.start and copied.startswith("\n"):
+            return copied[1:]
+        return copied
+
     def clone_insertion(self, *, insert_above: bool) -> tuple[int, str]:
         """Return the insertion point and payload for cloning this line"""
         if insert_above:
@@ -128,6 +138,41 @@ class EditorBufferContext:
     in_fenced_block: bool
     language_key: str
     wrap_lookup_keys: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EditorWrapRule:
+    """Describe one selection-wrap and auto-pair rule for editor typing"""
+
+    prefix: str
+    suffix: str
+    wrap_selection: bool = True
+    auto_pair: bool = True
+    skip_over: bool = True
+    delete_pair: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class VisualLineSegment:
+    """Describe one rendered visual row inside a logical document line"""
+
+    row: int
+    start_col: int
+    end_col: int
+    start_index: int
+    end_index: int
+
+
+@dataclass(frozen=True, slots=True)
+class VisualLineTargets:
+    """Describe the relevant wrapped-row and logical-line boundaries for a caret"""
+
+    visual_start: int
+    visual_end: int
+    logical_start: int
+    logical_smart_start: int
+    logical_end: int
+    wrapped: bool
 
 
 def fragment_text(fragment: tuple[object, ...]) -> str:
@@ -264,6 +309,49 @@ def get_editor_wrap_pair(
     trigger: str,
 ) -> tuple[str, str] | None:
     """Look up a wrap pair for one trigger in the active editor context"""
+    rule = get_editor_wrap_rule(text, position, trigger)
+    if rule is None or not rule.wrap_selection:
+        return None
+    return rule.prefix, rule.suffix
+
+
+def _coerce_editor_wrap_rule(raw_rule: object) -> EditorWrapRule | None:
+    """Normalize one wrap registry entry into the shared typed rule model"""
+    if (
+        isinstance(raw_rule, list)
+        and len(raw_rule) >= 2
+        and isinstance(raw_rule[0], str)
+        and isinstance(raw_rule[1], str)
+    ):
+        return EditorWrapRule(prefix=raw_rule[0], suffix=raw_rule[1])
+    if not isinstance(raw_rule, dict):
+        return None
+
+    prefix = raw_rule.get("open", raw_rule.get("prefix"))
+    suffix = raw_rule.get("close", raw_rule.get("suffix"))
+    if not isinstance(prefix, str) or not isinstance(suffix, str):
+        return None
+
+    def _get_bool(key: str, default: bool) -> bool:
+        value = raw_rule.get(key, default)
+        return value if isinstance(value, bool) else default
+
+    return EditorWrapRule(
+        prefix=prefix,
+        suffix=suffix,
+        wrap_selection=_get_bool("wrap_selection", True),
+        auto_pair=_get_bool("auto_pair", True),
+        skip_over=_get_bool("skip_over", True),
+        delete_pair=_get_bool("delete_pair", True),
+    )
+
+
+def get_editor_wrap_rule(
+    text: str,
+    position: int,
+    trigger: str,
+) -> EditorWrapRule | None:
+    """Look up a typed wrap rule for one trigger in the active editor context"""
     if not trigger:
         return None
     wrap_registry = strings.get("editor_wrap_symbols")
@@ -274,15 +362,171 @@ def get_editor_wrap_pair(
         context_pairs = wrap_registry.get(key)
         if not isinstance(context_pairs, dict):
             continue
-        pair = context_pairs.get(trigger)
-        if (
-            isinstance(pair, list)
-            and len(pair) >= 2
-            and isinstance(pair[0], str)
-            and isinstance(pair[1], str)
-        ):
-            return cast(str, pair[0]), cast(str, pair[1])
+        rule = _coerce_editor_wrap_rule(context_pairs.get(trigger))
+        if rule is not None:
+            return rule
     return None
+
+
+def get_editor_closing_wrap_rule(
+    text: str,
+    position: int,
+    closing_text: str,
+) -> EditorWrapRule | None:
+    """Look up a typed wrap rule by its closing text in the active editor context"""
+    if not closing_text:
+        return None
+    wrap_registry = strings.get("editor_wrap_symbols")
+    if not isinstance(wrap_registry, dict):
+        return None
+    context = get_active_editor_context(text, position)
+    for key in context.wrap_lookup_keys:
+        context_pairs = wrap_registry.get(key)
+        if not isinstance(context_pairs, dict):
+            continue
+        for raw_rule in context_pairs.values():
+            rule = _coerce_editor_wrap_rule(raw_rule)
+            if rule is not None and rule.suffix == closing_text:
+                return rule
+    return None
+
+
+def _get_visible_row_mapping(render_info: object) -> list[tuple[int, tuple[int, int]]]:
+    """Return the rendered visual-row mapping sorted by display order"""
+    mapping = getattr(render_info, "visible_line_to_row_col", None)
+    if not isinstance(mapping, dict):
+        return []
+    return sorted(
+        (
+            (cast(int, visible_row), cast(tuple[int, int], row_col))
+            for visible_row, row_col in mapping.items()
+            if isinstance(visible_row, int)
+            and isinstance(row_col, tuple)
+            and len(row_col) == 2
+            and isinstance(row_col[0], int)
+            and isinstance(row_col[1], int)
+        ),
+        key=lambda item: item[0],
+    )
+
+
+def _line_end_index(document: Document, row: int, col: int) -> int:
+    """Translate one row and column into a clamped absolute document index"""
+    return document.translate_row_col_to_index(row, max(0, col))
+
+
+def _get_visible_segments(
+    document: Document,
+    render_info: object,
+) -> tuple[VisualLineSegment, ...]:
+    """Return the visible wrapped-row segments described by render metadata"""
+    visible_rows = _get_visible_row_mapping(render_info)
+    if not visible_rows:
+        return tuple()
+
+    segments: list[VisualLineSegment] = []
+    for index, (_visible_row, (row, start_col)) in enumerate(visible_rows):
+        line_text = document.lines[row]
+        end_col = len(line_text)
+        if index + 1 < len(visible_rows) and visible_rows[index + 1][1][0] == row:
+            end_col = visible_rows[index + 1][1][1]
+        segments.append(
+            VisualLineSegment(
+                row=row,
+                start_col=start_col,
+                end_col=end_col,
+                start_index=_line_end_index(document, row, start_col),
+                end_index=_line_end_index(document, row, end_col),
+            )
+        )
+    return tuple(segments)
+
+
+def _current_visual_segment_index(
+    segments: Sequence[VisualLineSegment],
+    *,
+    row: int,
+    col: int,
+) -> int | None:
+    """Return the segment index that currently owns the caret position"""
+    if not segments:
+        return None
+    row_matches = [
+        index for index, segment in enumerate(segments) if segment.row == row
+    ]
+    if not row_matches:
+        return None
+    last_row_index = row_matches[-1]
+    for index in row_matches:
+        segment = segments[index]
+        if col <= segment.end_col or index == last_row_index:
+            return index
+    return row_matches[-1]
+
+
+def get_visual_vertical_target(
+    text: str,
+    position: int,
+    render_info: object,
+    *,
+    direction: int,
+    preferred_column: int | None,
+) -> tuple[int, int] | None:
+    """Return the next wrapped-row caret target when render data is available"""
+    document = Document(text, cursor_position=position)
+    row, col = document.translate_index_to_position(position)
+    segments = _get_visible_segments(document, render_info)
+    current_index = _current_visual_segment_index(segments, row=row, col=col)
+    if current_index is None:
+        return None
+    target_index = current_index + direction
+    if target_index < 0 or target_index >= len(segments):
+        return None
+
+    current_segment = segments[current_index]
+    visual_column = preferred_column
+    if visual_column is None:
+        visual_column = max(0, col - current_segment.start_col)
+
+    target_segment = segments[target_index]
+    target_col = min(
+        target_segment.start_col + visual_column,
+        target_segment.end_col,
+    )
+    return (
+        document.translate_row_col_to_index(target_segment.row, target_col),
+        visual_column,
+    )
+
+
+def get_visual_line_targets(
+    text: str,
+    position: int,
+    render_info: object,
+) -> VisualLineTargets | None:
+    """Return wrapped-row and logical-line boundaries for Home and End behavior"""
+    document = Document(text, cursor_position=position)
+    row, col = document.translate_index_to_position(position)
+    segments = _get_visible_segments(document, render_info)
+    current_index = _current_visual_segment_index(segments, row=row, col=col)
+    if current_index is None:
+        return None
+
+    segment = segments[current_index]
+    line_text = document.lines[row]
+    logical_start = document.translate_row_col_to_index(row, 0)
+    smart_col = len(line_text) - len(line_text.lstrip(" \t"))
+    logical_smart_start = document.translate_row_col_to_index(row, smart_col)
+    logical_end = document.translate_row_col_to_index(row, len(line_text))
+    wrapped = sum(1 for item in segments if item.row == row) > 1
+    return VisualLineTargets(
+        visual_start=segment.start_index,
+        visual_end=segment.end_index,
+        logical_start=logical_start,
+        logical_smart_start=logical_smart_start,
+        logical_end=logical_end,
+        wrapped=wrapped,
+    )
 
 
 def apply_editor_text_edits(
@@ -324,6 +568,7 @@ def apply_editor_text_edits(
                     ),
                     anchor=anchor,
                     preferred_column=caret.preferred_column,
+                    visual_column=caret.visual_column,
                     is_primary=caret.is_primary,
                 )
             )

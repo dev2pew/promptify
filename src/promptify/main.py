@@ -25,7 +25,7 @@ from .shared.state import (
     EditorSessionState,
     EditorSessionStateStore,
 )
-from .ui.dialogs import ask_yes_no_modal
+from .ui.dialogs import ask_restore_session_modal
 from .ui.editor import InteractiveEditor
 from .utils.i18n import get_string
 
@@ -56,7 +56,7 @@ class App:
     @property
     def editor_session_store(self) -> EditorSessionStateStore:
         """Return the persistent restore store for unsaved editor sessions"""
-        return EditorSessionStateStore(self.data_dir / "state.dat")
+        return EditorSessionStateStore(self.data_dir / "editor-sessions")
 
     async def get_state(self) -> AppState:
         """Load persisted application state from disk"""
@@ -66,14 +66,51 @@ class App:
         """Persist application state to disk"""
         await self.state_store.save(state)
 
-    async def prompt_restore_editor_session(self) -> bool:
-        """Ask whether a pending interactive-editor session should be restored"""
-        return await ask_yes_no_modal(
+    def _format_restore_session_label(self, session: EditorSessionState) -> str:
+        """Build one compact restore-picker label for a saved editor session"""
+        updated = session.updated_at
+        try:
+            parsed = datetime.datetime.fromisoformat(session.updated_at)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=datetime.UTC)
+            updated = parsed.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            pass
+        return get_string(
+            "restore_session_item",
+            "{updated} | {case_name} | {target_path}",
+        ).format(
+            updated=updated,
+            case_name=Path(session.case_dir).name or session.case_dir,
+            target_path=session.target_path,
+        )
+
+    def _is_restorable_editor_session(self, session: EditorSessionState) -> bool:
+        """Return whether a saved session still points at valid case and target paths"""
+        return Path(session.case_dir).is_dir() and Path(session.target_path).is_dir()
+
+    async def prompt_restore_editor_session(
+        self, sessions: tuple[EditorSessionState, ...]
+    ) -> tuple[str, str | None]:
+        """Ask what to do with the current list of pending editor sessions"""
+        return await ask_restore_session_modal(
             title=get_string("restore_session_title", "restore session"),
             text=get_string(
                 "restore_session_prompt",
-                "an unsaved interactive editor session was found.\n\nrestore it now?",
+                "select a saved interactive editor session to restore or discard.",
             ),
+            values=[
+                (session.session_id, self._format_restore_session_label(session))
+                for session in sessions
+            ],
+            restore_text=get_string("restore_session_action_restore", "restore"),
+            discard_text=get_string(
+                "restore_session_action_discard_selected", "discard"
+            ),
+            discard_all_text=get_string(
+                "restore_session_action_discard_all", "discard all"
+            ),
+            cancel_text=get_string("restore_session_action_cancel", "cancel"),
         )
 
     async def get_last_path(self, case_name: str, state: AppState) -> str:
@@ -159,37 +196,70 @@ class App:
 
     async def maybe_restore_editor_session(self) -> bool:
         """Restore a pending editor session before showing the menu wizard"""
-        session = await self.editor_session_store.load()
-        if session is None:
-            return False
-        if not await self.prompt_restore_editor_session():
-            await self.editor_session_store.delete()
+        sessions = list(await self.editor_session_store.list())
+        if not sessions:
             return False
 
-        case_dir = Path(session.case_dir)
-        target_dir = Path(session.target_path)
-        if not case_dir.is_dir() or not target_dir.is_dir():
-            await self.editor_session_store.delete()
+        valid_sessions: list[EditorSessionState] = []
+        discarded_invalid = False
+        for session in sessions:
+            if self._is_restorable_editor_session(session):
+                valid_sessions.append(session)
+                continue
+            await self.editor_session_store.delete(session.session_id)
+            discarded_invalid = True
+
+        if discarded_invalid:
             log.warn(
                 get_string(
                     "restore_session_invalid",
                     "saved editor session is no longer valid and was discarded",
                 )
             )
-            return False
-
-        case = CaseConfig(case_dir)
-        indexer, resolver = await self.build_runtime(case, target_dir)
-        try:
-            await self.run_interactive_mode(
-                case,
-                resolver,
-                indexer,
-                initial_text=session.prompt_text,
+        sessions = valid_sessions
+        while sessions:
+            action, session_id = await self.prompt_restore_editor_session(
+                tuple(sessions)
             )
-        finally:
-            indexer.stop_watching()
-        return True
+            if action == "discard_all":
+                await self.editor_session_store.delete_all()
+                return False
+            if session_id is None or action == "cancel":
+                return False
+            if action == "discard_selected":
+                await self.editor_session_store.delete(session_id)
+                sessions = [
+                    session for session in sessions if session.session_id != session_id
+                ]
+                continue
+
+            session = await self.editor_session_store.load(session_id)
+            if session is None or not self._is_restorable_editor_session(session):
+                await self.editor_session_store.delete(session_id)
+                sessions = [item for item in sessions if item.session_id != session_id]
+                log.warn(
+                    get_string(
+                        "restore_session_invalid",
+                        "saved editor session is no longer valid and was discarded",
+                    )
+                )
+                continue
+
+            case = CaseConfig(Path(session.case_dir))
+            target_dir = Path(session.target_path)
+            indexer, resolver = await self.build_runtime(case, target_dir)
+            try:
+                await self.run_interactive_mode(
+                    case,
+                    resolver,
+                    indexer,
+                    initial_text=session.prompt_text,
+                    restored_session=session,
+                )
+            finally:
+                indexer.stop_watching()
+            return True
+        return False
 
     async def save_output(
         self, case: CaseConfig, content: str, raw_content: str | None = None
@@ -434,6 +504,7 @@ class App:
         indexer: ProjectIndexer,
         *,
         initial_text: str | None = None,
+        restored_session: EditorSessionState | None = None,
     ) -> None:
         """Launch the interactive prompt-toolkit editor"""
         prompt_path = case.case_dir / case.prompt_file
@@ -443,10 +514,22 @@ class App:
             async with aiofiles.open(prompt_path, "r", encoding="utf-8") as f:
                 initial_text = await f.read()
 
-        session_state = EditorSessionState(
-            case_dir=str(case.case_dir.resolve()),
-            target_path=str(indexer.target_dir.resolve()),
-            prompt_text=initial_text,
+        session_state = (
+            EditorSessionState(
+                session_id=self.editor_session_store.create_session_id(),
+                case_dir=str(case.case_dir.resolve()),
+                target_path=str(indexer.target_dir.resolve()),
+                prompt_text=initial_text,
+                updated_at=datetime.datetime.now(datetime.UTC).isoformat(),
+            )
+            if restored_session is None
+            else EditorSessionState(
+                session_id=restored_session.session_id,
+                case_dir=str(case.case_dir.resolve()),
+                target_path=str(indexer.target_dir.resolve()),
+                prompt_text=initial_text,
+                updated_at=datetime.datetime.now(datetime.UTC).isoformat(),
+            )
         )
         editor = InteractiveEditor(
             initial_text,
@@ -465,7 +548,7 @@ class App:
         log.normal(get_string("resolving_mentions", "resolving mentions"))
         final_output = await resolver.resolve_user(edited_text)
         await self.save_output(case, final_output, raw_content=edited_text)
-        await self.editor_session_store.delete()
+        await self.editor_session_store.delete(session_state.session_id)
 
 
 def cli():

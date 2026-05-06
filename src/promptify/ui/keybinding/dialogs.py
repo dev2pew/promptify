@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from prompt_toolkit.filters import Condition
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 
 from .context import EditorBindingContext
@@ -10,6 +11,11 @@ from .sequences import CTRL_ALT_ENTER, MODAL_BLOCKED_ESCAPE_SEQUENCES, SHIFT_ENT
 
 def register_dialog_bindings(ctx: EditorBindingContext) -> None:
     """Register editor bindings that manage overlays, search, and completions"""
+    occurrence_toggle_focus = ctx.search_widget_focus | (
+        ctx.editor_focus
+        & ~ctx.is_modal_visible
+        & Condition(lambda: ctx.editor.occurrence_mode_active())
+    )
 
     @ctx.bind_sequences(
         MODAL_BLOCKED_ESCAPE_SEQUENCES,
@@ -149,12 +155,21 @@ def register_dialog_bindings(ctx: EditorBindingContext) -> None:
 
     @ctx.bind_sequences(
         SHIFT_ENTER,
-        filter=ctx.search_focus,
+        filter=ctx.search_widget_focus,
+        eager=True,
         note_activity=True,
         invalidate=True,
     )
     def _search_previous_shift(event: KeyPressEvent) -> None:
         ctx.editor.search_step(-1)
+
+    @ctx.bind("tab", filter=ctx.search_widget_focus, eager=True)
+    def _cycle_search_focus_forward(event: KeyPressEvent) -> None:
+        ctx.editor.cycle_search_widget_focus(1)
+
+    @ctx.bind("s-tab", filter=ctx.search_widget_focus, eager=True)
+    def _cycle_search_focus_backward(event: KeyPressEvent) -> None:
+        ctx.editor.cycle_search_widget_focus(-1)
 
     @ctx.bind("up", filter=ctx.search_focus, note_activity=True, invalidate=True)
     def _search_history_previous(event: KeyPressEvent) -> None:
@@ -164,15 +179,15 @@ def register_dialog_bindings(ctx: EditorBindingContext) -> None:
     def _search_history_next(event: KeyPressEvent) -> None:
         ctx.editor.cycle_search_history(1)
 
-    @ctx.bind("f6", filter=ctx.search_widget_focus, note_activity=True, invalidate=True)
+    @ctx.bind("f6", filter=occurrence_toggle_focus, note_activity=True, invalidate=True)
     def _toggle_match_case(event: KeyPressEvent) -> None:
         ctx.editor.toggle_match_case()
 
-    @ctx.bind("f7", filter=ctx.search_widget_focus, note_activity=True, invalidate=True)
+    @ctx.bind("f7", filter=occurrence_toggle_focus, note_activity=True, invalidate=True)
     def _toggle_match_whole_word(event: KeyPressEvent) -> None:
         ctx.editor.toggle_match_whole_word()
 
-    @ctx.bind("f8", filter=ctx.search_widget_focus, note_activity=True, invalidate=True)
+    @ctx.bind("f8", filter=occurrence_toggle_focus, note_activity=True, invalidate=True)
     def _toggle_regex(event: KeyPressEvent) -> None:
         ctx.editor.toggle_regex()
 
@@ -200,6 +215,7 @@ def register_dialog_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind_sequences(
         CTRL_ALT_ENTER,
         filter=ctx.replace_focus,
+        eager=True,
         note_activity=True,
         invalidate=True,
     )

@@ -15,6 +15,11 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
             "PROMPTIFY_EDITOR_SHOW_HELP_ON_START": "yes",
             "PROMPTIFY_EDITOR_SHOW_LINE_NUMBERS": "off",
             "PROMPTIFY_EDITOR_WORD_WRAP": "on",
+            "PROMPTIFY_EDITOR_UNDO_HISTORY_LIMIT": "321",
+            "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_TOP": "2",
+            "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_BOTTOM": "3",
+            "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_LEFT": "4",
+            "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_RIGHT": "5",
             "PROMPTIFY_UI_TIMEOUTLEN": "0.02",
             "PROMPTIFY_THEME_TOPBAR": "bg:#000000 #ffffff",
             "PROMPTIFY_THEME_SEARCH_TOGGLE_ON": "fg:#00ff00 bold",
@@ -36,6 +41,11 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
     assert settings.editor_behavior.show_help_on_start
     assert not settings.editor_behavior.show_line_numbers
     assert settings.editor_behavior.word_wrap
+    assert settings.editor_behavior.undo_history_limit == 321
+    assert settings.editor_layout.view_safe_zone_top == 2
+    assert settings.editor_layout.view_safe_zone_bottom == 3
+    assert settings.editor_layout.view_safe_zone_left == 4
+    assert settings.editor_layout.view_safe_zone_right == 5
     assert settings.editor_layout.timeoutlen == 0.02
     assert settings.theme.styles["topbar"] == "bg:#000000 #ffffff"
     assert settings.theme.styles["search-toggle-on"] == "fg:#00ff00 bold"

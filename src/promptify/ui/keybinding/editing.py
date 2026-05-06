@@ -8,13 +8,13 @@ import time
 
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.document import Document
-from prompt_toolkit.filters import Condition, has_selection
+from prompt_toolkit.filters import has_selection
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.selection import SelectionState
 
 from ...core.context import get_comment_syntax
-from ...shared.editor_support import get_active_editor_context
+from ...shared.editor_support import get_active_editor_context, get_logical_line_span
 from .context import EditorBindingContext
 from .sequences import (
     CTRL_ALT_DOWN,
@@ -64,33 +64,15 @@ def _prepare_plain_navigation(ctx: EditorBindingContext, buffer: Buffer) -> None
 
 def _cut_entire_current_line(buffer: Buffer) -> str:
     """Cut and return the current logical line, including its separator when possible"""
-    document = buffer.document
-    row = document.cursor_position_row
-    line = document.current_line
-    line_start = document.translate_row_col_to_index(row, 0)
-    line_end = document.translate_row_col_to_index(row, len(line))
-    target_position = (
-        document.translate_row_col_to_index(row - 1, 0) if row > 0 else line_start
-    )
-
-    if row < document.line_count - 1:
-        start = line_start
-        end = line_end + 1
-        copied_text = document.text[start:end]
-    elif row > 0:
-        start = line_start - 1
-        end = line_end
-        copied_text = document.text[start:end].lstrip("\n")
-    else:
-        start = line_start
-        end = line_end
-        copied_text = document.text[start:end]
+    line = get_logical_line_span(buffer.text, buffer.cursor_position)
+    start, end = line.cut_range()
+    copied_text = line.cut_text(buffer.text)
 
     buffer.save_to_undo_stack()
     buffer.set_document(
         Document(
             buffer.text[:start] + buffer.text[end:],
-            cursor_position=target_position,
+            cursor_position=line.cut_target_position(),
         ),
         bypass_readonly=True,
     )
@@ -200,6 +182,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         if _collapse_selection(buffer, to_end=False):
             ctx.editor.reattach_scroll_to_cursor()
             return
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_to_line_start()
+            return
         _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_position += ctx.get_home_position(buffer.document)
 
@@ -208,6 +193,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         buffer = event.current_buffer
         if _collapse_selection(buffer, to_end=True):
             ctx.editor.reattach_scroll_to_cursor()
+            return
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_to_line_end()
             return
         _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_position += buffer.document.get_end_of_line_position()
@@ -218,10 +206,10 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         if _collapse_selection(buffer, to_end=False):
             ctx.editor.reattach_scroll_to_cursor()
             return
-        _prepare_plain_navigation(ctx, buffer)
-        if ctx.editor.multi_cursor_active():
+        if buffer is ctx.editor.buffer:
             ctx.editor.move_cursors_vertical(-1, count=15)
             return
+        _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_up(count=15)
 
     @ctx.bind("pagedown", filter=editor_text_focus)
@@ -230,10 +218,10 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         if _collapse_selection(buffer, to_end=True):
             ctx.editor.reattach_scroll_to_cursor()
             return
-        _prepare_plain_navigation(ctx, buffer)
-        if ctx.editor.multi_cursor_active():
+        if buffer is ctx.editor.buffer:
             ctx.editor.move_cursors_vertical(1, count=15)
             return
+        _prepare_plain_navigation(ctx, buffer)
         buffer.cursor_down(count=15)
 
     @ctx.bind("c-home", filter=ctx.text_focus, note_activity=True)
@@ -260,6 +248,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         if _collapse_selection(buffer, to_end=False):
             ctx.editor.reattach_scroll_to_cursor()
             return
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_by_word(-1)
+            return
         _prepare_plain_navigation(ctx, buffer)
         position = buffer.document.find_previous_word_beginning()
         buffer.cursor_position += (
@@ -271,6 +262,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
         buffer = event.current_buffer
         if _collapse_selection(buffer, to_end=True):
             ctx.editor.reattach_scroll_to_cursor()
+            return
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_by_word(1)
             return
         _prepare_plain_navigation(ctx, buffer)
         position = buffer.document.find_next_word_beginning()
@@ -302,12 +296,18 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("s-pageup", filter=editor_text_focus)
     def _s_pageup(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_vertical(-1, count=15, select=True)
+            return
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_cursor_up_position(count=15)
 
     @ctx.bind("s-pagedown", filter=editor_text_focus)
     def _s_pagedown(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_vertical(1, count=15, select=True)
+            return
         ctx.start_selection(buffer)
         buffer.cursor_position += buffer.document.get_cursor_down_position(count=15)
 
@@ -330,8 +330,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("s-c-left", filter=editable_text_focus)
     def _s_c_left(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
-            ctx.editor.clear_multi_cursors()
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_by_word(-1, select=True)
+            return
         ctx.start_selection(buffer)
         position = buffer.document.find_previous_word_beginning()
         buffer.cursor_position += (
@@ -341,8 +342,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("s-c-right", filter=editable_text_focus)
     def _s_c_right(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        if buffer is ctx.editor.buffer and ctx.editor.multi_cursor_active():
-            ctx.editor.clear_multi_cursors()
+        if buffer is ctx.editor.buffer:
+            ctx.editor.move_cursors_by_word(1, select=True)
+            return
         ctx.start_selection(buffer)
         position = buffer.document.find_next_word_beginning()
         if position is not None:
@@ -403,7 +405,9 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
             return
         event.current_buffer.delete()
 
-    @ctx.bind("<any>", filter=editable_text_focus & has_selection)
+    @ctx.bind(
+        "<any>", filter=(editable_text_focus & has_selection) & ~editor_text_focus
+    )
     def _type_over_selection(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
         if event.data and event.data.isprintable():
@@ -419,11 +423,14 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
 
     @ctx.bind(
         "<any>",
-        filter=editor_text_focus & Condition(lambda: ctx.editor.multi_cursor_active()),
+        filter=editor_text_focus,
     )
-    def _type_with_multi_cursor(event: KeyPressEvent) -> None:
-        if event.data and event.data.isprintable():
-            ctx.editor.type_text_in_main_buffer(event.data)
+    def _type_in_main_editor(event: KeyPressEvent) -> None:
+        if not event.data or not event.data.isprintable():
+            return
+        if ctx.editor.type_text_in_main_buffer(event.data):
+            return
+        event.current_buffer.insert_text(event.data)
 
     # Track entry time to distinguish simulated terminal paste logic from real typing.
     last_enter_time = [0.0]
@@ -584,7 +591,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("s-up", filter=editor_command_focus)
     def _s_up(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        if ctx.editor.multi_cursor_active():
+        if buffer is ctx.editor.buffer:
             ctx.editor.move_cursors_vertical(-1, select=True)
             return
         ctx.start_selection(buffer)
@@ -593,7 +600,7 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
     @ctx.bind("s-down", filter=editor_command_focus)
     def _s_down(event: KeyPressEvent) -> None:
         buffer = event.current_buffer
-        if ctx.editor.multi_cursor_active():
+        if buffer is ctx.editor.buffer:
             ctx.editor.move_cursors_vertical(1, select=True)
             return
         ctx.start_selection(buffer)

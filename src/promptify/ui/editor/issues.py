@@ -14,6 +14,7 @@ from ...shared.editor_state import (
 )
 from ...utils.i18n import get_string
 from ._imports import Buffer, Document
+from .controls import EditorBuffer
 from .lexers import CustomPromptLexer
 
 
@@ -26,11 +27,11 @@ class EditorIssuesMixin:
     _document_issue_cache_enabled: bool = True
     _document_issue_cache: tuple[EditorIssue, ...] = ()
     _search_cache_state: SearchHighlightState | None = None
-    buffer: Buffer = cast(Buffer, cast(object, None))
+    buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
     lexer: CustomPromptLexer | None = None
     indexer: ProjectIndexer = cast(ProjectIndexer, cast(object, None))
     err_message: str = ""
-    err_buffer: Buffer = cast(Buffer, cast(object, None))
+    err_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
 
     if TYPE_CHECKING:
 

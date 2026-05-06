@@ -16,6 +16,10 @@ _EXAMPLE_ENV_PATH = Path(__file__).resolve().parent.parent / ".env.example"
 _LAYOUT_KEYS = (
     "PROMPTIFY_UI_TERM_FALLBACK_WIDTH",
     "PROMPTIFY_UI_TERM_FALLBACK_HEIGHT",
+    "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_TOP",
+    "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_BOTTOM",
+    "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_LEFT",
+    "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_RIGHT",
     "PROMPTIFY_EDITOR_HELP_WIDTH_MIN",
     "PROMPTIFY_EDITOR_HELP_WIDTH_MAX",
     "PROMPTIFY_EDITOR_HELP_HEIGHT_MIN",
@@ -28,6 +32,18 @@ _LAYOUT_KEYS = (
 _SETTING_ATTR_MAP = (
     ("PROMPTIFY_UI_TERM_FALLBACK_WIDTH", "render", "terminal_fallback_width"),
     ("PROMPTIFY_UI_TERM_FALLBACK_HEIGHT", "render", "terminal_fallback_height"),
+    ("PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_TOP", "editor_layout", "view_safe_zone_top"),
+    (
+        "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_BOTTOM",
+        "editor_layout",
+        "view_safe_zone_bottom",
+    ),
+    ("PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_LEFT", "editor_layout", "view_safe_zone_left"),
+    (
+        "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_RIGHT",
+        "editor_layout",
+        "view_safe_zone_right",
+    ),
     ("PROMPTIFY_EDITOR_HELP_WIDTH_MIN", "editor_layout", "help_width_min"),
     ("PROMPTIFY_EDITOR_HELP_WIDTH_MAX", "editor_layout", "help_width_max"),
     ("PROMPTIFY_EDITOR_HELP_HEIGHT_MIN", "editor_layout", "help_height_min"),
@@ -91,6 +107,10 @@ def build_settings_passes(
     pass_count = get_settings_pass_count() if count is None else max(1, count)
     base_width = _get_int(source, "PROMPTIFY_UI_TERM_FALLBACK_WIDTH")
     base_height = _get_int(source, "PROMPTIFY_UI_TERM_FALLBACK_HEIGHT")
+    safe_zone_top = _get_int(source, "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_TOP")
+    safe_zone_bottom = _get_int(source, "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_BOTTOM")
+    safe_zone_left = _get_int(source, "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_LEFT")
+    safe_zone_right = _get_int(source, "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_RIGHT")
     help_width_min = _get_int(source, "PROMPTIFY_EDITOR_HELP_WIDTH_MIN")
     help_width_max = _get_int(source, "PROMPTIFY_EDITOR_HELP_WIDTH_MAX")
     help_height_min = _get_int(source, "PROMPTIFY_EDITOR_HELP_HEIGHT_MIN")
@@ -107,6 +127,10 @@ def build_settings_passes(
             {
                 "PROMPTIFY_UI_TERM_FALLBACK_WIDTH": str(base_width + (index * 9)),
                 "PROMPTIFY_UI_TERM_FALLBACK_HEIGHT": str(base_height + (index * 2)),
+                "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_TOP": str(safe_zone_top + index),
+                "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_BOTTOM": str(safe_zone_bottom + index),
+                "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_LEFT": str(safe_zone_left + index),
+                "PROMPTIFY_EDITOR_VIEW_SAFE_ZONE_RIGHT": str(safe_zone_right + index),
                 "PROMPTIFY_EDITOR_HELP_WIDTH_MIN": str(help_width_min + (index * 3)),
                 "PROMPTIFY_EDITOR_HELP_WIDTH_MAX": str(help_width_max + (index * 11)),
                 "PROMPTIFY_EDITOR_HELP_HEIGHT_MIN": str(help_height_min + index),

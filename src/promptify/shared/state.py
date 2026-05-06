@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import os
+import secrets
+import string
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -128,10 +131,12 @@ class AppState:
 class EditorSessionState:
     """Represent the restorable interactive-editor session snapshot"""
 
+    session_id: str
     case_dir: str
     target_path: str
     prompt_text: str
-    version: int = 1
+    updated_at: str
+    version: int = 2
 
     @classmethod
     def from_payload(cls, payload: object) -> EditorSessionState | None:
@@ -139,18 +144,30 @@ class EditorSessionState:
         if not isinstance(payload, dict):
             return None
         payload_map = cast(Mapping[str, Any], payload)
+        session_id = payload_map.get("session_id", "legacy-0000")
         case_dir = payload_map.get("case_dir")
         target_path = payload_map.get("target_path")
         prompt_text = payload_map.get("prompt_text")
-        version = payload_map.get("version", 1)
-        if not isinstance(case_dir, str) or not isinstance(target_path, str):
+        updated_at = payload_map.get("updated_at", "")
+        version = payload_map.get("version", 2)
+        if (
+            not isinstance(session_id, str)
+            or not isinstance(case_dir, str)
+            or not isinstance(target_path, str)
+        ):
             return None
-        if not isinstance(prompt_text, str) or not _is_plain_int(version):
+        if (
+            not isinstance(prompt_text, str)
+            or not isinstance(updated_at, str)
+            or not _is_plain_int(version)
+        ):
             return None
         return cls(
+            session_id=session_id,
             case_dir=case_dir,
             target_path=target_path,
             prompt_text=prompt_text,
+            updated_at=updated_at,
             version=version,
         )
 
@@ -158,9 +175,11 @@ class EditorSessionState:
         """Serialize the editor restore payload into JSON-safe data"""
         return {
             "version": self.version,
+            "session_id": self.session_id,
             "case_dir": self.case_dir,
             "target_path": self.target_path,
             "prompt_text": self.prompt_text,
+            "updated_at": self.updated_at,
         }
 
 
@@ -190,31 +209,75 @@ class AppStateStore:
 
 @dataclass(slots=True, frozen=True)
 class EditorSessionStateStore:
-    """Load, save, and remove the restorable editor session snapshot"""
+    """Load, save, list, and remove restorable editor session snapshots"""
 
-    state_file: Path
+    session_dir: Path
 
-    async def load(self) -> EditorSessionState | None:
-        """Load the current editor session restore payload when present"""
-        if not self.state_file.exists():
+    def create_session_id(self) -> str:
+        """Return a collision-resistant session id with a short random suffix"""
+        timestamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%f")
+        alphabet = string.ascii_lowercase + string.digits
+        suffix = "".join(secrets.choice(alphabet) for _ in range(4))
+        return f"{timestamp}-{suffix}"
+
+    def _state_file(self, session_id: str) -> Path:
+        """Return the snapshot file path for one editor session id"""
+        return self.session_dir / f"session-{session_id}.dat"
+
+    async def list(self) -> tuple[EditorSessionState, ...]:
+        """List every saved editor session snapshot ordered by newest first"""
+        if not self.session_dir.exists():
+            return tuple()
+
+        sessions: list[EditorSessionState] = []
+        for path in sorted(self.session_dir.glob("session-*.dat")):
+            try:
+                async with aiofiles.open(path, "r", encoding="utf-8") as f:
+                    payload = json.loads(await f.read())
+            except Exception:
+                continue
+            state = EditorSessionState.from_payload(payload)
+            if state is not None:
+                sessions.append(state)
+
+        def _sort_key(state: EditorSessionState) -> tuple[str, str]:
+            return state.updated_at, state.session_id
+
+        sessions.sort(key=_sort_key, reverse=True)
+        return tuple(sessions)
+
+    async def load(self, session_id: str) -> EditorSessionState | None:
+        """Load the saved payload for one editor session id when present"""
+        state_file = self._state_file(session_id)
+        if not state_file.exists():
             return None
         try:
-            async with aiofiles.open(self.state_file, "r", encoding="utf-8") as f:
+            async with aiofiles.open(state_file, "r", encoding="utf-8") as f:
                 payload = json.loads(await f.read())
         except Exception:
             return None
         return EditorSessionState.from_payload(payload)
 
     async def save(self, state: EditorSessionState) -> None:
-        """Persist the latest editor session restore payload"""
+        """Persist the latest payload for one editor session"""
         await _write_text_atomic(
-            self.state_file,
+            self._state_file(state.session_id),
             json.dumps(state.to_payload(), indent=4),
         )
 
-    async def delete(self) -> None:
-        """Remove the persisted editor session restore payload if it exists"""
+    async def delete(self, session_id: str) -> None:
+        """Remove one persisted editor session restore payload if it exists"""
         try:
-            self.state_file.unlink(missing_ok=True)
+            self._state_file(session_id).unlink(missing_ok=True)
         except Exception:
             pass
+
+    async def delete_all(self) -> None:
+        """Remove every persisted editor session snapshot if present"""
+        if not self.session_dir.exists():
+            return
+        for path in self.session_dir.glob("session-*.dat"):
+            try:
+                path.unlink(missing_ok=True)
+            except Exception:
+                pass

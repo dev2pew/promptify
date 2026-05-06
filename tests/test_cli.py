@@ -372,18 +372,52 @@ async def test_save_output_respects_behavior_toggles(test_sandbox, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_editor_session_state_store_round_trips(test_sandbox):
-    """Unsaved editor session snapshots should round-trip through state.dat"""
-    store = EditorSessionStateStore(test_sandbox["root"] / "data" / "state.dat")
+    """Unsaved editor session snapshots should round-trip through the session store"""
+    store = EditorSessionStateStore(test_sandbox["root"] / "data" / "states-roundtrip")
     state = EditorSessionState(
+        session_id="20260506T120000000000-ab12",
         case_dir=str(test_sandbox["case"]),
         target_path=str(test_sandbox["demo"]),
         prompt_text="draft prompt",
+        updated_at="2026-05-06T12:00:00+00:00",
     )
 
     await store.save(state)
-    loaded = await store.load()
+    loaded = await store.load(state.session_id)
 
     assert loaded == state
+    assert await store.list() == (state,)
+
+
+@pytest.mark.asyncio
+async def test_editor_session_state_store_lists_newest_first_and_deletes_all(
+    test_sandbox,
+):
+    """Session snapshots should sort newest-first and support delete-all cleanup"""
+    store = EditorSessionStateStore(test_sandbox["root"] / "data" / "states-ordering")
+    first = EditorSessionState(
+        session_id="20260506T110000000000-ab12",
+        case_dir=str(test_sandbox["case"]),
+        target_path=str(test_sandbox["demo"]),
+        prompt_text="first",
+        updated_at="2026-05-06T11:00:00+00:00",
+    )
+    second = EditorSessionState(
+        session_id="20260506T120000000000-cd34",
+        case_dir=str(test_sandbox["case"]),
+        target_path=str(test_sandbox["demo"]),
+        prompt_text="second",
+        updated_at="2026-05-06T12:00:00+00:00",
+    )
+
+    await store.save(first)
+    await store.save(second)
+
+    assert await store.list() == (second, first)
+
+    await store.delete_all()
+
+    assert await store.list() == ()
 
 
 @pytest.mark.asyncio
@@ -392,17 +426,22 @@ async def test_app_maybe_restore_editor_session_uses_saved_prompt(
 ):
     """Restore should reopen the editor with the persisted unsaved prompt text"""
     app = App()
-    app.data_dir = test_sandbox["root"] / "data"
+    app.data_dir = test_sandbox["root"] / "data" / "restore-single"
     state = EditorSessionState(
+        session_id="20260506T120000000000-ab12",
         case_dir=str(test_sandbox["case"]),
         target_path=str(test_sandbox["demo"]),
         prompt_text="draft restore",
+        updated_at="2026-05-06T12:00:00+00:00",
     )
     await app.editor_session_store.save(state)
     captured: dict[str, object] = {}
 
-    async def fake_prompt_restore() -> bool:
-        return True
+    async def fake_prompt_restore(
+        sessions: tuple[EditorSessionState, ...],
+    ) -> tuple[str, str]:
+        assert sessions == (state,)
+        return "restore", state.session_id
 
     async def fake_build_runtime(case: CaseConfig, target_dir):
         class FakeIndexer:
@@ -416,8 +455,16 @@ async def test_app_maybe_restore_editor_session_uses_saved_prompt(
         captured["target_dir"] = target_dir
         return FakeIndexer(target_dir), object()
 
-    async def fake_run_interactive_mode(case, resolver, indexer, *, initial_text=None):
+    async def fake_run_interactive_mode(
+        case,
+        resolver,
+        indexer,
+        *,
+        initial_text=None,
+        restored_session=None,
+    ):
         captured["initial_text"] = initial_text
+        captured["restored_session"] = restored_session
 
     monkeypatch.setattr(app, "prompt_restore_editor_session", fake_prompt_restore)
     monkeypatch.setattr(app, "build_runtime", fake_build_runtime)
@@ -425,6 +472,7 @@ async def test_app_maybe_restore_editor_session_uses_saved_prompt(
 
     assert await app.maybe_restore_editor_session() is True
     assert captured["initial_text"] == "draft restore"
+    assert captured["restored_session"] == state
     assert captured["stopped"] is True
 
 
@@ -432,21 +480,25 @@ async def test_app_maybe_restore_editor_session_uses_saved_prompt(
 async def test_app_maybe_restore_editor_session_discards_rejected_snapshot(
     test_sandbox, monkeypatch
 ):
-    """Declining restore should delete the pending snapshot and continue normally"""
+    """Discarding the selected restore snapshot should delete only that session"""
     app = App()
-    app.data_dir = test_sandbox["root"] / "data"
-    await app.editor_session_store.save(
-        EditorSessionState(
-            case_dir=str(test_sandbox["case"]),
-            target_path=str(test_sandbox["demo"]),
-            prompt_text="draft restore",
-        )
+    app.data_dir = test_sandbox["root"] / "data" / "restore-discard"
+    state = EditorSessionState(
+        session_id="20260506T120000000000-ab12",
+        case_dir=str(test_sandbox["case"]),
+        target_path=str(test_sandbox["demo"]),
+        prompt_text="draft restore",
+        updated_at="2026-05-06T12:00:00+00:00",
     )
+    await app.editor_session_store.save(state)
 
-    async def fake_prompt_restore() -> bool:
-        return False
+    async def fake_prompt_restore(
+        sessions: tuple[EditorSessionState, ...],
+    ) -> tuple[str, str]:
+        assert sessions == (state,)
+        return "discard_selected", state.session_id
 
     monkeypatch.setattr(app, "prompt_restore_editor_session", fake_prompt_restore)
 
     assert await app.maybe_restore_editor_session() is False
-    assert await app.editor_session_store.load() is None
+    assert await app.editor_session_store.load(state.session_id) is None

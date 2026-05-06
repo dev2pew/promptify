@@ -30,11 +30,12 @@ also called legacy mode. `promptify` reads `legacy.md` from the selected case an
 a terminal editor powered by `prompt-toolkit`.
 
 - fuzzy completion for files, directories, trees, extensions, symbols, and `git` mentions;
-- modern IDE style search and replace widget with match counts, wrap reporting, search history, and search-mode toggles for case, whole-word, regex, and preserve-case replace;
+- modern IDE style search and replace widget with match counts, wrap reporting, current-word prefill, tab focus cycling, search and replace history, and search-mode toggles for case, whole-word, regex, and preserve-case replace;
 - VS Code-style sticky-column cursor movement, multi-cursor editing, selection wrapping, occurrence selection, and view-only scrolling shortcuts;
+- auto-pair insertion for common wrap symbols in the main editor, plus selection-wrapping that keeps the inner text selected for nesting;
 - jump-to-line input with `:line[:character]` and `:line,character` targets;
 - issue overlays for malformed mentions and unresolved references before save;
-- crash-safe interactive restore backed by `data/state.dat`, with a restore prompt on next launch when unsaved editor work exists;
+- crash-safe interactive restore backed by per-session snapshots under `data/states/`, with a picker that can restore or discard individual unsaved sessions on next launch;
 - syntax highlighting, trailing whitespace marking, EOF newline indicators, active-line highlighting, and optional line numbers;
 - configurable layout, behavior, colors, and terminal compatibility through `.env`.
 
@@ -44,7 +45,7 @@ the in-app help screen is authoritative, but the main defaults are...
 
 - `Ctrl+G` / `F1`: help
 - `Ctrl+F`: search
-- `Ctrl+R`: toggle replace
+- `Ctrl+R`: open search and replace while keeping focus in search
 - `Alt+G`: jump to `:line[:character]` or `:line,character`
 - `Alt+Z`: toggle word wrap
 - `Shift+Alt+Up` / `Shift+Alt+Down`: clone the current line or active selection below or above while keeping the original active
@@ -53,18 +54,20 @@ the in-app help screen is authoritative, but the main defaults are...
 - `Ctrl+D`: select the next occurrence of the current word or selection
 - `Ctrl+Shift+L`: select all occurrences of the current word or selection
 - `Esc`: clear cloned cursors and return to the primary cursor
-- typing `(`, `[`, `{`, `'`, `"`, `` ` ``, `*`, `_`, `~`, or `$` over a selection wraps it and keeps the inner selection active for nesting
+- typing `(`, `[`, `{`, `'`, `"`, `` ` ``, `*`, `_`, `~`, or `$` over a selection wraps it and keeps the inner selection active for nesting; with no selection, opening symbols auto-pair and place the caret inside
 - `Ctrl+S`: resolve and save
 - `Ctrl+C` / `Ctrl+X` / `Ctrl+V`: copy, cut, and paste through the system clipboard; `Ctrl+X` cuts the current line when nothing is selected
+- `Ctrl+Y`: redo
 - `Ctrl+Shift+C` / `Ctrl+Shift+V`: system clipboard aliases when the terminal forwards them
 - `Ctrl+Q` / `F10`: abort with confirmation
 - `Ctrl+Up` / `Ctrl+Down`: scroll the editor view without moving the cursor
 - `Ctrl+PageUp` / `Ctrl+PageDown`: scroll the editor view by 15 lines
-- `F6` / `F7` / `F8`: toggle match case, whole word, and regex while search is open
+- `F6` / `F7` / `F8`: toggle match case, whole word, and regex while search is open or while `Ctrl+D` occurrence mode is active
 - `Ctrl+F6`: toggle preserve-case replace while replace is open
 - `Up` / `Down`: search history while the search field is focused
-- `Enter` / `Shift+Enter`: next and previous search result while the search field is focused
+- `Enter` / `Shift+Enter`: next and previous search result while the search or replace field is focused
 - `Enter` / `Ctrl+Alt+Enter`: replace current result or replace all while the replace field is focused
+- `Tab` / `Shift+Tab`: cycle focus between search and replace when both rows are open
 - `Enter` / `Ctrl+N`: next issue while issue mode is open
 - `Ctrl+R` / `Ctrl+P`: previous issue while issue mode is open
 
@@ -146,7 +149,7 @@ the full documented surface is in [.env.example](.env.example), including...
 - advanced real-token counting toggle with automatic fallback to the legacy heuristic estimator;
 - exact tokenizer data stored under `data/o200k_base.tiktoken`, with automatic download if it is missing and safe fallback when the download is unavailable;
 - matching thresholds and completion tuning;
-- editor layout, line-number gutter, word wrap, search history, bulk-paste tuning, key-sequence timeouts, and token refresh timing;
+- editor layout, line-number gutter, word wrap, scroll safe zones, search history, undo/redo history depth, bulk-paste tuning, key-sequence timeouts, and token refresh timing;
 - full prompt-toolkit style overrides for the interactive theme.
 - markdown heading theme overrides use `PROMPTIFY_THEME_MARKDOWN_HEADINGS` and apply to both primary and secondary heading tokens.
 

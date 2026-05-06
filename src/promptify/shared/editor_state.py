@@ -89,6 +89,7 @@ class MultiCursorCaret:
     position: int
     anchor: int | None = None
     preferred_column: int | None = None
+    visual_column: int | None = None
     is_primary: bool = False
 
     @property
@@ -127,6 +128,7 @@ class EditorCaretTarget:
     anchor_source_position: int | None = None
     anchor_replacement_offset: int = 0
     preferred_column: int | None = None
+    visual_column: int | None = None
     is_primary: bool = False
 
 

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ...shared.editor_state import EditorViewState, FocusTarget, OverlayName
 from ._imports import Buffer, SelectionState, Window, get_app
+from .controls import EditorBuffer
 
 
 if TYPE_CHECKING:
@@ -42,15 +43,16 @@ class EditorOverlayMixin:
     _help_search_anchor: int = -1
     _help_issue_anchor: int = -1
     result: str | None = None
-    buffer: Buffer = cast(Buffer, cast(object, None))
-    search_buffer: Buffer = cast(Buffer, cast(object, None))
-    replace_buffer: Buffer = cast(Buffer, cast(object, None))
-    jump_buffer: Buffer = cast(Buffer, cast(object, None))
+    buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    search_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    replace_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    jump_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
     help_window: Window = cast(Window, cast(object, None))
     err_window: Window = cast(Window, cast(object, None))
     quit_window: Window = cast(Window, cast(object, None))
     main_window: Any = cast(Any, None)
-    quit_buffer: Buffer = cast(Buffer, cast(object, None))
+    quit_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    _discard_session_state_on_exit: bool = False
 
     if TYPE_CHECKING:
 
@@ -123,12 +125,26 @@ class EditorOverlayMixin:
         overlay = self._get_visible_overlay()
         if overlay != "none":
             return cast(FocusTarget, overlay)
+        try:
+            app = get_app()
+        except Exception:
+            app = None
+        if app is not None:
+            current_buffer = getattr(app, "current_buffer", None)
+            if current_buffer is self.replace_buffer and self.search_visible:
+                return "replace"
+            if current_buffer is self.search_buffer and self.search_visible:
+                return "search"
+            if current_buffer is self.jump_buffer and self.jump_visible:
+                return "jump"
+            if current_buffer is self.buffer:
+                return "main"
         if self.jump_visible:
             return "jump"
-        if self.replace_visible:
-            return "replace"
         if self.search_visible:
             return "search"
+        if self.replace_visible:
+            return "replace"
         return "main"
 
     def _capture_view_state(self) -> EditorViewState:
@@ -277,5 +293,6 @@ class EditorOverlayMixin:
     def confirm_quit(self) -> None:
         """Abort the current editor session without saving"""
         self._set_overlay_visible("quit", False)
+        self._discard_session_state_on_exit = True
         self.result = None
         self.invalidate()

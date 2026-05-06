@@ -35,6 +35,7 @@ from ._imports import (
     WindowAlign,
     to_filter,
 )
+from .controls import EditorBuffer
 
 
 class EditorViewMixin:
@@ -57,11 +58,12 @@ class EditorViewMixin:
     _passive_status_transient: bool = False
     _token_estimate_busy: bool = False
     _document_issue_cache: tuple[EditorIssue, ...] = ()
-    buffer: Buffer = cast(Buffer, cast(object, None))
-    search_buffer: Buffer = cast(Buffer, cast(object, None))
-    replace_buffer: Buffer = cast(Buffer, cast(object, None))
-    jump_buffer: Buffer = cast(Buffer, cast(object, None))
-    help_buffer: Buffer = cast(Buffer, cast(object, None))
+    _multi_cursor_occurrence_query: str = ""
+    buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    search_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    replace_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    jump_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    help_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
     main_window: Any = cast(Any, None)
 
     if TYPE_CHECKING:
@@ -330,10 +332,15 @@ class EditorViewMixin:
                     width=Dimension(weight=1),
                 ),
                 Window(
-                    content=FormattedTextControl(self._get_status_text),
+                    content=FormattedTextControl(self._get_topbar_status_text),
+                    style="class:topbar-status",
+                    width=Dimension(preferred=30),
+                ),
+                Window(
+                    content=FormattedTextControl(self._get_indicator_text),
                     style="class:topbar-status",
                     align=WindowAlign.RIGHT,
-                    width=Dimension(preferred=24),
+                    width=9,
                 ),
                 Window(
                     content=FormattedTextControl(self._get_token_status_text),
@@ -462,33 +469,55 @@ class EditorViewMixin:
         return f" [ {mode} ] "
 
     def _get_status_text(self) -> str:
-        """Show passive status, issue counts, or validation pause feedback"""
+        """Show passive status or validation pause feedback"""
         if self._passive_status:
-            return f" {self._passive_status} "
+            return self._passive_status
         if not self.expensive_checks_enabled():
-            return (
-                " "
-                + self.get_text("editor_status_checks_paused", "mention checks paused")
-                + " "
+            return self.get_text("editor_status_checks_paused", "mention checks paused")
+        return ""
+
+    def _get_topbar_status_text(self) -> AnyFormattedText:
+        """Render passive status and occurrence-mode toggles in the top bar"""
+        status = self._get_status_text()
+        if self._multi_cursor_occurrence_query and not self.search_visible:
+            label = self.format_text(
+                "editor_occurrence_status",
+                "find: {query}",
+                query=self._multi_cursor_occurrence_query,
             )
+            return self._join_status_fragments(
+                f"{label}  {status}" if status else label,
+                self._get_search_toggle_fragments(),
+            )
+        return f" {status} " if status else ""
+
+    def _get_indicator_text(self) -> StyleAndTextTuples:
+        """Render stable-width issues and wrap chips for the top bar"""
         issues = self.get_document_issues()
         if issues:
-            return (
-                " "
-                + self.format_text(
-                    "editor_status_issue_count",
-                    "{count} {label}",
-                    count=len(issues),
-                    label=self.get_text(
-                        "editor_issue_label_plural"
-                        if len(issues) != 1
-                        else "editor_issue_label_singular",
-                        "issues" if len(issues) != 1 else "issue",
-                    ),
-                )
-                + " "
+            issue_text = self.get_text("editor_status_issue_chip_many", "99+")
+            if len(issues) < 100:
+                issue_text = str(len(issues))
+            issue_fragment = ("class:search-toggle-off", f"{issue_text:>3} ")
+        else:
+            issue_fragment = (
+                "class:search-toggle-on",
+                " " + self.get_text("editor_status_issue_chip_ok", "OK").ljust(2) + " ",
             )
-        return ""
+
+        wrap_key = (
+            "editor_status_wrap_chip_on"
+            if self.word_wrap_enabled
+            else "editor_status_wrap_chip_off"
+        )
+        wrap_default = "[W]" if self.word_wrap_enabled else "(W)"
+        wrap_fragment = (
+            "class:search-toggle-on"
+            if self.word_wrap_enabled
+            else "class:search-toggle-off",
+            " " + self.get_text(wrap_key, wrap_default) + " ",
+        )
+        return [issue_fragment, wrap_fragment]
 
     def _get_token_status_text(self) -> str:
         """Render token status with the requested busy-indicator format"""
@@ -514,6 +543,11 @@ class EditorViewMixin:
             )
         if mode == "help":
             return get_string("toolbar_text_help", "[Esc/Enter] close")
+        if self._multi_cursor_occurrence_query:
+            return get_string(
+                "toolbar_text_occurrence",
+                "^[D] next | ^[L] all | [F6/F7/F8] case / word / regex",
+            )
         return get_string(
             "toolbar_text_normal",
             "^[G] help | ^[F] find | [Alt+G] jump | [Alt+Z] wrap",

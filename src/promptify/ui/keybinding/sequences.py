@@ -6,10 +6,7 @@ from prompt_toolkit.keys import Keys
 
 from .context import KeySequence
 
-SHIFT_ENTER: tuple[KeySequence, ...] = (
-    (Keys.Escape, "[", "1", "3", ";", "2", "u"),
-    (Keys.Escape, Keys.Enter),
-)
+SHIFT_ENTER: tuple[KeySequence, ...] = ((Keys.Escape, "[", "1", "3", ";", "2", "u"),)
 
 CTRL_ALT_ENTER: tuple[KeySequence, ...] = (
     (Keys.Escape, "[", "1", "3", ";", "7", "u"),

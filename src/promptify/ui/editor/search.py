@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, cast
 
+from prompt_toolkit.selection import SelectionState
+
 from ...shared.editor_state import FocusTarget, SearchHighlightState, SearchMatch
 from ...shared.editor_support import (
     build_jump_target,
@@ -13,6 +15,7 @@ from ...shared.editor_support import (
 )
 from ...shared.editor_state import SearchOptions
 from ._imports import Buffer, Document
+from .controls import EditorBuffer
 
 
 class EditorSearchMixin:
@@ -39,10 +42,10 @@ class EditorSearchMixin:
     replace_visible: bool = False
     jump_visible: bool = False
     search_options: SearchOptions = SearchOptions()
-    search_buffer: Buffer = cast(Buffer, cast(object, None))
-    replace_buffer: Buffer = cast(Buffer, cast(object, None))
-    jump_buffer: Buffer = cast(Buffer, cast(object, None))
-    buffer: Buffer = cast(Buffer, cast(object, None))
+    search_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    replace_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    jump_buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
+    buffer: EditorBuffer = cast(EditorBuffer, cast(object, None))
 
     if TYPE_CHECKING:
 
@@ -72,6 +75,9 @@ class EditorSearchMixin:
 
         def _focus_target(self, target: FocusTarget) -> None:
             _ = target
+            raise NotImplementedError
+
+        def _get_focus_target(self) -> FocusTarget:
             raise NotImplementedError
 
         def _normalize_jump_target_text(self, text: str) -> str:
@@ -227,7 +233,9 @@ class EditorSearchMixin:
         body = query if self.search_options.regex else re.escape(query)
         if self.search_options.match_whole_word:
             body = rf"\b(?:{body})\b"
-        flags = 0 if self.search_options.match_case else re.IGNORECASE
+        flags = re.MULTILINE if self.search_options.regex else 0
+        if not self.search_options.match_case:
+            flags |= re.IGNORECASE
         return re.compile(body, flags)
 
     def _get_search_highlight_state(self) -> SearchHighlightState | None:
@@ -324,10 +332,22 @@ class EditorSearchMixin:
         self._clear_search_message()
         self._invalidate_search_cache()
         if self.search_buffer.text:
-            self.search_buffer.cursor_position = len(self.search_buffer.text)
-        elif self._search_history:
-            query = self._search_history[0]
-            self.search_buffer.document = Document(query, cursor_position=len(query))
+            query = self.search_buffer.text
+        else:
+            query = self._seed_search_query_from_editor()
+            if not query and self._search_history:
+                query = self._search_history[0]
+            if query:
+                self.search_buffer.document = Document(
+                    query, cursor_position=len(query)
+                )
+        if query:
+            self.search_buffer.cursor_position = len(query)
+            self.search_buffer.selection_state = SelectionState(
+                original_cursor_position=0
+            )
+        else:
+            self.search_buffer.selection_state = None
         self._focus_search()
 
     def close_search(self) -> None:
@@ -340,12 +360,50 @@ class EditorSearchMixin:
 
     def toggle_replace(self) -> None:
         """Toggle the replace row beneath the active search field"""
-        self.open_search()
-        self.replace_visible = not self.replace_visible
-        if not self.replace_visible:
+        if not self.search_visible:
+            self.open_search()
+            self.replace_visible = True
             self._focus_search()
             return
-        self._focus_replace()
+        self.replace_visible = not self.replace_visible
+        self._focus_search()
+
+    def cycle_search_widget_focus(self, direction: int) -> bool:
+        """Cycle between search and replace when both rows are visible"""
+        if not self.search_visible or not self.replace_visible:
+            return False
+        focus = self._get_focus_target()
+        if focus == "replace":
+            self._focus_search() if direction > 0 else self._focus_search()
+            return True
+        if focus == "search":
+            self._focus_replace() if direction > 0 else self._focus_replace()
+            return True
+        return False
+
+    def _seed_search_query_from_editor(self) -> str:
+        """Return a one-line selection or current word for newly opened search"""
+        selection = self.buffer.selection_state
+        if selection is not None:
+            start = selection.original_cursor_position
+            end = self.buffer.cursor_position
+            if start > end:
+                start, end = end, start
+            if start != end:
+                selected = self.buffer.text[start:end]
+                if "\n" not in selected:
+                    return selected
+
+        start_offset, end_offset = (
+            self.buffer.document.find_boundaries_of_current_word()
+        )
+        if start_offset == 0 and end_offset == 0:
+            return ""
+        start = self.buffer.cursor_position + start_offset
+        end = self.buffer.cursor_position + end_offset
+        if start >= end:
+            return ""
+        return self.buffer.text[start:end]
 
     def open_jump(self) -> None:
         """Show the jump bar and prepare it for a line or line:column target"""

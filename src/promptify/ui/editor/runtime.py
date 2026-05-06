@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import re
 from contextlib import suppress
 from typing import final, override
@@ -43,6 +44,7 @@ from ._imports import (
     HighlightMatchingBracketProcessor,
     Layout,
     NumberedMargin,
+    ScrollOffsets,
     Window,
     HAS_PYGMENTS,
     load_key_bindings,
@@ -52,7 +54,7 @@ from ._imports import (
     get_app,
 )
 from .completion import MentionCompleter, ResponsiveCompletionsMenu
-from .controls import EditorBufferControl, EditorWindow
+from .controls import EditorBuffer, EditorBufferControl, EditorWindow
 from .issues import EditorIssuesMixin
 from .lexers import CustomPromptLexer, HelpLexer
 from .multicursor import EditorMultiCursorMixin
@@ -129,6 +131,7 @@ class InteractiveEditor(
         self.COMPLETION_MENU_SCROLL_OFFSET = (
             settings.editor_layout.completion_menu_scroll_offset
         )
+        self.UNDO_HISTORY_LIMIT = settings.editor_behavior.undo_history_limit
         self.SEARCH_HISTORY_LIMIT = settings.editor_behavior.search_history_limit
         self.TOKEN_UPDATE_INTERVAL = settings.editor_behavior.token_update_interval
         self._bulk_mode_until = 0.0
@@ -159,8 +162,10 @@ class InteractiveEditor(
         self.session_store = session_store
         self.session_state = session_state
         self._pending_session_flush = False
+        self._queued_session_flush = False
+        self._discard_session_state_on_exit = False
 
-        self.buffer = Buffer(
+        self.buffer = EditorBuffer(
             document=Document(initial_text, cursor_position=0),
             completer=MentionCompleter(
                 indexer,
@@ -168,6 +173,7 @@ class InteractiveEditor(
                 self.should_complete,
             ),
             complete_while_typing=Condition(self.should_complete_while_typing),
+            undo_limit=self.UNDO_HISTORY_LIMIT,
         )
         self.buffer.on_text_changed += self._handle_buffer_text_changed
         self.buffer.on_text_changed += self._handle_editor_session_text_changed
@@ -176,7 +182,11 @@ class InteractiveEditor(
         help_text = get_string("help_text", HELP_TEXT_FALLBACK)
         self._help_search_anchor = help_text.find("[ search ]")
         self._help_issue_anchor = help_text.find("[ issues ]")
-        self.help_buffer = Buffer(document=Document(help_text), read_only=True)
+        self.help_buffer = EditorBuffer(
+            document=Document(help_text),
+            read_only=True,
+            undo_limit=self.UNDO_HISTORY_LIMIT,
+        )
         self.help_window = Window(
             content=BufferControl(buffer=self.help_buffer, lexer=HelpLexer()),
             style="class:help-text",
@@ -195,7 +205,11 @@ class InteractiveEditor(
 
         self.err_visible = False
         self.err_message = ""
-        self.err_buffer = Buffer(document=Document(""), read_only=True)
+        self.err_buffer = EditorBuffer(
+            document=Document(""),
+            read_only=True,
+            undo_limit=self.UNDO_HISTORY_LIMIT,
+        )
         self.err_window = Window(
             content=BufferControl(buffer=self.err_buffer),
             style="class:err-text",
@@ -212,7 +226,7 @@ class InteractiveEditor(
             ),
         )
         self.quit_visible = False
-        self.quit_buffer = Buffer(
+        self.quit_buffer = EditorBuffer(
             document=Document(
                 self.get_text(
                     "editor_quit_confirm",
@@ -220,6 +234,7 @@ class InteractiveEditor(
                 )
             ),
             read_only=True,
+            undo_limit=self.UNDO_HISTORY_LIMIT,
         )
         self.quit_window = Window(
             content=BufferControl(buffer=self.quit_buffer),
@@ -239,13 +254,15 @@ class InteractiveEditor(
         self.search_visible = False
         self.replace_visible = False
         self.search_message = ""
-        self.search_buffer = Buffer(
+        self.search_buffer = EditorBuffer(
             document=Document("", cursor_position=0),
             multiline=False,
+            undo_limit=self.UNDO_HISTORY_LIMIT,
         )
-        self.replace_buffer = Buffer(
+        self.replace_buffer = EditorBuffer(
             document=Document("", cursor_position=0),
             multiline=False,
+            undo_limit=self.UNDO_HISTORY_LIMIT,
         )
         self._search_last_query = ""
         self._search_last_direction = 1
@@ -261,10 +278,11 @@ class InteractiveEditor(
         self.search_window = self._build_search_widget()
         self.jump_visible = False
         self.jump_message = ""
-        self.jump_buffer = Buffer(
+        self.jump_buffer = EditorBuffer(
             document=Document("", cursor_position=0),
             multiline=False,
             auto_suggest=PrefixSuggestion(self._get_jump_default_text),
+            undo_limit=self.UNDO_HISTORY_LIMIT,
         )
         self.jump_buffer.on_text_changed += self._handle_jump_text_changed
         self.jump_window = self._build_input_bar(
@@ -305,6 +323,12 @@ class InteractiveEditor(
             ),
             cursorline=True,
             wrap_lines=to_filter(self.word_wrap_enabled),
+            scroll_offsets=ScrollOffsets(
+                top=settings.editor_layout.view_safe_zone_top,
+                bottom=settings.editor_layout.view_safe_zone_bottom,
+                left=settings.editor_layout.view_safe_zone_left,
+                right=settings.editor_layout.view_safe_zone_right,
+            ),
             left_margins=(
                 [
                     NumberedMargin(relative=False, display_tildes=False),
@@ -324,6 +348,7 @@ class InteractiveEditor(
         if self.session_store is None or self.session_state is None:
             return
         if self._pending_session_flush:
+            self._queued_session_flush = True
             return
         session_store = self.session_store
         session_state = self.session_state
@@ -331,19 +356,29 @@ class InteractiveEditor(
 
         async def _flush() -> None:
             try:
-                await session_store.save(
-                    EditorSessionState(
-                        case_dir=session_state.case_dir,
-                        target_path=session_state.target_path,
-                        prompt_text=self.buffer.text,
+                while True:
+                    self._queued_session_flush = False
+                    await session_store.save(
+                        EditorSessionState(
+                            session_id=session_state.session_id,
+                            case_dir=session_state.case_dir,
+                            target_path=session_state.target_path,
+                            prompt_text=self.buffer.text,
+                            updated_at=self._current_session_timestamp(),
+                        )
                     )
-                )
+                    if not self._queued_session_flush:
+                        break
             except OSError:
                 pass
             finally:
                 self._pending_session_flush = False
 
         _ = asyncio.create_task(_flush())
+
+    def _current_session_timestamp(self) -> str:
+        """Return the current UTC timestamp stored in editor session snapshots"""
+        return dt.datetime.now(dt.UTC).isoformat()
 
     async def _update_tokens_loop(self) -> None:
         """Update token counts asynchronously using debounced estimation"""
@@ -377,9 +412,11 @@ class InteractiveEditor(
         if self.session_store is not None and self.session_state is not None:
             await self.session_store.save(
                 EditorSessionState(
+                    session_id=self.session_state.session_id,
                     case_dir=self.session_state.case_dir,
                     target_path=self.session_state.target_path,
                     prompt_text=self.buffer.text,
+                    updated_at=self._current_session_timestamp(),
                 )
             )
         settings = settings_module.APP_SETTINGS
@@ -461,6 +498,12 @@ class InteractiveEditor(
             with suppress(asyncio.CancelledError):
                 _ = await token_task
             self._token_estimate_busy = False
+            if (
+                self._discard_session_state_on_exit
+                and self.session_store is not None
+                and self.session_state is not None
+            ):
+                await self.session_store.delete(self.session_state.session_id)
 
         return self.result
 
