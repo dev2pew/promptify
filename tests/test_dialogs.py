@@ -71,7 +71,7 @@ def test_restore_session_header_uses_localized_column_titles():
 
 
 def test_restore_session_header_aligns_with_radio_list_content():
-    """Header text should start where the restore-session row content starts"""
+    """Header columns should follow the restore-session row layout"""
     item = _build_restore_display_item(
         EditorSessionState(
             session_id="demo",
@@ -92,9 +92,8 @@ def test_restore_session_header_aligns_with_radio_list_content():
     row_text = fragment_list_to_text(radio_list._get_text_fragments()).splitlines()[0]
 
     assert header_text.index("updated") == row_text.index("2026")
-    assert [index for index, char in enumerate(header_text) if char == "|"] == [
-        index for index, char in enumerate(row_text) if char == "|"
-    ]
+    assert header_text.index("case") == row_text.index("angular_eq") + 1
+    assert header_text.index("target") == row_text.index("C:/eq/f") + 1
 
 
 def test_dialog_button_uses_focused_fragment_classes(monkeypatch):
