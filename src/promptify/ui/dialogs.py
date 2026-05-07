@@ -18,6 +18,7 @@ from prompt_toolkit.key_binding.defaults import load_key_bindings
 from prompt_toolkit.layout.containers import HSplit, Window
 from prompt_toolkit.layout import Layout
 from prompt_toolkit.layout.controls import FormattedTextControl
+from prompt_toolkit.mouse_events import MouseEvent, MouseEventType
 from prompt_toolkit.styles import Style
 from prompt_toolkit.utils import get_cwidth
 from prompt_toolkit.widgets import Box, Button, Dialog, Label, RadioList
@@ -37,6 +38,7 @@ _RESTORE_CASE_MAX_WIDTH = 20
 _RESTORE_PATH_MIN_WIDTH = 10
 _RESTORE_PATH_PREFERRED_WIDTH = 18
 _RESTORE_COLUMN_GAP = 3
+_RESTORE_SELECTOR_WIDTH = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +49,44 @@ class SessionRestoreDisplayItem:
     updated: str
     case_name: str
     target_path: str
+
+
+class _DialogButton(Button):
+    """Render dialog buttons with explicit focused and unfocused fragment styles"""
+
+    def _get_text_fragments(self) -> StyleAndTextTuples:
+        width = (
+            self.width
+            - (get_cwidth(self.left_symbol) + get_cwidth(self.right_symbol))
+            + (len(self.text) - get_cwidth(self.text))
+        )
+        text = (f"{{:^{max(0, width)}}}").format(self.text)
+        focused = get_app().layout.has_focus(self)
+        container_style = "class:button.focused" if focused else "class:button"
+        arrow_style = (
+            "class:button.focused.arrow class:button.arrow"
+            if focused
+            else "class:button.arrow"
+        )
+        text_style = (
+            "class:button.focused.text class:button.text"
+            if focused
+            else "class:button.text"
+        )
+
+        def handler(mouse_event: MouseEvent) -> None:
+            if (
+                self.handler is not None
+                and mouse_event.event_type == MouseEventType.MOUSE_UP
+            ):
+                self.handler()
+
+        return [
+            (f"{container_style} {arrow_style}", self.left_symbol, handler),
+            ("[SetCursorPosition]", ""),
+            (f"{container_style} {text_style}", text, handler),
+            (f"{container_style} {arrow_style}", self.right_symbol, handler),
+        ]
 
 
 def _build_dialog_style() -> Style:
@@ -166,10 +206,17 @@ def _restore_column_widths(total_width: int) -> tuple[int, int, int]:
     return _RESTORE_UPDATED_WIDTH, case_width, max(_RESTORE_PATH_MIN_WIDTH, path_width)
 
 
+def _restore_table_content_width(total_width: int) -> int:
+    """Return the usable width for table text after the radio selector prefix"""
+    return max(0, total_width - _RESTORE_SELECTOR_WIDTH)
+
+
 def _render_restore_session_header(total_width: int) -> StyleAndTextTuples:
     """Render the restore-session column header"""
-    updated_width, case_width, path_width = _restore_column_widths(total_width)
+    content_width = _restore_table_content_width(total_width)
+    updated_width, case_width, path_width = _restore_column_widths(content_width)
     fragments: StyleAndTextTuples = [
+        ("class:restore-session.header", " " * _RESTORE_SELECTOR_WIDTH),
         (
             "class:restore-session.header",
             _pad_text(
@@ -179,7 +226,7 @@ def _render_restore_session_header(total_width: int) -> StyleAndTextTuples:
                 ),
                 updated_width,
             ),
-        )
+        ),
     ]
     if case_width > 0:
         fragments.extend(
@@ -220,7 +267,8 @@ def _render_restore_session_row(
     item: SessionRestoreDisplayItem, total_width: int
 ) -> StyleAndTextTuples:
     """Render one restore-session row with width-aware truncation"""
-    updated_width, case_width, path_width = _restore_column_widths(total_width)
+    content_width = _restore_table_content_width(total_width)
+    updated_width, case_width, path_width = _restore_column_widths(content_width)
     fragments: StyleAndTextTuples = [
         (
             "class:restore-session.timestamp",
@@ -281,11 +329,11 @@ async def ask_yes_no_modal(*, title: str, text: str) -> bool:
         title=title,
         body=Box(body=Label(text=text, dont_extend_height=True), padding=1),
         buttons=[
-            Button(
+            _DialogButton(
                 text=get_string("yes_option", "yes"),
                 handler=functools.partial(_exit, True),
             ),
-            Button(
+            _DialogButton(
                 text=get_string("no_option", "no"),
                 handler=functools.partial(_exit, False),
             ),
@@ -332,7 +380,7 @@ async def ask_restore_session_modal(
             dont_extend_height=True,
         )
     )
-    body_items.append(Box(body=radio_list, padding_top=1))
+    body_items.append(Box(body=radio_list, padding_top=0))
     dialog = Dialog(
         title=title,
         body=Box(
@@ -341,19 +389,19 @@ async def ask_restore_session_modal(
             padding_right=1,
         ),
         buttons=[
-            Button(
+            _DialogButton(
                 text=restore_text,
                 handler=functools.partial(_exit, "restore"),
             ),
-            Button(
+            _DialogButton(
                 text=discard_text,
                 handler=functools.partial(_exit, "discard_selected"),
             ),
-            Button(
+            _DialogButton(
                 text=discard_all_text,
                 handler=functools.partial(_exit, "discard_all"),
             ),
-            Button(
+            _DialogButton(
                 text=cancel_text,
                 handler=functools.partial(_exit, "cancel"),
             ),

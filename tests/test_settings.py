@@ -29,6 +29,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
             "PROMPTIFY_THEME_MULTI_CURSOR_SELECTION": "bg:#111111 #eeeeee",
             "PROMPTIFY_THEME_DIALOG": "bg:#111111 #eeeeee",
             "PROMPTIFY_THEME_DIALOG_RADIO_SELECTED": "bg:#222222 #ffffff",
+            "PROMPTIFY_THEME_DIALOG_BUTTON_FOCUSED_TEXT": "fg:#123456 bold",
             "PROMPTIFY_THEME_RESTORE_SESSION_PATH": "fg:#fedcba",
             "PROMPTIFY_INDEX_WATCH_MODE": "polling",
             "PROMPTIFY_LOG_COLOR_INFO": "ansigreen",
@@ -59,6 +60,7 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
     assert settings.theme.styles["multi-cursor-selection"] == "bg:#111111 #eeeeee"
     assert settings.theme.styles["dialog"] == "bg:#111111 #eeeeee"
     assert settings.theme.styles["radio-selected"] == "bg:#222222 #ffffff"
+    assert settings.theme.styles["button.focused.text"] == "fg:#123456 bold"
     assert settings.theme.styles["restore-session.path"] == "fg:#fedcba"
     assert settings.indexer.watch_mode == "polling"
     assert settings.logger.info_color == "ansigreen"

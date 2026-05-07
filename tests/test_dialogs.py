@@ -8,6 +8,7 @@ from prompt_toolkit.widgets import Dialog, Label
 from promptify.core.terminal import detect_terminal_profile
 from promptify.shared.state import EditorSessionState
 from promptify.ui.dialogs import (
+    _DialogButton,
     _build_restore_display_item,
     _create_dialog_app,
     _render_restore_session_header,
@@ -54,7 +55,8 @@ def test_restore_session_row_trims_long_target_paths_from_the_left():
     text = fragment_list_to_text(to_formatted_text(fragments))
 
     assert "..." in text
-    assert text.rstrip().endswith("workspace/demo-target")
+    assert text.rstrip().endswith("demo-target")
+    assert "/" in text or "\\" in text
     assert any(style == "class:restore-session.path" for style, *_ in fragments)
 
 
@@ -62,6 +64,27 @@ def test_restore_session_header_uses_localized_column_titles():
     """The restore-session header should render the three table columns"""
     text = fragment_list_to_text(to_formatted_text(_render_restore_session_header(64)))
 
+    assert text.startswith(" " * 4)
     assert "updated" in text
     assert "case" in text
     assert "target" in text
+
+
+def test_dialog_button_uses_focused_fragment_classes(monkeypatch):
+    """Focused dialog buttons should emit focused text and arrow classes"""
+    button = _DialogButton("open")
+
+    class _LayoutStub:
+        @staticmethod
+        def has_focus(_target: object) -> bool:
+            return True
+
+    class _AppStub:
+        layout = _LayoutStub()
+
+    monkeypatch.setattr("promptify.ui.dialogs.get_app", lambda: _AppStub())
+
+    fragments = button._get_text_fragments()
+
+    assert any("class:button.focused.arrow" in style for style, *_ in fragments)
+    assert any("class:button.focused.text" in style for style, *_ in fragments)
