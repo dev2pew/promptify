@@ -68,6 +68,20 @@ def test_build_settings_accepts_behavior_and_theme_overrides():
     assert not settings.resolver.advanced_tokenizer_enabled
 
 
+def test_build_settings_propagates_focused_dialog_button_theme_to_fragments():
+    """Focused button fragment styles should follow the base focused button theme"""
+    settings, warns = build_settings(
+        {
+            "PROMPTIFY_THEME_DIALOG_BUTTON_FOCUSED": "bg:#345678 #fedcba bold",
+        }
+    )
+
+    assert warns == []
+    assert settings.theme.styles["button.focused"] == "bg:#345678 #fedcba bold"
+    assert settings.theme.styles["button.focused.arrow"] == "bg:#345678 #fedcba bold"
+    assert settings.theme.styles["button.focused.text"] == "bg:#345678 #fedcba bold"
+
+
 def test_build_settings_generated_layout_passes_are_applied(settings_pass):
     """Generated settings passes should parse into matching typed values"""
     settings, warns = build_settings(settings_pass.env)

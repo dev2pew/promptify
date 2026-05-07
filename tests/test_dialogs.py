@@ -3,7 +3,7 @@
 from typing import Any
 
 from prompt_toolkit.formatted_text import fragment_list_to_text, to_formatted_text
-from prompt_toolkit.widgets import Dialog, Label
+from prompt_toolkit.widgets import Dialog, Label, RadioList
 
 from promptify.core.terminal import detect_terminal_profile
 from promptify.shared.state import EditorSessionState
@@ -68,6 +68,33 @@ def test_restore_session_header_uses_localized_column_titles():
     assert "updated" in text
     assert "case" in text
     assert "target" in text
+
+
+def test_restore_session_header_aligns_with_radio_list_content():
+    """Header text should start where the restore-session row content starts"""
+    item = _build_restore_display_item(
+        EditorSessionState(
+            session_id="demo",
+            case_dir="C:/cases/angular_eq",
+            target_path="C:/eq/f",
+            prompt_text="",
+            updated_at="2026-05-07T02:16:43+00:00",
+        )
+    )
+    width = 80
+    header_text = fragment_list_to_text(
+        to_formatted_text(_render_restore_session_header(width))
+    )
+    radio_list = RadioList(
+        values=[("demo", lambda: _render_restore_session_row(item, width))],
+        default="demo",
+    )
+    row_text = fragment_list_to_text(radio_list._get_text_fragments()).splitlines()[0]
+
+    assert header_text.index("updated") == row_text.index("2026")
+    assert [index for index, char in enumerate(header_text) if char == "|"] == [
+        index for index, char in enumerate(row_text) if char == "|"
+    ]
 
 
 def test_dialog_button_uses_focused_fragment_classes(monkeypatch):

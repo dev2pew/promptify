@@ -62,17 +62,8 @@ class _DialogButton(Button):
         )
         text = (f"{{:^{max(0, width)}}}").format(self.text)
         focused = get_app().layout.has_focus(self)
-        container_style = "class:button.focused" if focused else "class:button"
-        arrow_style = (
-            "class:button.focused.arrow class:button.arrow"
-            if focused
-            else "class:button.arrow"
-        )
-        text_style = (
-            "class:button.focused.text class:button.text"
-            if focused
-            else "class:button.text"
-        )
+        arrow_style = "class:button.focused.arrow" if focused else "class:button.arrow"
+        text_style = "class:button.focused.text" if focused else "class:button.text"
 
         def handler(mouse_event: MouseEvent) -> None:
             if (
@@ -82,10 +73,10 @@ class _DialogButton(Button):
                 self.handler()
 
         return [
-            (f"{container_style} {arrow_style}", self.left_symbol, handler),
+            (arrow_style, self.left_symbol, handler),
             ("[SetCursorPosition]", ""),
-            (f"{container_style} {text_style}", text, handler),
-            (f"{container_style} {arrow_style}", self.right_symbol, handler),
+            (text_style, text, handler),
+            (arrow_style, self.right_symbol, handler),
         ]
 
 
@@ -231,7 +222,7 @@ def _render_restore_session_header(total_width: int) -> StyleAndTextTuples:
     if case_width > 0:
         fragments.extend(
             [
-                ("class:restore-session.header", " | "),
+                ("class:restore-session.header", "  | "),
                 (
                     "class:restore-session.header",
                     _pad_text(

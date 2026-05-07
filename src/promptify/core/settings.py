@@ -448,6 +448,14 @@ def _build_theme_styles(
             warns.append(f"{env_key} cannot be empty, using theme default")
             continue
         styles[style_key] = value
+    if _get_env(env, "PROMPTIFY_THEME_DIALOG_BUTTON_ARROW") is None:
+        styles["button.arrow"] = styles["button"]
+    if _get_env(env, "PROMPTIFY_THEME_DIALOG_BUTTON_TEXT") is None:
+        styles["button.text"] = styles["button"]
+    if _get_env(env, "PROMPTIFY_THEME_DIALOG_BUTTON_FOCUSED_ARROW") is None:
+        styles["button.focused.arrow"] = styles["button.focused"]
+    if _get_env(env, "PROMPTIFY_THEME_DIALOG_BUTTON_FOCUSED_TEXT") is None:
+        styles["button.focused.text"] = styles["button.focused"]
     return styles
 
 
