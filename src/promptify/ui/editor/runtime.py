@@ -174,6 +174,8 @@ class InteractiveEditor(
             ),
             complete_while_typing=Condition(self.should_complete_while_typing),
             undo_limit=self.UNDO_HISTORY_LIMIT,
+            history_snapshot_getter=self._capture_editor_history_state,
+            history_snapshot_restorer=self._restore_editor_history_state,
         )
         self.buffer.on_text_changed += self._handle_buffer_text_changed
         self.buffer.on_text_changed += self._handle_editor_session_text_changed

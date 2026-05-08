@@ -140,3 +140,15 @@ class EditorTextEdit:
     end: int
     replacement: str
     carets: tuple[EditorCaretTarget, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class EditorHistorySnapshot:
+    """Capture caret and selection state that should survive undo and redo"""
+
+    multi_carets: tuple[MultiCursorCaret, ...] = ()
+    selection_anchor: int | None = None
+    preferred_column: int | None = None
+    visual_column: int | None = None
+    occurrence_query: str = ""
+    last_vertical_direction: int = 0

@@ -166,14 +166,10 @@ def register_editing_bindings(ctx: EditorBindingContext) -> None:
 
     @ctx.bind("c-z", filter=editable_text_focus)
     def _undo(event: KeyPressEvent) -> None:
-        if ctx.editor.multi_cursor_active():
-            ctx.editor.clear_multi_cursors()
         event.app.current_buffer.undo()
 
     @ctx.bind("c-y", filter=editable_text_focus, eager=True)
     def _redo(event: KeyPressEvent) -> None:
-        if ctx.editor.multi_cursor_active():
-            ctx.editor.clear_multi_cursors()
         event.app.current_buffer.redo()
 
     @ctx.bind("home", filter=ctx.text_focus, note_activity=True)

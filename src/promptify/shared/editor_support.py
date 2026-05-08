@@ -106,21 +106,16 @@ class LogicalLineSpan:
         """Return the VS Code-like deletion span for removing this line"""
         if self.row < self.line_count - 1:
             return self.start, self.end + 1
-        if self.row > 0:
-            return self.start - 1, self.end
         return self.start, self.end
 
     def cut_target_position(self) -> int:
         """Return the cursor location left behind after cutting this line"""
-        return self.previous_row_start if self.row > 0 else self.start
+        return self.start
 
     def cut_text(self, text: str) -> str:
         """Return the exact text VS Code-style line cutting should copy"""
         cut_start, cut_end = self.cut_range()
-        copied = text[cut_start:cut_end]
-        if self.row > 0 and cut_start < self.start and copied.startswith("\n"):
-            return copied[1:]
-        return copied
+        return text[cut_start:cut_end]
 
     def clone_insertion(self, *, insert_above: bool) -> tuple[int, str]:
         """Return the insertion point and payload for cloning this line"""

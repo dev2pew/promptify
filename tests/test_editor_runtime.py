@@ -15,6 +15,9 @@ test_interactive_editor_runtime_handles_bracketed_paste = (
 test_interactive_editor_runtime_paste_preserves_undo_redo_history = (
     cases.test_interactive_editor_runtime_paste_preserves_undo_redo_history
 )
+test_interactive_editor_runtime_undo_redo_preserves_multicursors = (
+    cases.test_interactive_editor_runtime_undo_redo_preserves_multicursors
+)
 test_interactive_editor_runtime_save_returns_live_buffer = (
     cases.test_interactive_editor_runtime_save_returns_live_buffer
 )
@@ -52,6 +55,9 @@ test_interactive_editor_runtime_fast_cut_is_not_cancelled_by_typeahead = (
 test_interactive_editor_runtime_ctrl_x_cuts_current_line = (
     cases.test_interactive_editor_runtime_ctrl_x_cuts_current_line
 )
+test_interactive_editor_cut_current_line_keeps_caret_row = (
+    cases.test_interactive_editor_cut_current_line_keeps_caret_row
+)
 test_interactive_editor_runtime_shift_vertical_selection_deletes = (
     cases.test_interactive_editor_runtime_shift_vertical_selection_deletes
 )
@@ -82,6 +88,12 @@ test_interactive_editor_scroll_view_keeps_cursor_position = (
 
 test_interactive_editor_runtime_modal_blocks_multicursor_sequences = (
     cases.test_interactive_editor_runtime_modal_blocks_multicursor_sequences
+)
+test_interactive_editor_cut_contiguous_multicursor_lines_collapse_cleanly = (
+    cases.test_interactive_editor_cut_contiguous_multicursor_lines_collapse_cleanly
+)
+test_interactive_editor_multicursor_paste_distributes_lines_once = (
+    cases.test_interactive_editor_multicursor_paste_distributes_lines_once
 )
 test_interactive_editor_multicursor_shift_home_delete_stays_coherent = (
     cases.test_interactive_editor_multicursor_shift_home_delete_stays_coherent

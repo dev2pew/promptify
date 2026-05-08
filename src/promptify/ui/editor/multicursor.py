@@ -10,6 +10,7 @@ from prompt_toolkit.selection import SelectionState
 
 from ...shared.editor_state import (
     EditorCaretTarget,
+    EditorHistorySnapshot,
     EditorTextEdit,
     MultiCursorCaret,
     SearchOptions,
@@ -65,6 +66,76 @@ class EditorMultiCursorMixin:
             visual_column=self._wrap_preferred_column,
             is_primary=True,
         )
+
+    def _copy_caret(self, caret: MultiCursorCaret) -> MultiCursorCaret:
+        """Create a detached caret copy for history snapshots and rebasing"""
+        return MultiCursorCaret(
+            position=caret.position,
+            anchor=caret.anchor,
+            preferred_column=caret.preferred_column,
+            visual_column=caret.visual_column,
+            is_primary=caret.is_primary,
+        )
+
+    def _clamp_position_to_text(self, position: int, text: str | None = None) -> int:
+        """Clamp one absolute position to the current or provided text bounds"""
+        text_length = len(self.buffer.text if text is None else text)
+        return max(0, min(text_length, position))
+
+    def _current_selection_anchor(self) -> int | None:
+        """Return the live prompt-toolkit selection anchor when present"""
+        selection = self.buffer.selection_state
+        if selection is None:
+            return None
+        return selection.original_cursor_position
+
+    def _capture_editor_history_state(self) -> EditorHistorySnapshot:
+        """Snapshot the editor-only caret state that undo and redo should restore"""
+        return EditorHistorySnapshot(
+            multi_carets=tuple(self._copy_caret(caret) for caret in self._multi_carets),
+            selection_anchor=self._current_selection_anchor(),
+            preferred_column=self.buffer.preferred_column,
+            visual_column=self._wrap_preferred_column,
+            occurrence_query=self._multi_cursor_occurrence_query,
+            last_vertical_direction=self._multi_cursor_last_vertical_direction,
+        )
+
+    def _restore_editor_history_state(
+        self, snapshot: EditorHistorySnapshot | None
+    ) -> None:
+        """Restore multi-caret, selection, and sticky-column state after history jumps"""
+        if snapshot is None:
+            self._multi_carets = []
+            self._multi_cursor_occurrence_query = ""
+            self._multi_cursor_last_vertical_direction = 0
+            self.buffer.selection_state = None
+            self.buffer.preferred_column = None
+            self._wrap_preferred_column = None
+            self.invalidate()
+            return
+
+        self._multi_cursor_occurrence_query = snapshot.occurrence_query
+        self._multi_cursor_last_vertical_direction = snapshot.last_vertical_direction
+        if snapshot.occurrence_query:
+            self._show_multi_cursor_search(snapshot.occurrence_query)
+
+        history_carets = [self._copy_caret(caret) for caret in snapshot.multi_carets]
+        if history_carets:
+            self._set_multi_carets(history_carets)
+            return
+
+        self._multi_carets = []
+        self.buffer.selection_state = None
+        anchor = snapshot.selection_anchor
+        if anchor is not None:
+            clamped_anchor = self._clamp_position_to_text(anchor)
+            if clamped_anchor != self.buffer.cursor_position:
+                self.buffer.selection_state = SelectionState(
+                    original_cursor_position=clamped_anchor
+                )
+        self.buffer.preferred_column = snapshot.preferred_column
+        self._wrap_preferred_column = snapshot.visual_column
+        self.invalidate()
 
     def _get_multi_carets(self) -> tuple[MultiCursorCaret, ...]:
         """Return the active virtual carets or a single live primary caret"""
@@ -176,14 +247,16 @@ class EditorMultiCursorMixin:
         )
 
     def _clamp_multi_caret(
-        self, caret: MultiCursorCaret, *, primary_claimed: bool
+        self,
+        caret: MultiCursorCaret,
+        *,
+        primary_claimed: bool,
+        text_length: int | None = None,
     ) -> MultiCursorCaret:
         """Return one caret clamped to the live document bounds"""
-        text_length = len(self.buffer.text)
-        position = max(0, min(text_length, caret.position))
-        anchor = (
-            None if caret.anchor is None else max(0, min(text_length, caret.anchor))
-        )
+        limit = len(self.buffer.text) if text_length is None else text_length
+        position = max(0, min(limit, caret.position))
+        anchor = None if caret.anchor is None else max(0, min(limit, caret.anchor))
         return MultiCursorCaret(
             position=position,
             anchor=anchor,
@@ -218,13 +291,17 @@ class EditorMultiCursorMixin:
         )
 
     def _merge_multi_carets(
-        self, carets: list[MultiCursorCaret]
+        self, carets: list[MultiCursorCaret], *, text_length: int | None = None
     ) -> list[MultiCursorCaret]:
         """Normalize carets into non-overlapping edit ranges with one primary"""
         primary_claimed = False
         clamped: list[MultiCursorCaret] = []
         for caret in carets:
-            normalized = self._clamp_multi_caret(caret, primary_claimed=primary_claimed)
+            normalized = self._clamp_multi_caret(
+                caret,
+                primary_claimed=primary_claimed,
+                text_length=text_length,
+            )
             primary_claimed = primary_claimed or normalized.is_primary
             clamped.append(normalized)
 
@@ -433,7 +510,8 @@ class EditorMultiCursorMixin:
         self, caret: MultiCursorCaret, direction: int, *, count: int = 1
     ) -> MultiCursorCaret:
         """Move one caret by logical lines while keeping its preferred column"""
-        document = Document(self.buffer.text, cursor_position=caret.position)
+        position = self._clamp_position_to_text(caret.position)
+        document = Document(self.buffer.text, cursor_position=position)
         preferred = (
             caret.preferred_column
             if caret.preferred_column is not None
@@ -447,7 +525,7 @@ class EditorMultiCursorMixin:
             )
         )
         return MultiCursorCaret(
-            position=max(0, min(len(self.buffer.text), caret.position + delta)),
+            position=max(0, min(len(self.buffer.text), position + delta)),
             anchor=None,
             preferred_column=preferred,
             visual_column=None,
@@ -481,6 +559,7 @@ class EditorMultiCursorMixin:
         if target is None:
             return None
         target_position, visual_column = target
+        target_position = self._clamp_position_to_text(target_position)
         target_document = Document(self.buffer.text, cursor_position=target_position)
         _target_row, target_col = target_document.translate_index_to_position(
             target_position
@@ -600,16 +679,17 @@ class EditorMultiCursorMixin:
 
     def _line_start_position_for_caret(self, caret: MultiCursorCaret) -> int:
         """Return the smart line-start position for one caret"""
-        document = Document(self.buffer.text, cursor_position=caret.position)
-        logical_start = caret.position + document.get_start_of_line_position(
+        position = self._clamp_position_to_text(caret.position)
+        document = Document(self.buffer.text, cursor_position=position)
+        logical_start = position + document.get_start_of_line_position(
             after_whitespace=False
         )
-        smart_start = caret.position + document.get_start_of_line_position(
+        smart_start = position + document.get_start_of_line_position(
             after_whitespace=True
         )
-        if smart_start == caret.position and smart_start != logical_start:
+        if smart_start == position and smart_start != logical_start:
             return logical_start
-        if smart_start != logical_start and caret.position > smart_start:
+        if smart_start != logical_start and position > smart_start:
             return smart_start
 
         render_info = self.main_window.render_info
@@ -620,15 +700,15 @@ class EditorMultiCursorMixin:
         ):
             targets = get_visual_line_targets(
                 self.buffer.text,
-                caret.position,
+                position,
                 render_info,
             )
             if targets is not None and targets.wrapped:
-                if caret.position != targets.visual_start:
+                if position != targets.visual_start:
                     if (
                         targets.visual_start == targets.logical_start
                         and targets.logical_smart_start > targets.logical_start
-                        and caret.position > targets.logical_smart_start
+                        and position > targets.logical_smart_start
                     ):
                         return targets.logical_smart_start
                     return targets.visual_start
@@ -647,11 +727,12 @@ class EditorMultiCursorMixin:
                 return targets.logical_start
 
         if smart_start != logical_start:
-            return logical_start if caret.position == smart_start else smart_start
+            return logical_start if position == smart_start else smart_start
         return logical_start
 
     def _line_end_position_for_caret(self, caret: MultiCursorCaret) -> int:
         """Return the logical line-end position for one caret"""
+        position = self._clamp_position_to_text(caret.position)
         render_info = self.main_window.render_info
         if (
             render_info is not None
@@ -660,17 +741,17 @@ class EditorMultiCursorMixin:
         ):
             targets = get_visual_line_targets(
                 self.buffer.text,
-                caret.position,
+                position,
                 render_info,
             )
             if targets is not None and targets.wrapped:
-                if caret.position != targets.visual_end:
+                if position != targets.visual_end:
                     return targets.visual_end
                 if targets.visual_end != targets.logical_end:
                     return targets.logical_end
                 return targets.logical_end
-        document = Document(self.buffer.text, cursor_position=caret.position)
-        return caret.position + document.get_end_of_line_position()
+        document = Document(self.buffer.text, cursor_position=position)
+        return position + document.get_end_of_line_position()
 
     def move_cursors_to_line_start(self, *, select: bool = False) -> bool:
         """Move every active caret to its own smart line start"""
@@ -731,13 +812,14 @@ class EditorMultiCursorMixin:
 
     def _word_move_position(self, caret: MultiCursorCaret, direction: int) -> int:
         """Resolve the previous or next word boundary for one caret"""
-        document = Document(self.buffer.text, cursor_position=caret.position)
+        position = self._clamp_position_to_text(caret.position)
+        document = Document(self.buffer.text, cursor_position=position)
         if direction < 0:
             offset = document.find_previous_word_beginning()
-            return caret.position + (offset if offset is not None else -caret.position)
+            return position + (offset if offset is not None else -position)
         offset = document.find_next_word_beginning()
         if offset is not None:
-            return caret.position + offset
+            return position + offset
         return len(self.buffer.text)
 
     def move_cursors_by_word(self, direction: int, *, select: bool = False) -> bool:
@@ -759,9 +841,10 @@ class EditorMultiCursorMixin:
 
     def _row_col_for_caret(self, caret: MultiCursorCaret) -> tuple[int, int]:
         """Return the logical row and column for one caret position"""
+        position = self._clamp_position_to_text(caret.position)
         return Document(
-            self.buffer.text, cursor_position=caret.position
-        ).translate_index_to_position(caret.position)
+            self.buffer.text, cursor_position=position
+        ).translate_index_to_position(position)
 
     def add_vertical_cursor(self, direction: int) -> bool:
         """Clone a caret above or below the current block, keeping the original fixed"""
@@ -772,13 +855,14 @@ class EditorMultiCursorMixin:
             if direction < 0
             else max(carets, key=lambda c: self._row_col_for_caret(c)[0])
         )
-        document = Document(self.buffer.text, cursor_position=target.position)
+        target_position = self._clamp_position_to_text(target.position)
+        document = Document(self.buffer.text, cursor_position=target_position)
         preferred = (
             target.preferred_column
             if target.preferred_column is not None
             else document.cursor_position_col
         )
-        row, _col = document.translate_index_to_position(target.position)
+        row, _col = document.translate_index_to_position(target_position)
         next_row = row + direction
         if next_row < 0 or next_row >= document.line_count:
             return False
@@ -824,6 +908,9 @@ class EditorMultiCursorMixin:
         if not edits:
             return
         new_text, new_carets = apply_editor_text_edits(self.buffer.text, edits)
+        new_carets = self._merge_multi_carets(
+            list(new_carets), text_length=len(new_text)
+        )
         if not new_carets:
             new_carets = [MultiCursorCaret(position=0, is_primary=True)]
         if not any(caret.is_primary for caret in new_carets):
@@ -1275,14 +1362,15 @@ class EditorMultiCursorMixin:
                 continue
             if caret.position <= 0:
                 continue
-            document = Document(self.buffer.text, cursor_position=caret.position)
+            position = self._clamp_position_to_text(caret.position)
+            document = Document(self.buffer.text, cursor_position=position)
             offset = document.find_previous_word_beginning()
-            start = caret.position + offset if offset is not None else 0
-            if start != caret.position:
+            start = position + offset if offset is not None else 0
+            if start != position:
                 replacements.append(
                     EditorTextEdit(
                         start=start,
-                        end=caret.position,
+                        end=position,
                         replacement="",
                         carets=(
                             self._caret_target(
@@ -1323,19 +1411,20 @@ class EditorMultiCursorMixin:
                 continue
             if caret.position >= text_length:
                 continue
-            document = Document(self.buffer.text, cursor_position=caret.position)
+            position = self._clamp_position_to_text(caret.position)
+            document = Document(self.buffer.text, cursor_position=position)
             offset = document.find_next_word_beginning()
-            end = caret.position + offset if offset is not None else text_length
-            if end != caret.position:
+            end = position + offset if offset is not None else text_length
+            if end != position:
                 replacements.append(
                     EditorTextEdit(
-                        start=caret.position,
+                        start=position,
                         end=end,
                         replacement="",
                         carets=(
                             self._caret_target(
                                 caret,
-                                source_position=caret.position,
+                                source_position=position,
                                 anchor_source_position=None,
                             ),
                         ),
@@ -1347,8 +1436,35 @@ class EditorMultiCursorMixin:
         return True
 
     def paste_text_at_cursors(self, text: str) -> bool:
-        """Paste the same payload at every active caret"""
-        return self.replace_text_at_cursors(text)
+        """Paste text at active carets, distributing lines when counts match"""
+        carets = self._get_multi_carets()
+        if not any(
+            caret.is_primary is False or caret.has_selection for caret in carets
+        ):
+            return False
+
+        pasted_lines = text.splitlines()
+        distribute_lines = len(pasted_lines) == len(carets)
+        replacements = [
+            EditorTextEdit(
+                start=caret.selection_start,
+                end=caret.selection_end,
+                replacement=pasted_lines[index] if distribute_lines else text,
+                carets=(
+                    self._caret_target(
+                        caret,
+                        replacement_offset=len(
+                            pasted_lines[index] if distribute_lines else text
+                        ),
+                        anchor_source_position=None,
+                    ),
+                ),
+            )
+            for index, caret in enumerate(carets)
+        ]
+        self._apply_text_edits(replacements)
+        self.start_bulk_edit(text)
+        return True
 
     def get_multi_cursor_render_carets(self) -> tuple[MultiCursorCaret, ...]:
         """Expose the active carets to the rendering processors"""

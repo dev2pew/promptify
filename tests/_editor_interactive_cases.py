@@ -151,6 +151,83 @@ async def test_interactive_editor_runtime_paste_preserves_undo_redo_history(
             await asyncio.wait_for(task, timeout=1.5)
 
 
+async def test_interactive_editor_runtime_undo_redo_preserves_multicursors(
+    app_components,
+):
+    """Ctrl+Z and Ctrl+Y should keep cloned carets attached to the restored text"""
+    context, resolver = app_components
+    editor = InteractiveEditor("one\ntwo\nthree", context.indexer, resolver)
+
+    with create_pipe_input() as pipe_input:
+        with create_app_session(input=pipe_input, output=DummyOutput()):
+            task = asyncio.create_task(editor.run_async())
+
+            await asyncio.sleep(0.05)
+            editor.buffer.cursor_position = (
+                editor.buffer.document.translate_row_col_to_index(1, 0)
+            )
+
+            pipe_input.send_text("\x1b[1;7A")  # CTRL+ALT+UP
+            rows: list[int] = []
+            for _ in range(20):
+                rows = sorted(
+                    editor.buffer.document.translate_index_to_position(caret.position)[
+                        0
+                    ]
+                    for caret in editor.get_multi_cursor_render_carets()
+                )
+                if rows == [0, 1]:
+                    break
+                await asyncio.sleep(0.02)
+
+            pipe_input.send_text("x")
+            for _ in range(20):
+                if editor.buffer.text == "xone\nxtwo\nthree":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "xone\nxtwo\nthree"
+
+            pipe_input.send_text("\x1a")  # CTRL+Z
+            for _ in range(20):
+                if editor.buffer.text == "one\ntwo\nthree":
+                    break
+                await asyncio.sleep(0.02)
+
+            assert editor.buffer.text == "one\ntwo\nthree"
+            assert sorted(
+                editor.buffer.document.translate_index_to_position(caret.position)[0]
+                for caret in editor.get_multi_cursor_render_carets()
+            ) == [0, 1]
+
+            editor.buffer.redo()
+
+            assert editor.buffer.text == "xone\nxtwo\nthree"
+            assert sorted(
+                editor.buffer.document.translate_index_to_position(caret.position)[0]
+                for caret in editor.get_multi_cursor_render_carets()
+            ) == [0, 1]
+
+            pipe_input.send_text("\x1b[1;7B")  # CTRL+ALT+DOWN
+            rows = []
+            for _ in range(20):
+                rows = sorted(
+                    editor.buffer.document.translate_index_to_position(caret.position)[
+                        0
+                    ]
+                    for caret in editor.get_multi_cursor_render_carets()
+                )
+                if rows == [0, 1, 2]:
+                    break
+                await asyncio.sleep(0.02)
+
+            assert rows == [0, 1, 2]
+
+            pipe_input.send_text("\x11")  # CTRL+Q
+            pipe_input.send_text("\r")  # ENTER
+            await asyncio.wait_for(task, timeout=1.5)
+
+
 async def test_interactive_editor_runtime_save_returns_live_buffer(app_components):
     """Ctrl+S should exit the live editor and return the current buffer content"""
     context, resolver = app_components
@@ -905,6 +982,9 @@ async def test_interactive_editor_runtime_ctrl_x_cuts_current_line(
 
             assert editor.buffer.text == "# demo\n\nline 2\nline 3"
             assert copied_to_system == ["cut me\n"]
+            assert editor.buffer.document.translate_index_to_position(
+                editor.buffer.cursor_position
+            ) == (2, 0)
 
             editor.buffer.cursor_position = (
                 editor.buffer.document.translate_row_col_to_index(2, 0)
@@ -1202,6 +1282,41 @@ async def test_interactive_editor_wrap_rules_disable_auto_pair_for_backticks_and
     assert paren.wrap_selection is True and paren.auto_pair is True
 
 
+async def test_interactive_editor_cut_current_line_keeps_caret_row(
+    app_components,
+):
+    """Line cuts should keep the caret on the same visual row when possible"""
+    context, resolver = app_components
+
+    editor = InteractiveEditor("# demo\ncut me.", context.indexer, resolver)
+    editor.buffer.cursor_position = editor.buffer.document.translate_row_col_to_index(
+        1, 3
+    )
+
+    cut_text = editor.cut_current_lines_at_cursors()
+
+    assert cut_text == "cut me."
+    assert editor.buffer.text == "# demo\n"
+    assert editor.buffer.document.translate_index_to_position(
+        editor.buffer.cursor_position
+    ) == (1, 0)
+
+    blank_line_editor = InteractiveEditor(
+        "# demo\n\ncut me.", context.indexer, resolver
+    )
+    blank_line_editor.buffer.cursor_position = (
+        blank_line_editor.buffer.document.translate_row_col_to_index(1, 0)
+    )
+
+    cut_text = blank_line_editor.cut_current_lines_at_cursors()
+
+    assert cut_text == "\n"
+    assert blank_line_editor.buffer.text == "# demo\ncut me."
+    assert blank_line_editor.buffer.document.translate_index_to_position(
+        blank_line_editor.buffer.cursor_position
+    ) == (1, 0)
+
+
 async def test_interactive_editor_cut_current_lines_preserves_noncontiguous_multicursors(
     app_components,
 ):
@@ -1222,13 +1337,13 @@ async def test_interactive_editor_cut_current_lines_preserves_noncontiguous_mult
     cut_text = editor.cut_current_lines_at_cursors()
 
     assert cut_text == "line 2\nline 4"
-    assert editor.buffer.text == "line 1\nline 3"
+    assert editor.buffer.text == "line 1\nline 3\n"
     assert editor.multi_cursor_active()
     carets = editor.get_multi_cursor_render_carets()
     assert [
         editor.buffer.document.translate_index_to_position(caret.position)
         for caret in carets
-    ] == [(0, 0), (1, 0)]
+    ] == [(1, 0), (2, 0)]
 
 
 async def test_interactive_editor_runtime_ctrl_x_preserves_noncontiguous_multicursors(
@@ -1263,21 +1378,79 @@ async def test_interactive_editor_runtime_ctrl_x_preserves_noncontiguous_multicu
             pipe_input.send_text("\x18")  # CTRL+X
 
             for _ in range(20):
-                if editor.buffer.text == "line 1\nline 3":
+                if editor.buffer.text == "line 1\nline 3\n":
                     break
                 await asyncio.sleep(0.02)
 
             assert copied_to_system == ["line 2\nline 4"]
-            assert editor.buffer.text == "line 1\nline 3"
+            assert editor.buffer.text == "line 1\nline 3\n"
             assert editor.multi_cursor_active()
             assert [
                 editor.buffer.document.translate_index_to_position(caret.position)
                 for caret in editor.get_multi_cursor_render_carets()
-            ] == [(0, 0), (1, 0)]
+            ] == [(1, 0), (2, 0)]
 
             pipe_input.send_text("\x11")  # CTRL+Q
             pipe_input.send_text("\r")  # ENTER
             await asyncio.wait_for(task, timeout=1.5)
+
+
+async def test_interactive_editor_cut_contiguous_multicursor_lines_collapse_cleanly(
+    app_components,
+):
+    """Contiguous line cuts should collapse to one caret and paste back once"""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "line 1\nline 2\nline 3\nline 4", context.indexer, resolver
+    )
+    editor.buffer.cursor_position = editor.buffer.document.translate_row_col_to_index(
+        2, 0
+    )
+
+    assert editor.add_vertical_cursor(-1)
+    assert editor.add_vertical_cursor(-1)
+
+    cut_text = editor.cut_current_lines_at_cursors()
+
+    assert cut_text == "line 1\nline 2\nline 3\n"
+    assert editor.buffer.text == "line 4"
+    assert not editor.multi_cursor_active()
+    assert editor.buffer.cursor_position == 0
+
+    editor.paste_text(editor.buffer, cut_text)
+
+    assert editor.buffer.text == "line 1\nline 2\nline 3\nline 4"
+    assert editor.buffer.document.translate_index_to_position(
+        editor.buffer.cursor_position
+    ) == (3, 0)
+
+
+async def test_interactive_editor_multicursor_paste_distributes_lines_once(
+    app_components,
+):
+    """Pasting line-count-matched multi-cursor cuts should map one line per caret"""
+    context, resolver = app_components
+    editor = InteractiveEditor(
+        "abcdefg.\nabcdefg.\nabcdefg.", context.indexer, resolver
+    )
+    second_start = editor.buffer.document.translate_row_col_to_index(1, 0)
+    second_end = editor.buffer.document.translate_row_col_to_index(1, 8)
+    third_start = editor.buffer.document.translate_row_col_to_index(2, 0)
+    third_end = editor.buffer.document.translate_row_col_to_index(2, 8)
+    editor._set_multi_carets(
+        [
+            MultiCursorCaret(position=8, anchor=0, is_primary=True),
+            MultiCursorCaret(position=second_end, anchor=second_start),
+            MultiCursorCaret(position=third_end, anchor=third_start),
+        ]
+    )
+
+    cut_text = editor.cut_selected_text_at_cursors()
+
+    assert cut_text == "abcdefg.\nabcdefg.\nabcdefg."
+    assert editor.buffer.text == "\n\n"
+    assert editor.paste_text_at_cursors(cut_text)
+    assert editor.buffer.text == "abcdefg.\nabcdefg.\nabcdefg."
 
 
 async def test_interactive_editor_runtime_shift_alt_clone_hotkeys_match_requested_direction(
